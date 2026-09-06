@@ -1,0 +1,4 @@
+# Day 1 — scaffolding only. Each workstream appends its own dependencies as it
+# lands (ingestion: requests/tenacity; transformation: dbt-postgres; ML:
+# scikit-learn/xgboost; BI: streamlit/plotly).
+python-dotenv==1.0.1
