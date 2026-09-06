@@ -15,6 +15,51 @@ python config.py       # prints the resolved config, secrets masked
 
 Every variable is named and documented in [`.env.example`](.env.example), and [`config.py`](config.py) is the only module that reads the environment. `.env` is git-ignored.
 
+## Warehouse topology
+
+Two Postgres environments, switched by a single environment variable. No code
+branches on which one is in use.
+
+| | Host | Holds | Used for |
+|---|---|---|---|
+| **Local** | PostgreSQL 16 in Docker Compose | bronze → silver → gold | The 30-year backfill, all dbt iteration, model training |
+| **Serving** | Neon free plan, project `horizon` (`aged-paper-67892047`, `aws-us-east-2`) | gold marts and predictions only | What the public Streamlit dashboard reads |
+
+**The backfill runs locally and Neon receives finished gold marts only.** Two
+free-plan limits force this and shape everything downstream:
+
+- **0.5 GB storage.** Raw API responses are kept as gzipped files under a
+  git-ignored `data/raw/`, never as a per-row JSON column — that alone would
+  exhaust the budget. Bronze and silver never leave the local container.
+- **100 compute-hours per month.** A multi-hour backfill against a serverless
+  database is slow and wastes the allowance. Neon sees one bulk load per
+  promotion, then read-only dashboard traffic.
+
+Neon scales compute to zero after five minutes idle and resumes on the next
+query, so there is no keep-alive job to maintain. The cold-start cost is paid
+by the first dashboard visitor after a quiet period, and is reproducible with:
+
+```bash
+python tests/check_connection.py --target serving --cold
+```
+
+Run it with no arguments to check both targets at once.
+
+### Quota dashboards
+
+Free-plan usage is not exposed through the API, so these are console links:
+
+- Project overview and storage — <https://console.neon.tech/app/projects/aged-paper-67892047>
+- Compute metrics — <https://console.neon.tech/app/projects/aged-paper-67892047/monitoring>
+- Org usage against the free-plan allowance — <https://console.neon.tech/app/orgs/org-twilight-mode-94780402/billing>
+
+### Known deviation
+
+Neon provisioned the project on **PostgreSQL 18**; local development runs
+**PostgreSQL 16**, as specified. The gold marts use no version-specific syntax
+and both targets are verified by the same connection check, but the skew is
+recorded here rather than discovered later.
+
 ## Licence
 
 [MIT](LICENSE)

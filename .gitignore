@@ -9,6 +9,10 @@
 secrets.yml
 secrets.yaml
 
+# Neon CLI local context, written by `neon link` / `neon init`.
+.neon
+.neon/
+
 # ---------------------------------------------------------------------------
 # Data — raw API payloads are gzipped to disk, never to git (see §5.4).
 # ---------------------------------------------------------------------------
