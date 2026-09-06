@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import dataclasses
 import datetime as dt
-import json
 import re
 import sys
 from email.utils import format_datetime
@@ -31,9 +30,6 @@ import pytest
 requests = pytest.importorskip("requests")
 tenacity = pytest.importorskip("tenacity")
 
-from requests.adapters import BaseAdapter  # noqa: E402
-from requests.structures import CaseInsensitiveDict  # noqa: E402
-
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from cities import get_city  # noqa: E402
@@ -42,7 +38,6 @@ from ingestion.client import (  # noqa: E402
     ARCHIVE_START,
     DAILY_UNITS,
     DAILY_VARIABLES,
-    HOURLY_UNITS,
     HOURLY_VARIABLES,
     MAX_BACKOFF_SECONDS,
     MAX_RETRY_AFTER_SECONDS,
@@ -57,6 +52,13 @@ from ingestion.client import (  # noqa: E402
     _wait_archive,
     fetch_observations,
 )
+from http_fixtures import (  # noqa: E402
+    ScriptedAdapter,
+    daily_payload as _daily_payload,
+    hourly_payload as _hourly_payload,
+    responds,
+    session_for as _session_for,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCHEMA_SQL = REPO_ROOT / "ingestion" / "schema.sql"
@@ -68,59 +70,8 @@ DAYS = 3
 
 
 # ---------------------------------------------------------------------------
-# Scripted transport
+# Fixtures
 # ---------------------------------------------------------------------------
-
-
-class ScriptedAdapter(BaseAdapter):
-    """Replays a fixed script of responses and exceptions, recording calls.
-
-    Each entry is either a ``requests.Response`` factory (a callable taking the
-    prepared request) or an exception instance to raise. The script must be
-    consumed exactly — a test that expects three attempts and gets two fails
-    loudly rather than passing on a coincidence.
-    """
-
-    def __init__(self, script: list) -> None:
-        self.script = list(script)
-        self.calls: list[SimpleNamespace] = []
-
-    def send(self, request, stream=False, timeout=None, verify=True, cert=None,
-             proxies=None):
-        self.calls.append(SimpleNamespace(request=request, timeout=timeout))
-        if not self.script:
-            raise AssertionError(
-                f"unscripted request #{len(self.calls)} to {request.url}"
-            )
-        item = self.script.pop(0)
-        if isinstance(item, BaseException):
-            raise item
-        return item(request)
-
-    def close(self) -> None:  # pragma: no cover - nothing to release
-        pass
-
-
-def responds(status: int = 200, *, json_body=None, text: str | None = None,
-             headers: dict | None = None):
-    """A response factory for :class:`ScriptedAdapter`."""
-
-    def build(request) -> requests.Response:
-        response = requests.Response()
-        response.status_code = status
-        response.url = request.url
-        response.request = request
-        response.headers = CaseInsensitiveDict(headers or {})
-        if json_body is not None:
-            body = json.dumps(json_body)
-            response.headers.setdefault("Content-Type", "application/json")
-        else:
-            body = text or ""
-        response._content = body.encode("utf-8")
-        response.encoding = "utf-8"
-        return response
-
-    return build
 
 
 @pytest.fixture
@@ -145,60 +96,17 @@ def slept(monkeypatch) -> list[float]:
 
 
 def session_for(script: list) -> tuple[requests.Session, ScriptedAdapter]:
-    adapter = ScriptedAdapter(script)
-    session = requests.Session()
+    session, adapter = _session_for(script)
     session.headers.update({"User-Agent": USER_AGENT, "Accept": "application/json"})
-    session.mount("https://", adapter)
-    session.mount("http://", adapter)
     return session, adapter
 
 
-# ---------------------------------------------------------------------------
-# Payload fixtures
-# ---------------------------------------------------------------------------
-
-
 def daily_payload(days: int = DAYS, start: dt.date = START, **overrides) -> dict:
-    times = [(start + dt.timedelta(days=i)).isoformat() for i in range(days)]
-    payload = {
-        "latitude": 51.493847,
-        "longitude": -0.1630249,
-        "generationtime_ms": 1.5,
-        "utc_offset_seconds": 0,
-        "timezone": "GMT",
-        "timezone_abbreviation": "GMT",
-        "elevation": 16.0,
-        "daily_units": {"time": "iso8601", **DAILY_UNITS},
-        "daily": {
-            "time": times,
-            **{name: [1.0] * days for name in DAILY_VARIABLES},
-        },
-    }
-    payload.update(overrides)
-    return payload
+    return _daily_payload(days, start, **overrides)
 
 
 def hourly_payload(days: int = 1, start: dt.date = START, **overrides) -> dict:
-    hours = days * 24
-    base = dt.datetime.combine(start, dt.time())
-    times = [(base + dt.timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M")
-             for i in range(hours)]
-    payload = {
-        "latitude": 51.493847,
-        "longitude": -0.1630249,
-        "generationtime_ms": 2.5,
-        "utc_offset_seconds": 0,
-        "timezone": "GMT",
-        "timezone_abbreviation": "GMT",
-        "elevation": 16.0,
-        "hourly_units": {"time": "iso8601", **HOURLY_UNITS},
-        "hourly": {
-            "time": times,
-            **{name: [2.0] * hours for name in HOURLY_VARIABLES},
-        },
-    }
-    payload.update(overrides)
-    return payload
+    return _hourly_payload(days, start, **overrides)
 
 
 def fetch(script, settings, *, city=CITY, start=START, end=END, grain="daily"):

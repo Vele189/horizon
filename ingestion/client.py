@@ -56,7 +56,7 @@ from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Final, Iterator, Literal, Mapping
+from typing import Any, Callable, Final, Iterator, Literal, Mapping
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -90,6 +90,8 @@ __all__ = [
     "Grain",
     "build_session",
     "fetch_observations",
+    "parse_payload",
+    "request_url",
 ]
 
 log = logging.getLogger(__name__)
@@ -532,12 +534,15 @@ def _get(
     url: str,
     params: dict[str, str],
     timeout: tuple[float, float],
-) -> tuple[dict[str, Any], str]:
+) -> tuple[dict[str, Any], str, bytes]:
     """Perform one attempt, translating every failure into an ArchiveError.
 
-    Returns the decoded body and the URL that produced it — the latter comes
-    from the response rather than being rebuilt, so ``source_url`` is the exact
-    string that was sent, redirects and parameter encoding included.
+    Returns the decoded body, the URL that produced it, and the undecoded
+    bytes. The URL comes from the response rather than being rebuilt, so
+    ``source_url`` is the exact string that was sent, redirects and parameter
+    encoding included. The bytes are what ING-03 archives: re-serialising the
+    decoded object would already be a transformation, and the whole point of
+    the archive is to hold something no code of ours has touched.
     """
     try:
         response = session.get(url, params=params, timeout=timeout)
@@ -578,12 +583,16 @@ def _get(
             body=str(payload.get("reason", "")),
         )
 
-    return payload, str(response.url)
+    return payload, str(response.url), response.content
 
 
 # ---------------------------------------------------------------------------
 # Validation of a 200
 # ---------------------------------------------------------------------------
+# parse_payload is public because it has two callers, not one: the live path
+# below, and ING-03's replay rebuilding bronze from archived payloads. Sharing
+# it is the point — a parsing bug fixed here is fixed for replay by
+# construction, rather than fixed twice and drifting.
 
 
 def _parse_timestamp(raw: str, grain: Grain) -> dt.datetime:
@@ -613,10 +622,10 @@ def _expected_count(start: dt.date, end: dt.date, grain: Grain) -> int:
     return days if grain == "daily" else days * 24
 
 
-def _validate(
+def parse_payload(
     payload: Mapping[str, Any],
     *,
-    city: City,
+    city_id: str,
     grain: Grain,
     start: dt.date,
     end: dt.date,
@@ -627,7 +636,7 @@ def _validate(
     offset = payload.get("utc_offset_seconds")
     if offset != 0:
         raise ArchiveResponseError(
-            f"{city.id}: response reports utc_offset_seconds={offset!r} "
+            f"{city_id}: response reports utc_offset_seconds={offset!r} "
             f"(timezone {payload.get('timezone')!r}) despite timezone=UTC being "
             "requested. Every timestamp would be shifted and the daily "
             "aggregates would be computed over the wrong day boundaries."
@@ -637,18 +646,18 @@ def _validate(
     units = payload.get(f"{grain}_units")
     if not isinstance(block, dict) or not isinstance(units, dict):
         raise ArchiveResponseError(
-            f"{city.id}: response has no usable {grain!r} / {grain}_units block. "
+            f"{city_id}: response has no usable {grain!r} / {grain}_units block. "
             f"Top-level keys: {sorted(payload)}."
         )
 
     raw_times = block.get("time")
     if not isinstance(raw_times, list):
-        raise ArchiveResponseError(f"{city.id}: {grain}.time is missing or not a list.")
+        raise ArchiveResponseError(f"{city_id}: {grain}.time is missing or not a list.")
 
     expected = _expected_count(start, end, grain)
     if len(raw_times) != expected:
         raise ArchiveResponseError(
-            f"{city.id}: expected {expected} {grain} timestamps for "
+            f"{city_id}: expected {expected} {grain} timestamps for "
             f"{start}..{end}, got {len(raw_times)}. The API silently returned a "
             "different range than the one requested."
         )
@@ -656,7 +665,7 @@ def _validate(
     times = tuple(_parse_timestamp(raw, grain) for raw in raw_times)
     if times and (times[0].date() != start or times[-1].date() != end):
         raise ArchiveResponseError(
-            f"{city.id}: requested {start}..{end} but the response spans "
+            f"{city_id}: requested {start}..{end} but the response spans "
             f"{times[0].date()}..{times[-1].date()}."
         )
 
@@ -665,20 +674,20 @@ def _validate(
         series = block.get(name)
         if series is None:
             raise ArchiveResponseError(
-                f"{city.id}: {grain} variable {name!r} was requested but is "
+                f"{city_id}: {grain} variable {name!r} was requested but is "
                 f"absent from the response. Present: {sorted(block)}."
             )
         if not isinstance(series, list) or len(series) != len(times):
             length = len(series) if isinstance(series, list) else "not a list"
             raise ArchiveResponseError(
-                f"{city.id}: {grain}.{name} has length {length}, expected "
+                f"{city_id}: {grain}.{name} has length {length}, expected "
                 f"{len(times)} to match the time axis."
             )
 
         actual_unit = units.get(name)
         if actual_unit != expected_unit:
             raise ArchiveResponseError(
-                f"{city.id}: {grain}.{name} came back in {actual_unit!r}, not "
+                f"{city_id}: {grain}.{name} came back in {actual_unit!r}, not "
                 f"the {expected_unit!r} this client requests and the bronze "
                 "schema documents. Refusing to land it — the values would be "
                 "numerically wrong under a correct-looking column name."
@@ -687,7 +696,7 @@ def _validate(
         for value in series:
             if value is not None and not isinstance(value, (int, float)):
                 raise ArchiveResponseError(
-                    f"{city.id}: {grain}.{name} contains a non-numeric value "
+                    f"{city_id}: {grain}.{name} contains a non-numeric value "
                     f"{value!r}."
                 )
         values[name] = tuple(series)
@@ -698,14 +707,14 @@ def _validate(
         longitude, (int, float)
     ):
         raise ArchiveResponseError(
-            f"{city.id}: response is missing the grid cell coordinates that "
+            f"{city_id}: response is missing the grid cell coordinates that "
             "bronze records as provenance."
         )
 
     elevation = payload.get("elevation")
 
     return ArchiveResponse(
-        city_id=city.id,
+        city_id=city_id,
         grain=grain,
         start=start,
         end=end,
@@ -722,55 +731,22 @@ def _validate(
 
 
 # ---------------------------------------------------------------------------
-# The public entry point
+# Building the request
 # ---------------------------------------------------------------------------
 
 
-def fetch_observations(
-    city: City | str,
-    start: dt.date,
-    end: dt.date,
-    grain: Grain = "daily",
-    *,
-    session: requests.Session | None = None,
-    settings: Settings | None = None,
-) -> ArchiveResponse:
-    """Fetch one city's observations for one date range at one grain.
+def _resolve(
+    city: City | str, start: dt.date, end: dt.date, grain: Grain
+) -> tuple[City, Grain]:
+    """Check the arguments and resolve the city, before any network call.
 
-    Args:
-        city: A :class:`~cities.City`, or a city id resolved through
-            ``config/cities.yml``. Coordinates are never passed in directly —
-            the registry is the only source of them.
-        start: First day of the range, inclusive.
-        end: Last day, inclusive. Both are calendar dates in UTC.
-        grain: ``"daily"`` (30-year baseline) or ``"hourly"`` (trailing
-            24 months, storm dynamics).
-        session: Reuse one across a backfill. A private session is created and
-            closed per call when omitted, which is fine for one-off use and
-            wasteful for hundreds of requests.
-        settings: Override the process configuration. Intended for tests.
-
-    Returns:
-        A validated :class:`ArchiveResponse`.
-
-    Raises:
-        ValueError: The arguments cannot describe a valid request — checked
-            before any network call, because a round trip to learn that
-            ``end`` precedes ``start`` is a wasted one.
-        ArchiveRequestError: The API rejected the request with a 4xx. Raised on
-            the first attempt, with the response body in the message.
-        ArchiveRetryableError: Timeouts, 5xx, or rate limits that survived
-            ``MAX_RETRY_ATTEMPTS``.
-        ArchiveResponseError: A 200 whose units, timezone, or shape do not
-            match what was asked for.
+    A round trip spent learning that ``end`` precedes ``start`` is a wasted
+    one, and during a backfill it is a wasted one out of hundreds.
     """
-    resolved_settings = settings if settings is not None else get_settings()
     resolved_city = city if isinstance(city, City) else get_city(str(city))
 
     if grain not in _UNITS_BY_GRAIN:
-        raise ValueError(
-            f"grain must be 'daily' or 'hourly', got {grain!r}."
-        )
+        raise ValueError(f"grain must be 'daily' or 'hourly', got {grain!r}.")
     if not isinstance(start, dt.date) or not isinstance(end, dt.date):
         raise ValueError(
             f"start and end must be dates, got {type(start).__name__} and "
@@ -794,15 +770,104 @@ def fetch_observations(
             "also trails the present by several days; the API states its exact "
             "cut-off in the 400 it returns for a range beyond it."
         )
+    return resolved_city, grain
 
-    params = {
-        "latitude": f"{resolved_city.lat:.6f}",
-        "longitude": f"{resolved_city.lon:.6f}",
+
+def _build_params(
+    city: City, start: dt.date, end: dt.date, grain: Grain
+) -> dict[str, str]:
+    return {
+        "latitude": f"{city.lat:.6f}",
+        "longitude": f"{city.lon:.6f}",
         "start_date": start.isoformat(),
         "end_date": end.isoformat(),
         grain: ",".join(_UNITS_BY_GRAIN[grain]),
         **_UNIT_PARAMS,
     }
+
+
+def request_url(
+    city: City | str,
+    start: dt.date,
+    end: dt.date,
+    grain: Grain = "daily",
+    *,
+    settings: Settings | None = None,
+) -> str:
+    """The exact URL :func:`fetch_observations` would request.
+
+    Prepared through ``requests`` rather than assembled by hand, so it is the
+    same string by construction rather than by careful maintenance. Two callers
+    need it without making the request: ING-03's replay, which rebuilds bronze
+    from archived payloads and must reproduce the ``source_url`` those rows
+    would have carried, and any log line that wants to say what it is about to
+    fetch.
+    """
+    resolved_settings = settings if settings is not None else get_settings()
+    resolved_city, grain = _resolve(city, start, end, grain)
+    prepared = requests.Request(
+        "GET",
+        resolved_settings.openmeteo_base_url,
+        params=_build_params(resolved_city, start, end, grain),
+    ).prepare()
+    return str(prepared.url)
+
+
+# ---------------------------------------------------------------------------
+# The public entry point
+# ---------------------------------------------------------------------------
+
+
+def fetch_observations(
+    city: City | str,
+    start: dt.date,
+    end: dt.date,
+    grain: Grain = "daily",
+    *,
+    on_payload: Callable[[bytes, str], None] | None = None,
+    session: requests.Session | None = None,
+    settings: Settings | None = None,
+) -> ArchiveResponse:
+    """Fetch one city's observations for one date range at one grain.
+
+    Args:
+        city: A :class:`~cities.City`, or a city id resolved through
+            ``config/cities.yml``. Coordinates are never passed in directly —
+            the registry is the only source of them.
+        start: First day of the range, inclusive.
+        end: Last day, inclusive. Both are calendar dates in UTC.
+        grain: ``"daily"`` (30-year baseline) or ``"hourly"`` (trailing
+            24 months, storm dynamics).
+        on_payload: Called with ``(raw_bytes, url)`` once the request has
+            succeeded and **before** the response is parsed. This is the seam
+            ING-03's archival hangs off: a parsing bug found on day seven must
+            not cost a re-pull of thirty years, which it would if the payload
+            only reached disk after the code that has the bug in it. It runs
+            outside the retry loop, so failed attempts are never archived, and
+            an exception from it propagates — a response fetched and then
+            dropped on the floor is worse than a loud failure.
+        session: Reuse one across a backfill. A private session is created and
+            closed per call when omitted, which is fine for one-off use and
+            wasteful for hundreds of requests.
+        settings: Override the process configuration. Intended for tests.
+
+    Returns:
+        A validated :class:`ArchiveResponse`.
+
+    Raises:
+        ValueError: The arguments cannot describe a valid request — checked
+            before any network call, because a round trip to learn that
+            ``end`` precedes ``start`` is a wasted one.
+        ArchiveRequestError: The API rejected the request with a 4xx. Raised on
+            the first attempt, with the response body in the message.
+        ArchiveRetryableError: Timeouts, 5xx, or rate limits that survived
+            ``MAX_RETRY_ATTEMPTS``.
+        ArchiveResponseError: A 200 whose units, timezone, or shape do not
+            match what was asked for.
+    """
+    resolved_settings = settings if settings is not None else get_settings()
+    resolved_city, grain = _resolve(city, start, end, grain)
+    params = _build_params(resolved_city, start, end, grain)
     timeout = (
         float(resolved_settings.request_connect_timeout_seconds),
         float(resolved_settings.request_timeout_seconds),
@@ -819,16 +884,19 @@ def fetch_observations(
         resolved_settings.openmeteo_base_url,
     )
     try:
-        payload, url = _retrying(resolved_settings)(
+        payload, url, raw = _retrying(resolved_settings)(
             _get, active, resolved_settings.openmeteo_base_url, params, timeout
         )
     finally:
         if owns_session:
             active.close()
 
-    return _validate(
+    if on_payload is not None:
+        on_payload(raw, url)
+
+    return parse_payload(
         payload,
-        city=resolved_city,
+        city_id=resolved_city.id,
         grain=grain,
         start=start,
         end=end,

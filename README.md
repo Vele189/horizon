@@ -231,6 +231,59 @@ harsh price for that:
 The limit is honest and tested: *growing* the chunk past a landed boundary
 re-fetches the partly-covered window.
 
+## Raw payload archive
+
+Every response is gzipped to
+`data/raw/{grain}/{city_id}/{start}_{end}.json.gz` exactly as it arrived — not
+re-serialised, not reordered, not validated. `data/` is git-ignored and nothing
+under it is tracked.
+
+```bash
+python ingestion/archive.py             # what is on disk
+python ingestion/archive.py --verify    # re-parse everything, no network
+python ingestion/archive.py --stats     # measured size, projected to the full backfill
+```
+
+### The write happens before the parse
+
+That ordering is the whole point. A parsing bug found on day seven — a unit
+misread, a timestamp off by an hour, a column mapped to the wrong variable —
+costs a re-run of the transformation if the payloads are on disk, and a
+[2.7-day re-pull](#the-backfill-does-not-fit-in-one-day-of-free-quota) if they
+are not. So archival hangs off an `on_payload` hook that
+`fetch_observations` calls between the successful response and
+`parse_payload`, and a response that fails validation is still on disk
+afterwards. The hook runs outside the retry loop, so failed attempts are never
+archived, and an exception from it propagates — a response fetched and then
+dropped on the floor is worse than a loud failure.
+
+Replay feeds archived payloads through the *same* `parse_payload` the live
+path uses, so fixing a parser bug fixes replay by construction rather than
+twice. `source_url` is reproduced by `request_url()`, which prepares the
+identical string through `requests` rather than assembling it by hand — tested
+against a live response.
+
+### Measured size
+
+Sampled across five climates and both grains (London, Reykjavík, Singapore,
+Phoenix, Sydney daily; London and Cairo hourly):
+
+| | Rows sampled | Compressed | Ratio |
+|---|---|---|---|
+| Daily (21 variables) | 1 826 | 33.5 B/row | 29% of raw |
+| Hourly (12 variables) | 17 568 | 14.9 B/row | 20% of raw |
+
+Projected across the full 436 665-row backfill: **5.5 MiB daily + 3.7 MiB
+hourly ≈ 9.3 MiB**. Two decimal orders below the 0.5 GB Neon allowance the
+per-row `jsonb` column would have eaten into — and it never goes near the
+database at all.
+
+Files are written to a temporary name in the destination directory, fsynced,
+then renamed over the target, so a crash mid-write leaves the previous file
+rather than a truncated one. `mtime=0` and an empty gzip `filename` field keep
+the output byte-identical for identical input, which makes re-archiving a unit
+detectably a no-op.
+
 ## Licence
 
 [MIT](LICENSE)
