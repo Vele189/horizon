@@ -1,0 +1,293 @@
+# =============================================================================
+# Target cities — single source of truth
+# =============================================================================
+# Nothing downstream may hardcode a city name, coordinate, or timezone. Read
+# this file through `cities.load_cities()`, which validates it on load.
+#
+# The selection is not arbitrary. It satisfies the envelope fixed in decision
+# D2 of docs/proposal.md, and each property does specific work:
+#
+#   15 cities, 10 northern / 5 southern   hemisphere-aware season mapping
+#   Köppen Af → Dfb                       every major climate regime
+#   64.15°N (Reykjavik) → 36.85°S (Auckland)
+#   10 m (Lagos) → 1753 m (Johannesburg)  elevation as a real covariate
+#
+# Seven cities carry a `validation_event`. These are the Day 8 gate: if a dated
+# event does not surface as a |Z| > 2.5 anomaly, the climatology is wrong and
+# everything downstream is built on sand (§7.2). This file is therefore a test
+# fixture as well as a config file — treat a change to an event date as a
+# change to a test.
+#
+# Coordinates are city-centre reference points. Open-Meteo resolves them to the
+# nearest ERA5 grid cell; `elevation_m` is the city's own elevation, not the
+# grid cell's, and is carried for use as a model feature.
+# =============================================================================
+
+version: 1
+
+cities:
+
+  # ---------------------------------------------------------------------------
+  # Northern hemisphere — 10
+  # ---------------------------------------------------------------------------
+
+  - id: singapore
+    name: Singapore
+    country: Singapore
+    country_code: SG
+    lat: 1.3521
+    lon: 103.8198
+    elevation_m: 15
+    timezone: Asia/Singapore
+    koppen: Af
+    season_model: seasonless
+    role: >-
+      Low-σ bookend. The tightest temperature distribution in the set, so a
+      2 °C departure is a three-sigma event. Paired with Moscow, it is the
+      argument for a Z-score over a fixed absolute threshold.
+
+  - id: lagos
+    name: Lagos
+    country: Nigeria
+    country_code: NG
+    lat: 6.5244
+    lon: 3.3792
+    elevation_m: 10
+    timezone: Africa/Lagos
+    koppen: Aw
+    season_model: wet_dry
+    role: >-
+      Lowest elevation in the set. Has no temperate thermal cycle; dim_date
+      must express a wet/dry regime rather than mapping months to four
+      northern seasons.
+
+  - id: delhi
+    name: Delhi
+    country: India
+    country_code: IN
+    lat: 28.6139
+    lon: 77.2090
+    elevation_m: 216
+    timezone: Asia/Kolkata
+    koppen: BSh
+    season_model: four_season
+    role: >-
+      Timezone trap: UTC+05:30 breaks any arithmetic that assumes integer-hour
+      offsets. Also the strongest monsoon signal in the set.
+
+  - id: cairo
+    name: Cairo
+    country: Egypt
+    country_code: EG
+    lat: 30.0444
+    lon: 31.2357
+    elevation_m: 23
+    timezone: Africa/Cairo
+    koppen: BWh
+    season_model: four_season
+    role: >-
+      Hot desert with a wide diurnal range and near-zero precipitation — the
+      arid counterpart to Singapore's humidity.
+
+  - id: phoenix
+    name: Phoenix
+    country: United States
+    country_code: US
+    lat: 33.4484
+    lon: -112.0740
+    elevation_m: 331
+    timezone: America/Phoenix
+    koppen: BWh
+    season_model: four_season
+    role: >-
+      Timezone trap: observes no DST despite a US longitude, so any logic that
+      infers DST from country or offset will be wrong here for half the year.
+
+  - id: tokyo
+    name: Tokyo
+    country: Japan
+    country_code: JP
+    lat: 35.6762
+    lon: 139.6503
+    elevation_m: 40
+    timezone: Asia/Tokyo
+    koppen: Cfa
+    season_model: four_season
+    validation_event:
+      date: 2018-07-23
+      direction: hot
+      description: >-
+        2018 Japan heat wave. Kumagaya set the national record at 41.1 °C;
+        Tokyo (Otemachi) reached 39.0 °C, its highest since records began in
+        1875. Declared a natural disaster by the Japan Meteorological Agency.
+      observed_c: 39.0
+
+  - id: portland
+    name: Portland
+    country: United States
+    country_code: US
+    lat: 45.5152
+    lon: -122.6784
+    elevation_m: 15
+    timezone: America/Los_Angeles
+    koppen: Csb
+    season_model: four_season
+    validation_event:
+      date: 2021-06-28
+      direction: hot
+      description: >-
+        2021 Pacific Northwest heat dome, third and hottest day. Portland
+        reached 46.7 °C, beating its previous all-time record by 5 °C — an
+        anomaly so far outside the historical distribution that it is the
+        single strongest test of the baseline in this file.
+      observed_c: 46.7
+
+  - id: london
+    name: London
+    country: United Kingdom
+    country_code: GB
+    lat: 51.5074
+    lon: -0.1278
+    elevation_m: 11
+    timezone: Europe/London
+    koppen: Cfb
+    season_model: four_season
+    validation_event:
+      date: 2022-07-19
+      direction: hot
+      description: >-
+        First recorded 40 °C day in the United Kingdom. Heathrow reached
+        40.2 °C and Coningsby 40.3 °C, exceeding the previous national record
+        by 1.6 °C.
+      observed_c: 40.2
+
+  - id: moscow
+    name: Moscow
+    country: Russia
+    country_code: RU
+    lat: 55.7558
+    lon: 37.6173
+    elevation_m: 156
+    timezone: Europe/Moscow
+    koppen: Dfb
+    season_model: four_season
+    role: >-
+      High-σ bookend. The widest temperature distribution in the set, and the
+      only Dfb continental climate.
+    validation_event:
+      date: 2010-07-29
+      direction: hot
+      description: >-
+        Peak of the 2010 Russian heat wave. Moscow reached 38.2 °C, its
+        all-time record, during a blocking pattern that held for over a month.
+      observed_c: 38.2
+
+  - id: reykjavik
+    name: Reykjavík
+    country: Iceland
+    country_code: IS
+    lat: 64.1466
+    lon: -21.9426
+    elevation_m: 61
+    timezone: Atlantic/Reykjavik
+    koppen: Cfc
+    season_model: four_season
+    role: >-
+      Northernmost city in the set. Timezone trap: UTC+00:00 year-round with
+      no DST, so it is not interchangeable with Europe/London despite sharing
+      an offset for part of the year.
+
+  # ---------------------------------------------------------------------------
+  # Southern hemisphere — 5
+  # ---------------------------------------------------------------------------
+
+  - id: sao_paulo
+    name: São Paulo
+    country: Brazil
+    country_code: BR
+    lat: -23.5505
+    lon: -46.6333
+    elevation_m: 760
+    timezone: America/Sao_Paulo
+    koppen: Cfa
+    season_model: four_season
+    validation_event:
+      date: 2021-07-30
+      direction: cold
+      description: >-
+        2021 Brazilian cold wave and frost. An Antarctic air mass pushed frost
+        far north of its usual limit, devastating the coffee crop. The only
+        negative anomaly among the seven — it proves the Z-score detects cold
+        departures, not just heat.
+      observed_c: 6.5
+
+  - id: johannesburg
+    name: Johannesburg
+    country: South Africa
+    country_code: ZA
+    lat: -26.2041
+    lon: 28.0473
+    elevation_m: 1753
+    timezone: Africa/Johannesburg
+    koppen: Cwb
+    season_model: four_season
+    role: >-
+      Highest elevation in the set at 1753 m, which suppresses absolute
+      temperature independently of latitude — the reason elevation is carried
+      as a feature rather than treated as metadata.
+
+  - id: sydney
+    name: Sydney
+    country: Australia
+    country_code: AU
+    lat: -33.8688
+    lon: 151.2093
+    elevation_m: 58
+    timezone: Australia/Sydney
+    koppen: Cfa
+    season_model: four_season
+    role: >-
+      Timezone trap: observes DST on the opposite calendar to the northern
+      cities, so a hardcoded northern DST window is wrong here twice a year.
+    validation_event:
+      date: 2020-01-04
+      direction: hot
+      description: >-
+        Peak of the 2019–20 Australian bushfire season heat. Penrith, in
+        western Sydney, reached 48.9 °C — the hottest place on Earth that day
+        and the highest temperature recorded in the Sydney basin.
+      observed_c: 48.9
+
+  - id: buenos_aires
+    name: Buenos Aires
+    country: Argentina
+    country_code: AR
+    lat: -34.6037
+    lon: -58.3816
+    elevation_m: 25
+    timezone: America/Argentina/Buenos_Aires
+    koppen: Cfa
+    season_model: four_season
+    validation_event:
+      date: 2022-01-11
+      direction: hot
+      description: >-
+        2022 Southern Cone heat wave. Buenos Aires reached 41.1 °C, its
+        highest since 1957, and briefly made Argentina the hottest place on
+        the planet.
+      observed_c: 41.1
+
+  - id: auckland
+    name: Auckland
+    country: New Zealand
+    country_code: NZ
+    lat: -36.8485
+    lon: 174.7633
+    elevation_m: 26
+    timezone: Pacific/Auckland
+    koppen: Cfb
+    season_model: four_season
+    role: >-
+      Southernmost city in the set. Timezone trap: southern-calendar DST, and
+      a UTC+12/+13 offset that puts its local day ahead of UTC — the case most
+      likely to expose an off-by-one-day join.
