@@ -46,6 +46,7 @@ from ingestion.client import (  # noqa: E402
     HOURLY_VARIABLES,
     MAX_BACKOFF_SECONDS,
     MAX_RETRY_AFTER_SECONDS,
+    RATE_LIMIT_FALLBACK_SECONDS,
     USER_AGENT,
     ArchiveRateLimited,
     ArchiveRequestError,
@@ -491,16 +492,22 @@ def test_retry_after_cannot_park_the_backfill_indefinitely(settings, slept) -> N
     assert slept == [MAX_RETRY_AFTER_SECONDS]
 
 
-def test_429_without_retry_after_falls_back_to_backoff(settings, slept) -> None:
+def test_429_without_retry_after_waits_out_the_stated_window(settings, slept) -> None:
+    """Open-Meteo's is the headerless case, and it is the common one.
+
+    It answers an overrun with a bare 429 reading "Minutely API request limit
+    exceeded. Please try again in one minute." Exponential backoff would spend
+    every attempt inside the minute the server is asking for.
+    """
     fetch(
         [
-            responds(429, text="rate limited"),
+            responds(429, text="Minutely API request limit exceeded. "
+                               "Please try again in one minute."),
             responds(json_body=daily_payload()),
         ],
         settings,
     )
-    assert len(slept) == 1
-    assert 2.0 <= slept[0] < 4.0
+    assert slept == [RATE_LIMIT_FALLBACK_SECONDS]
 
 
 def test_429_is_reported_with_its_retry_after_when_it_never_clears(

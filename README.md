@@ -145,12 +145,91 @@ machine:
 - **429 honours `Retry-After`** — both the delay-seconds and HTTP-date forms —
   rather than backing off blindly, which would otherwise retry sooner than the
   server allows or wait far longer than needed. It is capped at five minutes so
-  a misconfigured proxy cannot park the backfill for a day.
+  a misconfigured proxy cannot park the backfill for a day. Open-Meteo sends
+  *no* header and a body reading "Minutely API request limit exceeded. Please
+  try again in one minute", so the headerless case waits a full minute rather
+  than falling back to exponential backoff — 2s, 6s, 10s, 16s never spans the
+  window the server is asking for, and burns every attempt for nothing.
 - **4xx raises on the first attempt** with the response body in the message.
   Open-Meteo's `reason` field names the offending parameter, and a bad request
   will fail identically on every retry.
 - **Retries are re-raised as the real exception**, not a `RetryError` wrapper,
   so a caller can tell a rate limit from a dead connection.
+
+## Backfill planner
+
+[`ingestion/planner.py`](ingestion/planner.py) decomposes the backfill into
+city × window work units, records what has landed, and paces the run.
+
+```bash
+python ingestion/planner.py                    # the plan and what it costs
+python ingestion/planner.py --list             # every pending unit
+python ingestion/planner.py --progress         # what the manifest says landed
+```
+
+### Open-Meteo meters weighted calls, not HTTP requests
+
+This is the finding that shapes the whole workstream. A request costs
+`(variables / 10) × (days / 14)` API calls, each factor floored at 1 — so one
+city-year of the 21 daily variables costs **55 calls, not one**.
+
+Measured on 2026-09-07: five requests for London — one, two, five, ten and
+thirty years of daily data — were refused on the fifth with `HTTP 429 Minutely
+API request limit exceeded`. Five requests is nowhere near the documented
+600/min. Their *weighted* cost is 55 + 110 + 274 + 548 = 987 by the fourth,
+crossing 600 exactly where the refusal landed. The formula is what the planner
+budgets against, and `test_the_observed_429_is_consistent_with_the_formula`
+pins that reasoning down.
+
+Two consequences:
+
+- **Chunk size is quota-neutral above a fortnight.** Weight is proportional to
+  days, so ten one-year units cost what one ten-year unit costs. Below 14 days
+  the floor makes short units cost a full call each — smaller is never cheaper,
+  it only buys finer resume granularity. That frees the default to be chosen
+  for legibility: **one calendar year**, measuring 47 KiB daily / 732 KiB
+  hourly, at 55 / 31 weighted calls.
+- **A fixed inter-request delay is not enough.** One second between city-years
+  would spend 3 300 calls a minute against a 600 budget. `REQUEST_DELAY_SECONDS`
+  is a *floor*; the planner derives the real delay from each unit's weight and
+  targets half the minutely allowance.
+
+### The backfill does not fit in one day of free quota
+
+| | Units | Rows | Weighted calls |
+|---|---|---|---|
+| Daily, 1995 → present | 480 | 173 505 | 26 026 |
+| Hourly, trailing 24 months | 45 | 263 160 | 957 |
+| **Total** | **525** | **436 665** | **26 983** |
+
+Against an allowance of 10 000 calls/day that is **2.7 days**, not the "runs for
+hours" the delivery plan assumed. This is not something to engineer around — it
+is the reason the manifest exists. `Plan.within_daily_quota()` returns the
+prefix that fits in today's allowance; the run stops there and tomorrow's
+session resumes from the manifest.
+
+### Resumability
+
+Completed units are appended to a JSONL manifest (`INGEST_MANIFEST_PATH`,
+git-ignored) and fsynced before the next unit starts, so a record on disk means
+the rows really are in the warehouse. Append-only rather than a rewritten
+document because the failure being designed against is the run dying mid-write:
+a truncated final line costs one re-fetched unit, a truncated rewrite costs the
+whole history.
+
+Completion is tested by **date coverage**, not by matching the window key, so
+the chunk size can change between sessions. The natural response to a 429 or a
+timeout is to halve it, and re-fetching everything landed so far would be a
+harsh price for that:
+
+```
+5 one-year units planned, 2 landed
+  → re-plan at 12 months:  3 pending, 2 skipped
+  → re-plan at  6 months:  6 pending, 4 skipped   # still skipped
+```
+
+The limit is honest and tested: *growing* the chunk past a landed boundary
+re-fetches the partly-covered window.
 
 ## Licence
 

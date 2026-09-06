@@ -194,6 +194,16 @@ ARCHIVE_START: Final[dt.date] = dt.date(1940, 1, 1)
 # for a day. Honour the header, but not past this.
 MAX_RETRY_AFTER_SECONDS: Final[float] = 300.0
 
+# What to wait when a 429 arrives with no Retry-After header at all. Measured
+# on 2026-09-07: Open-Meteo rate-limits on *weighted* API calls rather than
+# HTTP requests, and answers an overrun with a bare 429 whose body reads
+# "Minutely API request limit exceeded. Please try again in one minute." No
+# header, so the ordinary exponential backoff applied — and 2s, 6s, 10s, 16s
+# never spans the minute the server is actually asking for, which burns every
+# attempt for nothing. A rate limit is not a transient blip to feel out
+# gradually; the server has stated its window, so wait it out.
+RATE_LIMIT_FALLBACK_SECONDS: Final[float] = 60.0
+
 # Ceiling on the exponential backoff between ordinary retries.
 MAX_BACKOFF_SECONDS: Final[float] = 60.0
 
@@ -237,8 +247,10 @@ class ArchiveRateLimited(ArchiveRetryableError):
     """The API returned 429.
 
     ``retry_after`` is the parsed header in seconds, or ``None`` when the
-    response omitted it or sent something unparseable — in which case the
-    caller falls back to ordinary exponential backoff.
+    response omitted it or sent something unparseable — in which case the wait
+    strategy falls back to :data:`RATE_LIMIT_FALLBACK_SECONDS` rather than to
+    exponential backoff. Open-Meteo sends no header, so this is the usual path
+    rather than the exotic one.
     """
 
     def __init__(
@@ -421,8 +433,13 @@ class _wait_archive(wait_base):
     def __call__(self, retry_state: RetryCallState) -> float:
         outcome = retry_state.outcome
         exc = outcome.exception() if outcome is not None else None
-        if isinstance(exc, ArchiveRateLimited) and exc.retry_after is not None:
-            return min(exc.retry_after, MAX_RETRY_AFTER_SECONDS)
+        if isinstance(exc, ArchiveRateLimited):
+            stated = (
+                exc.retry_after
+                if exc.retry_after is not None
+                else RATE_LIMIT_FALLBACK_SECONDS
+            )
+            return min(stated, MAX_RETRY_AFTER_SECONDS)
         return self._exponential(retry_state)
 
 

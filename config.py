@@ -92,6 +92,22 @@ def _get_positive_int(name: str, default: int) -> int:
     return value
 
 
+def _get_positive_float(name: str, default: float) -> float:
+    """A non-negative float. Zero is allowed — it means "no delay"."""
+    raw = _get(name)
+    if raw is None:
+        return default
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise ConfigError(
+            f"{name} must be a number, got {raw!r}. Check your .env."
+        ) from exc
+    if value < 0:
+        raise ConfigError(f"{name} must not be negative, got {value}.")
+    return value
+
+
 def _get_path(name: str, default: str) -> Path:
     raw = _get_str(name, default)
     path = Path(raw)
@@ -128,7 +144,10 @@ class Settings:
     request_timeout_seconds: int
     max_retry_attempts: int
     retry_backoff_seconds: int
+    request_delay_seconds: float
+    ingest_chunk_months: int
     data_raw_dir: Path
+    ingest_manifest_path: Path
     model_artifact_dir: Path
     cities_config_path: Path
     log_dir: Path
@@ -204,7 +223,12 @@ def _build_settings() -> Settings:
         request_timeout_seconds=_get_positive_int("REQUEST_TIMEOUT_SECONDS", 30),
         max_retry_attempts=_get_positive_int("MAX_RETRY_ATTEMPTS", 5),
         retry_backoff_seconds=_get_positive_int("RETRY_BACKOFF_SECONDS", 2),
+        request_delay_seconds=_get_positive_float("REQUEST_DELAY_SECONDS", 1.0),
+        ingest_chunk_months=_get_positive_int("INGEST_CHUNK_MONTHS", 12),
         data_raw_dir=_get_path("DATA_RAW_DIR", "data/raw"),
+        ingest_manifest_path=_get_path(
+            "INGEST_MANIFEST_PATH", "data/manifest.jsonl"
+        ),
         model_artifact_dir=_get_path("MODEL_ARTIFACT_DIR", "machine_learning/artifacts"),
         cities_config_path=_get_path("CITIES_CONFIG_PATH", "config/cities.yml"),
         log_dir=_get_path("LOG_DIR", "logs"),
