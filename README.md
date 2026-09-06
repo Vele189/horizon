@@ -36,14 +36,29 @@ free-plan limits force this and shape everything downstream:
   promotion, then read-only dashboard traffic.
 
 Neon scales compute to zero after five minutes idle and resumes on the next
-query, so there is no keep-alive job to maintain. The cold-start cost is paid
-by the first dashboard visitor after a quiet period, and is reproducible with:
+query, so there is no keep-alive job to maintain. Measured from a development
+machine in South Africa against `aws-us-east-2`:
+
+| | Connect + first query |
+|---|---|
+| Warm (compute active, median of 5) | 2409 ms |
+| Cold (after 340 s idle) | 3619 ms |
+| **Cold-start penalty** | **~1.2 s** |
+
+Only the 1.2 s is Neon resuming compute. The 2.4 s floor underneath it is
+distance: TCP handshake to that region measures 271 ms round-trip and TCP+TLS
+553 ms, so a Postgres connection's handshake and SCRAM exchange spend roughly
+eight round-trips crossing an ocean. **This is a local-development cost, not a
+production one** — the dashboard is deployed to Streamlit Community Cloud,
+which sits on the same continent as the database. Do not tune the schema in
+response to latency observed from a laptop.
+
+Reproduce with:
 
 ```bash
-python tests/check_connection.py --target serving --cold
+python tests/check_connection.py --target serving --cold   # after 5 min idle
+python tests/check_connection.py                           # both targets
 ```
-
-Run it with no arguments to check both targets at once.
 
 ### Quota dashboards
 
