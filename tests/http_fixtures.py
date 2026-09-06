@@ -20,6 +20,28 @@ from ingestion.client import DAILY_UNITS, DAILY_VARIABLES, HOURLY_UNITS, HOURLY_
 
 LONDON_GRID = (51.493847, -0.1630249, 16.0)
 
+#: Variables the API returns as JSON integers, and the bronze schema declares
+#: smallint. Fixtures must respect that: a payload full of floats would exercise
+#: a COPY path real data never takes, and hide the one it does.
+INTEGER_VARIABLES = frozenset(
+    {
+        "weather_code",
+        "cloud_cover",
+        "cloud_cover_mean",
+        "relative_humidity_2m",
+        "relative_humidity_2m_mean",
+        "wind_direction_10m",
+        "wind_direction_10m_dominant",
+    }
+)
+
+
+def _series(name: str, count: int) -> list:
+    """Values shaped like the API's: integers where it sends integers."""
+    if name in INTEGER_VARIABLES:
+        return [i % 100 for i in range(count)]
+    return [float(i) for i in range(count)]
+
 
 class ScriptedAdapter(BaseAdapter):
     """Replays a fixed script of responses and exceptions, recording calls.
@@ -94,7 +116,7 @@ def daily_payload(days: int, start: dt.date, **overrides) -> dict:
         "daily_units": {"time": "iso8601", **DAILY_UNITS},
         "daily": {
             "time": times,
-            **{name: [float(i) for i in range(days)] for name in DAILY_VARIABLES},
+            **{name: _series(name, days) for name in DAILY_VARIABLES},
         },
     }
     payload.update(overrides)
@@ -118,7 +140,7 @@ def hourly_payload(days: int, start: dt.date, **overrides) -> dict:
         "hourly_units": {"time": "iso8601", **HOURLY_UNITS},
         "hourly": {
             "time": times,
-            **{name: [float(i) for i in range(hours)] for name in HOURLY_VARIABLES},
+            **{name: _series(name, hours) for name in HOURLY_VARIABLES},
         },
     }
     payload.update(overrides)

@@ -284,6 +284,62 @@ rather than a truncated one. `mtime=0` and an empty gzip `filename` field keep
 the output byte-identical for identical input, which makes re-archiving a unit
 detectably a no-op.
 
+## Bronze loader
+
+[`ingestion/loader.py`](ingestion/loader.py) replays archived payloads into
+`bronze_raw.observations_daily` and `_hourly`. It reads from disk, never from
+the network.
+
+```bash
+python ingestion/loader.py --dry-run     # what would be loaded
+python ingestion/loader.py               # load everything not yet in the manifest
+```
+
+### What it does not do
+
+Bronze's job is faithful landing. Nothing here converts a unit, shifts a
+timezone, fills a gap, or deduplicates a row — each of those is a decision, and
+a decision belongs in dbt where it is SQL, version controlled and tested, not
+buried in a Python loader where it is invisible to anyone reading the models.
+Every one of those negatives has a test that fails if a future well-meaning
+change adds the cleverness.
+
+The judgement call is null handling, and it is exercised in the direction of
+doing nothing: a null in the payload is a null in the warehouse. Coercing it to
+zero would turn "this grid cell reports no snowfall data" into "it did not
+snow" — a different claim, a wrong one, and indistinguishable from a real
+measurement afterwards.
+
+Two things make that work, and both were caught by tests rather than reasoned
+about:
+
+- The frame is built with `dtype=object`. Left to itself pandas widens any
+  column containing a null to `float64` and replaces the null with `NaN`, so
+  `weather_code` would arrive as `51.0` and a missing value would land as a
+  float rather than SQL NULL.
+- The CSV handed to `COPY` uses `QUOTE_NOTNULL`, not the default
+  `QUOTE_MINIMAL`. Postgres reads an *unquoted* empty CSV field as NULL and a
+  quoted one as an empty string; `QUOTE_MINIMAL` writes both as nothing at all,
+  which would silently null any empty string.
+
+Type conversion is refused rather than performed. A `smallint` column rejecting
+`"98.0"` means the API changed how it represents an integer, and landing it
+quietly as `98` would hide that — the payload is already archived, so nothing
+is lost by stopping, only delayed.
+
+### Throughput
+
+`to_sql`'s `method=` hook runs `COPY FROM STDIN` instead of pandas' multi-row
+`INSERT`. Measured locally: **19 394 rows in 0.7 s (~28 000 rows/s)**, which
+puts the full 436 665-row backfill at roughly 15 seconds of load time. A test
+asserts no `INSERT` statement is issued at all, so the mechanism is pinned
+rather than described.
+
+Each unit commits in its own transaction, and the manifest is recorded *after*
+that commit — so a manifest entry always means the rows are really in the
+warehouse. `batch_id` groups every row one run wrote, so a bad run is undone
+with a single `delete ... where batch_id = ...`.
+
 ## Licence
 
 [MIT](LICENSE)

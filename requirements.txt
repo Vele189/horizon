@@ -7,3 +7,5 @@ PyYAML==6.0.2
 # Ingestion
 requests==2.34.2
 tenacity==9.1.4
+pandas==3.0.5
+SQLAlchemy==2.0.52
