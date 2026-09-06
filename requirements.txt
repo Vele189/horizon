@@ -1,6 +1,9 @@
-# Day 1 — scaffolding only. Each workstream appends its own dependencies as it
-# lands (ingestion: requests/tenacity; transformation: dbt-postgres; ML:
-# scikit-learn/xgboost; BI: streamlit/plotly).
+# Each workstream appends its own dependencies as it lands (transformation:
+# dbt-postgres; ML: scikit-learn/xgboost; BI: streamlit/plotly).
 python-dotenv==1.0.1
 psycopg2-binary==2.9.10
 PyYAML==6.0.2
+
+# Ingestion
+requests==2.34.2
+tenacity==9.1.4

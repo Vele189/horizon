@@ -79,6 +79,19 @@ def _get_int(name: str, default: int) -> int:
         ) from exc
 
 
+def _get_positive_int(name: str, default: int) -> int:
+    """Coerce like :func:`_get_int`, but reject values that cannot work.
+
+    A timeout of zero never fires, and zero retry attempts means the request is
+    never made at all. Both are configuration mistakes that would otherwise
+    surface as a mysterious hang or a silent no-op deep inside ingestion.
+    """
+    value = _get_int(name, default)
+    if value < 1:
+        raise ConfigError(f"{name} must be a positive integer, got {value}.")
+    return value
+
+
 def _get_path(name: str, default: str) -> Path:
     raw = _get_str(name, default)
     path = Path(raw)
@@ -111,6 +124,7 @@ class Settings:
     postgres_db: str
     postgres_port: int
     openmeteo_base_url: str
+    request_connect_timeout_seconds: int
     request_timeout_seconds: int
     max_retry_attempts: int
     retry_backoff_seconds: int
@@ -184,9 +198,12 @@ def _build_settings() -> Settings:
         openmeteo_base_url=_get_str(
             "OPENMETEO_BASE_URL", "https://archive-api.open-meteo.com/v1/archive"
         ),
-        request_timeout_seconds=_get_int("REQUEST_TIMEOUT_SECONDS", 30),
-        max_retry_attempts=_get_int("MAX_RETRY_ATTEMPTS", 5),
-        retry_backoff_seconds=_get_int("RETRY_BACKOFF_SECONDS", 2),
+        request_connect_timeout_seconds=_get_positive_int(
+            "REQUEST_CONNECT_TIMEOUT_SECONDS", 10
+        ),
+        request_timeout_seconds=_get_positive_int("REQUEST_TIMEOUT_SECONDS", 30),
+        max_retry_attempts=_get_positive_int("MAX_RETRY_ATTEMPTS", 5),
+        retry_backoff_seconds=_get_positive_int("RETRY_BACKOFF_SECONDS", 2),
         data_raw_dir=_get_path("DATA_RAW_DIR", "data/raw"),
         model_artifact_dir=_get_path("MODEL_ARTIFACT_DIR", "machine_learning/artifacts"),
         cities_config_path=_get_path("CITIES_CONFIG_PATH", "config/cities.yml"),
