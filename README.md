@@ -954,6 +954,53 @@ with 28 February so nothing after it shifts.
 A test asserts raw `day_of_year` takes **both** 60 and 61 for 1 March — the
 trap stated as a fact rather than described in a comment.
 
+## Gold: `fact_weather_observations`
+
+One row per city per UTC day, with foreign keys to `dim_cities` and `dim_date`.
+Materialised as a table with a **unique** index on `(city_id, date_key)` and a
+second on `date_key` alone.
+
+Measures: temperature min/max/mean and apparent equivalents, dew point,
+precipitation / rain / snowfall (both cm and mm) / precipitation hours, wind
+speed mean and max, gusts, direction, surface and sea-level pressure, humidity,
+cloud cover, radiation, and the WMO code — plus the grid cell that answered and
+the ingestion lineage.
+
+### It selects from silver and does not join the dimensions
+
+An inner join to `dim_cities` would enforce referential integrity by
+**dropping** any row it could not match, and a fact silently missing a city is
+indistinguishable from a city with no weather. The `relationships` tests assert
+the same property and fail loudly instead.
+
+Verified by planting an orphan `atlantis` row: it trips both the foreign-key
+test *and* the row-count-against-silver test, and both go green when it's
+removed.
+
+### The index earns its place
+
+```
+Bitmap Heap Scan on fact_weather_observations
+  ->  Bitmap Index Scan on (city_id, date_key)
+        Index Cond: city_id = 'london' AND date_key between …
+```
+
+That's the shape the dashboard issues — one city, one date range — over a
+serverless connection where a sequential scan of 173 520 rows is the difference
+between a usable dashboard and a slow one.
+
+### Row count is asserted against silver, not a constant
+
+The proposal's ~164 000 assumed a round thirty years; the configured range runs
+1995-01-01 to the archive edge, so the completed figure is **15 × 11 568 =
+173 520**. The backfill runs across days, so a hardcoded number would be red
+for most of its life and would teach everyone to ignore it. The test asserts
+the fact carries exactly as many rows as silver, plus a per-city check that any
+*completed* city has no gap between its first and last day.
+
+Currently **60 396 rows across 9 cities** — the remaining six are still
+backfilling.
+
 ## Licence
 
 [MIT](LICENSE)

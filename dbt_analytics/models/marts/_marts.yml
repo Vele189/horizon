@@ -197,3 +197,98 @@ models:
           - not_null
           - accepted_values:
               values: ['four_season', 'wet_dry', 'seasonless']
+
+  - name: fact_weather_observations
+    description: >
+      The primary daily fact: one row per city per UTC day, with foreign keys
+      to dim_cities and dim_date.
+
+
+      Selected from silver rather than joined to the dimensions. An inner join
+      to dim_cities would enforce referential integrity by *dropping* any row
+      it could not match, which is the wrong failure - a fact silently missing
+      a city looks exactly like a city with no weather. The relationships tests
+      below assert the same property and fail loudly instead.
+
+
+      Silver has already deduplicated on (city_id, observation_time) and
+      asserted units, so the grain here is inherited rather than re-derived.
+      The unique test on (city_id, date_key) is what proves that inheritance
+      held.
+
+
+      Materialised as a table with a unique index on (city_id, date_key) and a
+      second on date_key alone - the dashboard filters by city and scans by
+      date, and gold is what it reads over a serverless connection.
+
+
+      **Expected size** is 15 cities x 11,568 days = 173,520 rows once the
+      backfill completes (the proposal's ~164,000 assumed a round 30 years;
+      the range runs 1995-01-01 to the archive edge). It holds fewer while the
+      backfill is in progress, and the count is asserted against silver rather
+      than against a constant so it stays true either way.
+    tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [city_id, date_key]
+    columns:
+      - name: city_id
+        description: Foreign key to dim_cities.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_cities')
+              field: city_id
+      - name: date_key
+        description: >
+          Foreign key to dim_date, and the grain. The UTC calendar day the
+          aggregate covers - a projection of a day that is already a UTC day
+          upstream, not a timezone conversion.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_day
+      - name: observation_time
+        description: >
+          The exact instant, carried alongside the key so a mart row can join
+          back to silver without reconstructing a midnight - and so there is a
+          timestamp here that says which zone it is in, which the date does not.
+        tests: [not_null]
+      - name: temperature_2m_min
+        tests:
+          - accepted_range: {min_value: -90, max_value: 60}
+      - name: temperature_2m_max
+        tests:
+          - accepted_range: {min_value: -90, max_value: 60}
+      - name: temperature_2m_mean
+        tests:
+          - accepted_range: {min_value: -90, max_value: 60}
+      - name: precipitation_sum
+        tests:
+          - accepted_range: {min_value: 0}
+      - name: wind_speed_10m_max
+        description: km/h, bounded in m/s through the kmh_to_ms macro.
+        tests:
+          - accepted_range:
+              expression: "{{ kmh_to_ms('wind_speed_10m_max') }}"
+              min_value: 0
+              max_value: 120
+      - name: wind_gusts_10m_max
+        tests:
+          - accepted_range:
+              expression: "{{ kmh_to_ms('wind_gusts_10m_max') }}"
+              min_value: 0
+              max_value: 120
+      - name: pressure_msl_mean
+        tests:
+          - accepted_range: {min_value: 850, max_value: 1085}
+      - name: surface_pressure_mean
+        description: At the grid cell's elevation, not reduced to sea level.
+        tests:
+          - accepted_range: {min_value: 700, max_value: 1085}
+      - name: relative_humidity_2m_mean
+        tests:
+          - accepted_range: {min_value: 0, max_value: 100}
+      - name: batch_id
+        description: The ingestion run that produced the underlying row.
+        tests: [not_null]
