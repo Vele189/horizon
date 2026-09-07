@@ -13,7 +13,6 @@ would be testing something the runner does not do.
 
 from __future__ import annotations
 
-import dataclasses
 import datetime as dt
 import json
 import sys
@@ -31,7 +30,6 @@ requests = pytest.importorskip("requests")
 from sqlalchemy import text  # noqa: E402
 
 from cities import load_cities  # noqa: E402
-from config import ConfigError, Settings, get_settings  # noqa: E402
 from ingestion import archive, backfill  # noqa: E402
 from ingestion.backfill import (  # noqa: E402
     MAX_ACCEPTABLE_GAP_DAYS,
@@ -45,73 +43,14 @@ from ingestion.backfill import (  # noqa: E402
     run_backfill,
     table_size,
 )
-from ingestion.loader import BRONZE_SCHEMA, TABLE_BY_GRAIN, engine_from_settings  # noqa: E402
-from ingestion.planner import Manifest, Plan, plan_backfill  # noqa: E402
-from http_fixtures import daily_payload, responds, session_for  # noqa: E402
+from ingestion.loader import BRONZE_SCHEMA  # noqa: E402
+from ingestion.planner import Manifest, plan_backfill  # noqa: E402
+from http_fixtures import daily_payload, responds  # noqa: E402
 
 CITY = "london"
 START = dt.date(2020, 1, 1)
 END = dt.date(2022, 12, 31)
 UNITS_PER_CITY = 3
-
-
-@pytest.fixture
-def root(tmp_path: Path) -> Path:
-    return tmp_path / "raw"
-
-
-@pytest.fixture
-def manifest(tmp_path: Path) -> Manifest:
-    return Manifest(tmp_path / "manifest.jsonl")
-
-
-@pytest.fixture
-def settings(root: Path, tmp_path: Path) -> Settings:
-    return dataclasses.replace(
-        get_settings(),
-        openmeteo_base_url="https://archive-api.test/v1/archive",
-        data_raw_dir=root,
-        ingest_manifest_path=tmp_path / "manifest.jsonl",
-        max_retry_attempts=1,
-    )
-
-
-@pytest.fixture(scope="module")
-def engine():
-    try:
-        get_settings().require_database_url()
-    except ConfigError as exc:
-        pytest.skip(f"no DATABASE_URL: {exc}")
-    built = engine_from_settings()
-    try:
-        with built.connect() as connection:
-            connection.execute(text("select 1"))
-    except Exception as exc:  # noqa: BLE001
-        built.dispose()
-        pytest.skip(f"database unreachable: {exc}")
-    yield built
-    built.dispose()
-
-
-@pytest.fixture
-def cleanup(engine):
-    """Delete whatever a run wrote, however it ended."""
-    batches: list = []
-    yield batches
-    with engine.begin() as connection:
-        for batch_id in batches:
-            for table in TABLE_BY_GRAIN.values():
-                connection.execute(
-                    text(f"delete from {BRONZE_SCHEMA}.{table} "
-                         "where batch_id = :batch"),
-                    {"batch": str(batch_id)},
-                )
-
-
-@pytest.fixture
-def instant(monkeypatch):
-    """Drop the politeness delay; pacing has its own test."""
-    monkeypatch.setattr(Plan, "delay_for", lambda self, unit: 0.0)
 
 
 def units_for(cities=(CITY,), settings=None, manifest=None):
@@ -131,21 +70,6 @@ def script_for(units) -> list:
     return [
         responds(json_body=daily_payload(unit.days, unit.start)) for unit in units
     ]
-
-
-@pytest.fixture
-def scripted(monkeypatch):
-    """Install a scripted session and hand back the adapter that recorded it."""
-    holder: dict = {}
-
-    def install(script: list):
-        session, adapter = session_for(script)
-        monkeypatch.setattr(backfill, "build_session", lambda: session)
-        holder["adapter"] = adapter
-        return adapter
-
-    install.holder = holder  # type: ignore[attr-defined]
-    return install
 
 
 def run(settings, manifest, root, cleanup, **kwargs):

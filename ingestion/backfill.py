@@ -83,9 +83,11 @@ __all__ = [
     "STORM_DYNAMICS_COLUMNS",
     "BackfillResult",
     "CityCoverage",
+    "Duplication",
     "TableSize",
     "bronze_coverage",
     "column_population",
+    "duplication",
     "run_backfill",
     "table_size",
 ]
@@ -520,6 +522,65 @@ NEON_STORAGE_BUDGET_BYTES: Final[int] = 500 * 1000 * 1000
 
 
 @dataclass(frozen=True)
+class Duplication:
+    """How much of a table is a second copy of an observation already there."""
+
+    rows: int
+    distinct_observations: int
+
+    @property
+    def duplicate_rows(self) -> int:
+        return self.rows - self.distinct_observations
+
+    @property
+    def share(self) -> float:
+        return self.duplicate_rows / self.rows if self.rows else 0.0
+
+
+def duplication(
+    engine: Engine,
+    grain: Grain,
+    city_id: str | None = None,
+    *,
+    batch_ids: Sequence[uuid.UUID] | None = None,
+) -> Duplication:
+    """Count rows against distinct ``(city_id, observation_time)`` pairs.
+
+    Duplicates are legal here — bronze is append-only and silver deduplicates
+    (DBT-02) — so this is a measurement, not a check. It is worth surfacing
+    because it is the observable symptom of the one gap in run-level
+    idempotency: a crash between the warehouse commit and the manifest write
+    leaves rows recorded nowhere, and the next run lands them again.
+
+    Args:
+        batch_ids: Restrict to rows these runs wrote. The report wants the
+            whole table and passes nothing; asking whether *this* run
+            duplicated anything needs the filter, since the table generally
+            holds earlier runs too.
+    """
+    table = f"{BRONZE_SCHEMA}.{TABLE_BY_GRAIN[grain]}"
+    clauses = []
+    parameters: dict = {}
+    if city_id is not None:
+        clauses.append("city_id = :city")
+        parameters["city"] = city_id
+    if batch_ids is not None:
+        clauses.append("batch_id = any(cast(:batches as uuid[]))")
+        parameters["batches"] = [str(b) for b in batch_ids]
+    predicate = f"where {' and '.join(clauses)}" if clauses else ""
+
+    with engine.connect() as connection:
+        rows, distinct = connection.execute(
+            text(
+                f"select count(*), count(distinct (city_id, observation_time)) "
+                f"from {table} {predicate}"
+            ),
+            parameters,
+        ).one()
+    return Duplication(rows=rows, distinct_observations=distinct)
+
+
+@dataclass(frozen=True)
 class TableSize:
     """One table's footprint, as Postgres accounts for it."""
 
@@ -718,6 +779,18 @@ def _print_report(
 
     total_rows = sum(c.rows for c in coverage)
     print(f"\n  {total_rows:,} rows total, {expected_start}..{expected_end or 'now'}")
+
+    repeated = duplication(engine, grain)
+    if repeated.duplicate_rows:
+        print(
+            f"  {repeated.duplicate_rows:,} of them ({repeated.share:.1%}) are a "
+            f"second copy of an observation already present.\n"
+            "  Legal — bronze is append-only and silver deduplicates (DBT-02) — "
+            "but it means a\n  window was ingested twice: a deleted manifest, or "
+            "a crash between the warehouse\n  commit and the manifest write."
+        )
+    else:
+        print("  no duplicate (city_id, observation_time) pairs")
 
     # The columns the downstream view actually reads. A row present but null in
     # these is a row that feeds nothing.

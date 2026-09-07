@@ -459,6 +459,66 @@ The other thing measurement turned up, also now in `--report`:
 during development. The report names the dead share when it exceeds a tenth and
 says to `VACUUM FULL`.
 
+## Idempotency
+
+`make run` invokes ingestion on every call, so a loader that is not idempotent
+corrupts the warehouse a little further each time. The guarantee has two layers
+and neither is sufficient alone.
+
+**1. Run level — the manifest.** A unit recorded as landed is not planned
+again, so a re-run makes no requests and writes no rows. This is exact, not
+approximate: the row count after a re-run is the *same number*.
+
+```
+first run   6 units, 2 192 rows
+re-run      0 units, 0 rows, 0 requests   fingerprint identical
+×10 re-runs                               fingerprint identical
+```
+
+**2. Row level — append-only bronze, deduplicated in silver (DBT-02).** There
+is exactly one window layer 1 cannot cover: a crash between the warehouse
+commit and the manifest write leaves rows that nothing has recorded, and the
+next run lands them again.
+
+That direction is deliberate. The manifest is written *last* — writing it first
+would let the same crash leave a manifest claiming rows that are not there, and
+a hole is silent where a duplicate is not. Duplicates are recoverable; holes
+are discovered in month three by a climatology that is quietly wrong.
+
+So bronze carries no unique constraint on `(city_id, observation_time)` — one
+would reject a legitimate re-ingest — and silver takes the most recent
+`ingested_at` per pair:
+
+```sql
+select * from (
+  select *, row_number() over (
+    partition by city_id, observation_time order by ingested_at desc
+  ) as rn
+  from bronze_raw.observations_daily
+) ranked where rn = 1
+```
+
+`tests/test_idempotency.py` runs that query over deliberately duplicated
+bronze, so "deferred to DBT-02" is a demonstrated claim and not a promise: it
+collapses to exactly one row per pair, keeps the newest copy, and does not
+reach across cities.
+
+**Blast radius.** Re-running one city touches only that city — a test pins the
+others' row count, id range, distinct timestamps and value sum, all unchanged.
+Re-running one city-year duplicates exactly that year and nothing else.
+
+**Re-landing is free.** A lost manifest costs no quota: the payloads are
+already in `data/raw/`, so the second run serves every unit from the archive
+and makes zero requests.
+
+`--report` surfaces the symptom directly, since duplicates are legal and
+therefore easy to stop noticing:
+
+```
+36,895 rows total
+365 of them (1.0%) are a second copy of an observation already present.
+```
+
 ## Licence
 
 [MIT](LICENSE)
