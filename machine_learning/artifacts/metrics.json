@@ -168,12 +168,12 @@
       }
     }
   },
-  "generated_at": "2026-09-07T08:31:53+00:00",
+  "generated_at": "2026-09-07T08:41:15+00:00",
   "label": {
     "horizon_days": 7,
     "window": "t+1 .. t+7 inclusive"
   },
-  "schema_version": 1,
+  "schema_version": 2,
   "snapshot": {
     "cities": 6,
     "first_date": "1995-01-31",
@@ -197,6 +197,7 @@
     }
   },
   "split": {
+    "embargo_days": 0,
     "periods": [
       {
         "end": "2018-12-31",

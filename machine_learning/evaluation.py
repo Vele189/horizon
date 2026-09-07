@@ -38,11 +38,13 @@ Usage::
 
 from __future__ import annotations
 
+import argparse
 import datetime as dt
+import logging
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Final, Mapping
+from typing import Final, Mapping, Sequence
 
 import numpy as np
 import pandas as pd
@@ -73,8 +75,11 @@ __all__ = [
     "Score",
     "Split",
     "assert_splits_are_disjoint",
+    "EMBARGO_DAYS",
     "add_persistence_signal",
+    "assert_splits_are_ordered",
     "base_rate",
+    "boundary_report",
     "evaluation_frame",
     "score",
     "split_frame",
@@ -123,6 +128,25 @@ PERSISTENCE_COUNT: Final[str] = f"anomaly_days_trailing{PERSISTENCE_WINDOW}"
 #: the alternative is a training set that has been told the first week of the
 #: period it is about to be validated on.
 PURGE_DAYS: Final[int] = HORIZON_DAYS
+
+
+#: Days optionally dropped from the *start* of every split that has an earlier
+#: one before it. Zero by default, and the default is the argued position.
+#:
+#: A validation row on 2019-01-01 has a 30-day rolling mean reaching back to
+#: 2018-12-03, which is training data. That is not leakage — it is deployment.
+#: A model predicting on 2019-01-01 in production has all of 2018 behind it,
+#: and blanking it here would measure a system nobody is going to run. Leakage
+#: is a *training* row reading forwards, which the backward-only features and
+#: :data:`PURGE_DAYS` between them already rule out.
+#:
+#: What a start-of-split embargo would buy is not leakage safety but sample
+#: independence: the last training rows and the first validation rows share
+#: some of the same days inside their windows, so the two sets are mildly
+#: correlated and the score mildly optimistic. It is offered so that claim can
+#: be measured rather than argued, and the measurement is in the README —
+#: it moves test PR-AUC by less than a thousandth.
+EMBARGO_DAYS: Final[int] = 0
 
 
 @dataclass(frozen=True)
@@ -203,42 +227,96 @@ def score(labels: pd.Series, predictions) -> Score:
 
 
 def split_frame(
-    frame: pd.DataFrame, *, purge: bool = True
+    frame: pd.DataFrame,
+    *,
+    purge: bool = True,
+    embargo_days: int = EMBARGO_DAYS,
 ) -> dict[str, pd.DataFrame]:
-    """Cut a labelled frame into train, validation and test.
+    """Cut a labelled frame into train, validation and test. Strictly by time.
+
+    The one function that does this. Not because splitting is hard, but because
+    a split written inline is a split written twice, and the second one is
+    where the shuffle gets in.
+
+    The two trims are not symmetric, and the asymmetry is the whole argument:
+
+    * ``purge`` drops :data:`PURGE_DAYS` from the **end** of a split, because
+      the label reaches forward and a training row must not be labelled by the
+      period it is about to be validated on. This is leakage, and it is on.
+    * ``embargo_days`` drops days from the **start** of a split, because a
+      rolling feature reaches backward across the boundary. This is not
+      leakage — it is what deployment looks like — and it is off. See
+      :data:`EMBARGO_DAYS`.
 
     Args:
         frame: Any frame with a ``date_key`` column.
-        purge: Drop :data:`PURGE_DAYS` from the end of every split that has a
-            later one after it, so no label window crosses a boundary. Off only
-            to demonstrate, in tests, what leaves without it.
+        purge: Drop the label horizon from the end of every split that has a
+            later one after it. Off only to demonstrate, in tests, what leaves
+            without it.
+        embargo_days: Drop this many days from the start of every split that
+            has an earlier one before it. Zero by default.
 
     Returns:
         One frame per split name, each with a fresh index. A split with no rows
         is present and empty rather than absent, so a caller iterating the
         splits cannot silently skip one.
     """
+    if embargo_days < 0:
+        raise ValueError(f"embargo_days must not be negative, got {embargo_days}.")
+
     parts: dict[str, pd.DataFrame] = {}
     for index, split in enumerate(SPLITS):
         keep = split.contains(frame["date_key"])
         if purge and index < len(SPLITS) - 1 and split.end is not None:
             boundary = pd.Timestamp(split.end) - pd.Timedelta(days=PURGE_DAYS - 1)
             keep &= frame["date_key"] < boundary
+        if embargo_days and index > 0 and split.start is not None:
+            opens = pd.Timestamp(split.start) + pd.Timedelta(days=embargo_days)
+            keep &= frame["date_key"] >= opens
         parts[split.name] = frame.loc[keep].reset_index(drop=True)
     return parts
 
 
-def assert_splits_are_disjoint(parts: Mapping[str, pd.DataFrame]) -> None:
-    """Raise unless no label window in one split reaches into the next.
-
-    The check the purge exists to satisfy, written as an assertion rather than
-    a comment so it is run rather than believed.
-    """
+def _consecutive(parts: Mapping[str, pd.DataFrame]):
+    """Yield ``(earlier_name, earlier, later_name, later)`` for non-empty pairs."""
     ordered = [split.name for split in SPLITS]
     for earlier, later in zip(ordered, ordered[1:]):
         before, after = parts[earlier], parts[later]
         if before.empty or after.empty:
             continue
+        yield earlier, before, later, after
+
+
+def assert_splits_are_ordered(parts: Mapping[str, pd.DataFrame]) -> None:
+    """Raise unless every split ends strictly before the next one starts.
+
+    The plain statement of a chronological split, and the one worth writing
+    even though :func:`assert_splits_are_disjoint` implies it. This is the
+    property that fails loudly the moment somebody shuffles: a random split
+    puts 2023 rows in the training set, and the maximum training date jumps
+    past the minimum validation date in a way no amount of reading the
+    surrounding code would reveal.
+    """
+    for earlier, before, later, after in _consecutive(parts):
+        last, first = before["date_key"].max(), after["date_key"].min()
+        if last >= first:
+            raise ValueError(
+                f"{earlier} reaches {last.date()} and {later} starts "
+                f"{first.date()}: the split is not chronological. A shuffle is "
+                "the usual cause."
+            )
+
+
+def assert_splits_are_disjoint(parts: Mapping[str, pd.DataFrame]) -> None:
+    """Raise unless no *label window* in one split reaches into the next.
+
+    Strictly stronger than :func:`assert_splits_are_ordered`, which it runs
+    first: ordering asks that the rows not overlap, this asks that what the
+    rows *know* not overlap. A split can be perfectly ordered and still hand
+    the training set the first week of validation through the label.
+    """
+    assert_splits_are_ordered(parts)
+    for earlier, before, later, after in _consecutive(parts):
         reach = before["date_key"].max() + pd.Timedelta(days=HORIZON_DAYS)
         if reach >= after["date_key"].min():
             raise ValueError(
@@ -332,3 +410,77 @@ def add_persistence_signal(frame: pd.DataFrame) -> pd.DataFrame:
         )
     return merged
 
+
+
+def boundary_report(parts: Mapping[str, pd.DataFrame]) -> pd.DataFrame:
+    """What sits either side of every boundary, and how much air is between.
+
+    ``gap_days`` is the distance from the last row of one split to the first of
+    the next; ``label_reach`` is where the last row's label window ends. The
+    second must land before the next split starts, and printing both makes the
+    purge visible as a number rather than as a claim in a docstring.
+    """
+    rows = []
+    for earlier, before, later, after in _consecutive(parts):
+        last, first = before["date_key"].max(), after["date_key"].min()
+        rows.append(
+            {
+                "boundary": f"{earlier} → {later}",
+                "last": last.date(),
+                "first": first.date(),
+                "gap_days": int((first - last).days),
+                "label_reach": (last + pd.Timedelta(days=HORIZON_DAYS)).date(),
+                "reach_clears": bool(
+                    last + pd.Timedelta(days=HORIZON_DAYS) < first
+                ),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Report the chronological split and check its boundaries."
+    )
+    parser.add_argument(
+        "--embargo-days",
+        type=int,
+        default=EMBARGO_DAYS,
+        help="Drop this many days from the start of each later split.",
+    )
+    parser.add_argument(
+        "--no-purge",
+        action="store_true",
+        help="Skip the end-of-split purge, to see what it was doing.",
+    )
+    args = parser.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+    parts = split_frame(
+        evaluation_frame(),
+        purge=not args.no_purge,
+        embargo_days=args.embargo_days,
+    )
+
+    print(f"purge {0 if args.no_purge else PURGE_DAYS} days   "
+          f"embargo {args.embargo_days} days\n")
+    summary = split_summary(parts)
+    summary["base_rate"] = summary["base_rate"].map("{:.2%}".format)
+    print(summary.to_string(index=False))
+
+    print()
+    print(boundary_report(parts).to_string(index=False))
+
+    print()
+    try:
+        assert_splits_are_disjoint(parts)
+    except ValueError as exc:
+        print(f"FAIL  {exc}")
+        return 1
+    print("OK    every split ends strictly before the next begins,")
+    print("      and no label window crosses a boundary.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(_main())

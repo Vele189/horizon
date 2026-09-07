@@ -61,6 +61,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import get_settings  # noqa: E402
 from machine_learning.evaluation import (  # noqa: E402
+    EMBARGO_DAYS,
     PERSISTENCE_FLAG,
     PERSISTENCE_WINDOW,
     PURGE_DAYS,
@@ -90,7 +91,11 @@ log = logging.getLogger(__name__)
 
 #: Bumped when the shape of ``metrics.json`` changes, so a reader can tell a
 #: file it does not understand from one that merely has different numbers.
-METRICS_SCHEMA_VERSION: Final[int] = 1
+#:
+#: 2 — ML-04 added ``split.embargo_days``, so a file records not only the trim
+#: that was applied at the end of each split but the one that was deliberately
+#: not applied at the start.
+METRICS_SCHEMA_VERSION: Final[int] = 2
 
 #: Pseudo-counts tried for the climatology's shrinkage, chosen on **validation**
 #: Brier. A (city, week) cell holds around 130 training rows here, so a cell
@@ -482,6 +487,7 @@ def build_metrics(
         },
         "split": {
             "purge_days": PURGE_DAYS,
+            "embargo_days": EMBARGO_DAYS,
             "periods": [
                 {
                     "name": split.name,

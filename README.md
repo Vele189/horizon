@@ -1790,6 +1790,102 @@ same rows in different orders must agree to the last digit, which they did not
 until `build_metrics` sorted its input — a Brier score is a mean over a float
 array, and a mean is summation-order dependent in its final ULP.
 
+## Chronological split harness
+
+`machine_learning/evaluation.py` cuts the labelled frame strictly by time. Run
+`python machine_learning/evaluation.py` for the report:
+
+| split | start | end | rows | positives | base rate |
+|---|---|---|---:|---:|---:|
+| train | 1995-01-31 | 2018-12-24 | 45 069 | 2 483 | **5.51%** |
+| validation | 2019-01-01 | 2021-12-24 | 5 445 | 464 | **8.52%** |
+| test | 2022-01-01 | 2026-09-01 | 8 506 | 1 155 | **13.58%** |
+
+One function, `split_frame()`, and nothing splits inline. Not because splitting
+is hard — because a split written inline is a split written twice, and the
+second one is where the shuffle gets in.
+
+### Three checks, weakest to strongest
+
+**Ordered.** Every split ends strictly before the next begins:
+`max(train) < min(validation)`, the assertion the ticket names. This is the one
+a shuffle breaks, and the error message says so — a random split puts 2023 rows
+in training, and nothing else in the pipeline would notice.
+
+**Disjoint.** No *label window* crosses a boundary either. Strictly stronger,
+and it runs the ordering check first. A split can be perfectly ordered and
+still hand the training set the first week of validation through the label,
+which is why train ends 2018-12-24 and not 2018-12-31:
+
+| boundary | last | first | gap | label reaches | clears |
+|---|---|---|---:|---|---|
+| train → validation | 2018-12-24 | 2019-01-01 | 8 days | 2018-12-31 | yes |
+| validation → test | 2021-12-24 | 2022-01-01 | 8 days | 2021-12-31 | yes |
+
+**Confirmed end to end.** Every observation from 2019-01-01 onwards is replaced
+with nonsense — temperature +40 °C, pressure −60 hPa, every anomaly flag
+inverted — features and labels are rebuilt from scratch, the split is re-cut,
+and the training split must come back **bit-identical**. That assertion does
+not inspect how any window is written, so a window that reaches forward fails
+it however cleverly it is expressed.
+
+The same test with the purge switched off fails, and it is asserted to fail —
+on exactly the last seven rows. That is what makes the first two worth running.
+
+### Backward reach across a boundary is deployment, not leakage
+
+The asymmetry is the part worth getting right, and it is easy to get wrong in
+the safe-looking direction.
+
+A validation row on 2019-01-05 has a 30-day rolling mean built from December
+2018 — training data. **That is correct.** A model predicting that day in
+production has all of 2018 behind it, and blanking it here would measure a
+system nobody is going to run. Leakage is a *training* row reading forwards,
+which the backward-only features and the purge between them already rule out.
+
+So there is a test that asserts the backward reach **exists**: rewrite 2018 and
+require the opening of validation to move. It is there so nobody later "fixes"
+the harness into reporting a worse number for a better-sounding reason. The
+same test pins the other end — past the longest window the rows are identical
+again, so the reach is bounded and known.
+
+### The embargo is off, and that was measured rather than assumed
+
+There is a real concern hiding under the correct one. The last training rows
+and the first validation rows share some of the same days inside their windows,
+so the two sets are mildly correlated and the score mildly optimistic. That is
+the standard argument for an *embargo* at the start of a split — sample
+independence, not leakage.
+
+`split_frame(embargo_days=...)` implements it, `EMBARGO_DAYS` is 0, and the
+reason is a number rather than a preference:
+
+| embargo | test rows | base rate | persistence PR-AUC | lift |
+|---:|---:|---:|---:|---:|
+| 0 days | 8 506 | 13.58% | 0.2293 | 1.69× |
+| 7 days | 8 471 | 13.63% | 0.2297 | 1.68× |
+| 30 days | 8 356 | 13.73% | 0.2305 | 1.68× |
+| 60 days | 8 206 | 13.81% | 0.2347 | 1.70× |
+
+Holding back a month moves test PR-AUC by **0.0012, upward** — the opposite
+direction from the optimism an embargo removes. The correlation is not there at
+this window length, so paying for it in realism would buy nothing. A test
+fails if that stops being true, and `metrics.json` records `embargo_days: 0`
+so a file says not only what trim was applied but what was deliberately not.
+
+### `train_test_split` is absent, and something checks
+
+A test scans **every `.py` file in the repository** — not just the ML package,
+because the failure it guards against is a quick train/test split appearing in
+a dashboard script where nobody would think to look. It forbids
+`sklearn.model_selection` wholesale rather than function by function:
+everything in it shuffles except `TimeSeriesSplit`, and a project that needs
+that one should reach for it deliberately and delete the line.
+
+A second test plants the forbidden import in a temporary file and requires the
+scan to catch it, because a check that passes by finding nothing is otherwise
+indistinguishable from a check that looks nowhere.
+
 ## Licence
 
 [MIT](LICENSE)

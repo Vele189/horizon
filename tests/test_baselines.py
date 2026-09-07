@@ -1,12 +1,8 @@
 """Tests for the split, the metrics, and the two baselines.
 
 These numbers are the target the model will be measured against, so they have
-to be right before anything is trained. Three things are being defended.
-
-The **split** must not leak across its own boundaries: the label at *t* reaches
-seven days forward, so the last week of the training period is labelled by the
-first week of validation unless it is purged. One test shows what leaves
-without the purge, so the purge is not merely believed.
+to be right before anything is trained. Two things are being defended here; the
+split itself is defended in ``test_split.py``.
 
 The **metrics** must be the ones the model will be scored with. Average
 precision for a constant prediction is the base rate by construction, which
@@ -20,7 +16,6 @@ to come back unchanged.
 
 from __future__ import annotations
 
-import datetime as dt
 import json
 import sys
 from pathlib import Path
@@ -33,6 +28,8 @@ np = pytest.importorskip("numpy")
 pd = pytest.importorskip("pandas")
 pytest.importorskip("sklearn")
 
+from ml_fixtures import labelled_span, spanning  # noqa: E402
+
 from machine_learning.baselines import (  # noqa: E402
     METRICS_SCHEMA_VERSION,
     SMOOTHING_GRID,
@@ -44,11 +41,10 @@ from machine_learning.baselines import (  # noqa: E402
     write_metrics,
 )
 from machine_learning.evaluation import (  # noqa: E402
+    EMBARGO_DAYS,
     PERSISTENCE_FLAG,
     PURGE_DAYS,
-    SPLITS,
     add_persistence_signal,
-    assert_splits_are_disjoint,
     base_rate,
     evaluation_frame,
     score,
@@ -63,104 +59,10 @@ from machine_learning.features import (  # noqa: E402
 from machine_learning.labels import (  # noqa: E402
     HORIZON_DAYS,
     LABEL,
-    build_labels,
     positives,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-
-
-def spanning(days: int = 11000, seed: int = 4) -> pd.DataFrame:
-    """A gold-shaped frame long enough to cross both split boundaries."""
-    rng = np.random.default_rng(seed)
-    dates = pd.date_range("1995-01-01", periods=days, freq="D")
-    season = 12 * np.sin(2 * np.pi * np.arange(days) / 365.25)
-    return pd.DataFrame(
-        {
-            "city_id": "alpha",
-            "date_key": dates,
-            "temperature_2m_mean": 15 + season + rng.normal(scale=3.0, size=days),
-            "pressure_msl_mean": 1013 + rng.normal(scale=8.0, size=days),
-            "z_temperature_2m_mean": rng.normal(size=days),
-            "is_anomaly": pd.array(rng.random(days) < 0.02, dtype="boolean"),
-            "latitude": 30.0,
-            "elevation_m": 20.0,
-        }
-    )
-
-
-def labelled_span(**kwargs) -> pd.DataFrame:
-    """The real pipeline in miniature, in the order the real one uses it.
-
-    Signal first, then trim. Reversed, the first rows of the population lose a
-    persistence signal they are entitled to — which is the bug this ordering
-    was written to fix, so the fixture has to reproduce the ordering and not
-    just the columns.
-    """
-    frame = spanning(**kwargs)
-    features = build_features(frame)
-    labels = build_labels(frame)
-    merged = add_persistence_signal(
-        features.merge(labels, on=["city_id", "date_key"], how="inner")
-    )
-    return merged.loc[merged[LABEL].notna() & ~merged["is_warmup"]].reset_index(
-        drop=True
-    )
-
-
-# --------------------------------------------------------------------------
-# The split
-# --------------------------------------------------------------------------
-
-
-def test_the_purge_stops_a_label_reaching_into_the_next_split() -> None:
-    """Without it the training set is told the first week of validation.
-
-    Seven rows per city per boundary is a rounding error in row count and not
-    one in principle. This is the test that makes the purge a fact rather than
-    an intention: with it off, the disjointness check raises.
-    """
-    frame = labelled_span()
-    purged = split_frame(frame, purge=True)
-    assert_splits_are_disjoint(purged)
-
-    unpurged = split_frame(frame, purge=False)
-    with pytest.raises(ValueError, match="Purge the boundary"):
-        assert_splits_are_disjoint(unpurged)
-
-
-def test_the_purge_costs_exactly_the_horizon_at_each_boundary() -> None:
-    frame = labelled_span()
-    purged = split_frame(frame, purge=True)
-    unpurged = split_frame(frame, purge=False)
-
-    assert len(unpurged["train"]) - len(purged["train"]) == PURGE_DAYS
-    assert len(unpurged["validation"]) - len(purged["validation"]) == PURGE_DAYS
-    # The last split has nothing after it to leak into, so nothing is dropped.
-    assert len(unpurged["test"]) == len(purged["test"])
-
-    last_train = purged["train"]["date_key"].max()
-    first_validation = purged["validation"]["date_key"].min()
-    assert last_train + pd.Timedelta(days=HORIZON_DAYS) < first_validation
-
-
-def test_the_splits_are_the_ones_the_proposal_specifies() -> None:
-    names = [split.name for split in SPLITS]
-    assert names == ["train", "validation", "test"]
-    assert SPLITS[0].end == dt.date(2018, 12, 31)
-    assert SPLITS[1].start == dt.date(2019, 1, 1)
-    assert SPLITS[1].end == dt.date(2021, 12, 31)
-    assert SPLITS[2].start == dt.date(2022, 1, 1)
-    assert SPLITS[2].end is None
-
-
-def test_every_split_is_present_even_when_empty() -> None:
-    """A caller iterating the splits must not silently skip a missing one."""
-    frame = labelled_span(days=400)  # 1995-1996 only
-    parts = split_frame(frame)
-    assert set(parts) == {"train", "validation", "test"}
-    assert parts["validation"].empty
-    assert parts["test"].empty
 
 
 # --------------------------------------------------------------------------
@@ -387,6 +289,7 @@ def test_the_payload_records_what_it_was_computed_on(tmp_path) -> None:
     assert payload["schema_version"] == METRICS_SCHEMA_VERSION
     assert payload["label"]["horizon_days"] == HORIZON_DAYS
     assert payload["split"]["purge_days"] == PURGE_DAYS
+    assert payload["split"]["embargo_days"] == EMBARGO_DAYS
     assert set(payload["baselines"]) == {"base_rate", "persistence", "climatology"}
     snapshot = payload["snapshot"]
     assert snapshot["rows"] > 0
