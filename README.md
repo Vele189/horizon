@@ -2510,6 +2510,76 @@ transaction. Running twice for the same day leaves one row with a fresh
 rows twice at different risk scores and requires the count to hold at three
 while the score changes.
 
+## Model card, and what this model is not
+
+[**docs/model-card.md**](docs/model-card.md) is the ML workstream's summary:
+intended use, out-of-scope use, the data, the evaluation, and every limitation
+the nine tickets before it turned up, in one place instead of nine.
+
+The headline is the sentence the proposal asks be written down plainly:
+
+> This is not a weather forecast and it does not compete with ECMWF, GFS, or
+> any operational numerical weather prediction. It has never seen a pressure
+> field, a satellite image, or a model run. It reads one city's own recorded
+> history and nothing else.
+
+Stating that reads as competence. Overclaiming reads as inexperience, and there
+is no version of this model that would justify the claim.
+
+### The card cannot go stale
+
+It carries a **Key figures** table of nineteen values — PR-AUC, Brier, F1,
+precision, recall, the threshold, the training window, the SHAP city share, the
+seed — and every row is looked up **by name** in `metrics.json` and compared by
+a test. A retrain that moves a score fails the suite until the card is updated.
+A second test fails on any figure stated in the table that nothing checks, so
+the way to add a number to the card is to wire up where it comes from.
+
+The full 27-feature list is printed **in order**, and asserted equal to
+`feature_columns()`. The order is part of the contract: a caller who supplies
+the right columns in the wrong order gets a confident wrong answer.
+
+### The limitation that leads, because it is the one with consequences
+
+The model is **calibrated to a world that no longer exists**. The positive rate
+is 5.51% in the training period and 13.58% in the test period, so its mean
+prediction on test is 0.070 where 0.136 actually occurs — and the shortfall
+runs through every decile.
+
+That is wrong in the direction that matters. A warning system that says
+"quiet" more often than it should is worse than one that is visibly uncertain,
+and extreme heat is a mortality risk concentrated among people least able to
+avoid it. **`risk_score` must be recalibrated before a reader sees it as a
+percentage**, and the card says so before it says anything about how well the
+model ranks.
+
+### The other nine, in one line each
+
+| | |
+|---|---|
+| Not a forecast | No pressure fields, no NWP. It can tell you a spell is running, not when it will break — its most confident false positive had *more* evidence than its most confident correct call |
+| Six cities, five scorable | All hot climates. No mid-latitude, no continental winter, no Southern Hemisphere |
+| 13.7% is a city lookup | `latitude` and `elevation_m` are constants per city; none of it transfers |
+| Tokyo's baseline is four years | Noisy σ, 3.9% flagged days against ~1.6% elsewhere |
+| The label conflates two things | "Unusual for the season" and "warmer because the climate warmed" — `corr(year, Z)` is positive in every city |
+| One feature is not strictly backward | The climatological Z excludes its own year but not later ones. Deliberate; the alternative gives the early record a three-year baseline |
+| A single-day Z cannot express duration | Phoenix's 2023 heat dome peaks at Z = +1.97 and flags zero days |
+| Seasonality is real but non-stationary | A week-of-year baseline is worth 2.47× in-sample and 0.91× across the split |
+| Everything is one snapshot | 59 090 rows to 2026-09-01, and the backfill is not finished |
+
+### And what was checked
+
+The card also records the eight properties that *are* enforced — no feature
+sees the future, the label boundary is exact, no feature reconstructs the
+label, the split is chronological and purged, no resampling, reproducible
+across processes, the SHAP values explain this model and not another, and the
+artefact is the one the metrics describe.
+
+Each of those has a companion test that deliberately breaks the property and
+requires the check to catch it. A check that passes by finding nothing is
+otherwise indistinguishable from one that looks nowhere, and that distinction
+is most of what separates this from a project that merely reports good numbers.
+
 ## Licence
 
 [MIT](LICENSE)
