@@ -292,3 +292,90 @@ models:
       - name: batch_id
         description: The ingestion run that produced the underlying row.
         tests: [not_null]
+
+  - name: fact_weather_hourly
+    description: >
+      Hourly facts for the trailing 24 months, feeding the Storm Dynamics view
+      and nothing else.
+
+
+      Thirty years at this grain would be over four million rows for no
+      analytical benefit - the storm view reads a rolling window and the
+      climatology is built from the daily grain - and it would be the single
+      largest object the pipeline produces, which matters because gold is the
+      only layer promoted to Neon's 0.5 GB allowance.
+
+
+      **The window is derived from the data, not pinned.** Silver holds
+      whatever ingestion landed, and two cities carry an extra eight months
+      from an earlier archival sample that took a calendar year rather than the
+      anchored window. Without the filter those rows would sit in a table that
+      claims to cover 24 months; with it, silver's 274,920 rows become 263,160
+      here.
+
+
+      **Pressure tendency uses a RANGE frame, not `lag(n)`.** `lag(pressure, 3)`
+      counts rows, so one missing hour makes it reach four hours back and
+      report the result as a three-hour change - a fabricated storm signal from
+      data that merely had a hole. RANGE asks for the reading exactly three
+      hours earlier and returns null when there is not one. Silver has no gaps
+      today; the correct form costs nothing and stays correct if it ever does.
+
+
+      Sanity-checked against real weather: the six deepest 24-hour falls in the
+      table are all Reykjavik, on the North Atlantic storm track, reaching
+      -41 hPa against the ~-24 hPa that defines explosive cyclogenesis, with
+      sea-level pressure down to 949.6 hPa.
+    tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [city_id, observation_hour]
+    columns:
+      - name: city_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_cities')
+              field: city_id
+      - name: observation_hour
+        description: Top of the hour, UTC. The grain.
+        tests: [not_null]
+      - name: date_key
+        description: Foreign key to dim_date, for joining the hourly view to calendar attributes.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_day
+      - name: pressure_msl
+        description: >
+          Sea-level pressure, which is what tendency is computed on. Surface
+          pressure carries the grid cell's elevation, so a tendency on it would
+          compare Johannesburg's 822 hPa against London's 1013 the moment
+          anything aggregated across cities.
+        tests:
+          - accepted_range: {min_value: 850, max_value: 1085}
+      - name: pressure_tendency_3h
+        description: >
+          Change in sea-level pressure over three hours, hPa. The synoptic
+          standard. Null for the first three hours of each city's series.
+        tests:
+          - accepted_range: {min_value: -60, max_value: 60}
+      - name: pressure_tendency_24h
+        description: >
+          Change over 24 hours, hPa. A fall of roughly 24 hPa in 24 hours at
+          mid-latitudes is the definition of a "bomb cyclone". Null for the
+          first 24 hours of each city's series.
+        tests:
+          - accepted_range: {min_value: -120, max_value: 120}
+      - name: wind_gusts_10m
+        tests:
+          - accepted_range:
+              expression: "{{ kmh_to_ms('wind_gusts_10m') }}"
+              min_value: 0
+              max_value: 120
+      - name: temperature_2m
+        tests:
+          - accepted_range: {min_value: -90, max_value: 60}
+      - name: relative_humidity_2m
+        tests:
+          - accepted_range: {min_value: 0, max_value: 100}

@@ -1001,6 +1001,73 @@ the fact carries exactly as many rows as silver, plus a per-city check that any
 Currently **60 396 rows across 9 cities** — the remaining six are still
 backfilling.
 
+## Gold: `fact_weather_hourly`
+
+One row per city per hour for the trailing 24 months — **263 160 rows**, 15
+cities, 2024-09-02 → 2026-09-02. Feeds the Storm Dynamics view and nothing
+else.
+
+### The window is derived, not pinned
+
+Silver holds 274 920 hourly rows; this table holds 263 160. The difference is
+`cairo` and `london`, which carry an extra eight months from an ING-03
+archival sample that took a calendar year rather than the anchored window.
+Unfiltered they would sit in a table documented as trailing-24-months, and a
+per-city average "over the window" would cover a different window per city.
+
+### Pressure tendency uses a `RANGE` frame, not `lag(n)`
+
+`lag(pressure, 3)` counts **rows**, not hours. One missing hour makes it reach
+four hours back and report the result as a three-hour change — a fabricated
+storm signal from data that merely had a hole. Demonstrated on a five-row
+fixture with 03:00 removed:
+
+```
+ts       p        lag(3)   range 3h
+04:00    1004.0      4.0        3.0   ← lag spans 4 hours and calls it 3
+```
+
+`RANGE BETWEEN INTERVAL '3 hours' PRECEDING AND INTERVAL '3 hours' PRECEDING`
+asks for the reading exactly three hours earlier and returns null when there
+isn't one. Silver has no gaps today; the correct form costs nothing and stays
+correct if it ever does.
+
+Computed on **sea-level** pressure, not surface — surface pressure carries the
+grid cell's elevation, so a tendency on it would compare Johannesburg's 822 hPa
+against London's 1013 the moment anything aggregated across cities.
+
+### It finds real storms
+
+A tendency can be arithmetically right and still meaningless, so it was checked
+against the weather. The six deepest 24-hour falls in the table are **all
+Reykjavík** — the North Atlantic storm track — reaching **−41 hPa/24h** against
+the ≈−24 hPa that defines explosive cyclogenesis, with sea-level pressure down
+to 949.6 hPa. The correlation between 24-hour tendency and gust strength is
+−0.109: weak, but correctly signed.
+
+Nulls are exactly 3 and 24 per city — the start of each series and nowhere
+else.
+
+### Gold against the Neon budget
+
+| object | rows | total | bytes/row |
+|---|---:|---:|---:|
+| `fact_weather_hourly` | 263 160 | **52.0 MB** | 198 |
+| `fact_weather_observations` | 60 396 | 14.2 MB | 235 |
+| `dim_date` | 11 938 | 1.4 MB | 121 |
+| `dim_city_season`, `dim_cities` | 195 | 0.1 MB | |
+| **total** | | **67.8 MB** | |
+
+That is **13.6% of Neon's 500 MB free plan** today, and **~94 MB (19%)** once
+the daily backfill completes. Gold is the only layer promoted to Neon, so
+unlike the bronze measurement this budget is a real constraint rather than a
+yardstick.
+
+The hourly fact is the largest object in the warehouse, which is exactly why it
+is capped at 24 months: thirty years at this grain would be over four million
+rows and, at 198 bytes each, would not fit in the allowance at all. A test
+asserts that arithmetic rather than restating the claim.
+
 ## Licence
 
 [MIT](LICENSE)
