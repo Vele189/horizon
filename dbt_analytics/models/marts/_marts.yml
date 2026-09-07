@@ -379,3 +379,81 @@ models:
       - name: relative_humidity_2m
         tests:
           - accepted_range: {min_value: 0, max_value: 100}
+
+  - name: fact_climatology
+    description: >
+      The day-of-year climatology: mean and standard deviation of daily
+      temperature per city per calendar day, smoothed over a +/-7 day window,
+      and computed **excluding the year being labelled**.
+
+
+      **Why the exclusion is the point.** A normal computed over all years
+      includes the very day it is about to label. The observation contributes
+      to its own mean and inflates its own sigma by its own deviation, so the
+      resulting Z-score is systematically too small, extremes look less
+      extreme, and a model trained on those labels is scoring against a target
+      that has already seen its own answer. With ~30 reference years the
+      leakage is roughly 1/30 of the signal - small enough to pass a spot
+      check, large enough to change a ranking. It is a parameter
+      (`climatology_exclude_own_year`, default true) so the leaky variant can
+      be built deliberately for comparison rather than reached by accident.
+
+
+      **Why +/-7 days.** A single calendar day's normal rests on ~30
+      observations, one per reference year, and at that sample size sigma is
+      noise. The window gives 15 calendar days x ~30 years = ~450 observations
+      of a distribution that genuinely varies slowly across a fortnight. The
+      window is circular: 1 January draws on 25 December through 8 January,
+      and a non-circular one would build the year's first and last weeks from
+      half the data, exactly where the northern winter extremes are.
+
+
+      **Leap day.** Keyed on `month_day`, so 29 February is its own row rather
+      than colliding with 1 March as it would under raw day_of_year. Its own
+      sample is a quarter the size of other days - eight leap years in
+      thirty-two - but its +/-7 window is full, drawn from 22 February to
+      7 March in every year.
+
+
+      A null sigma means no leakage-free baseline exists: the city has a single
+      reference year, and excluding it leaves nothing. That is the honest
+      answer rather than a silent fallback to the leaky value.
+    tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [city_id, month_day, for_year]
+    columns:
+      - name: city_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_cities')
+              field: city_id
+      - name: month_day
+        description: MM-DD. The leap-stable climatology key.
+        tests: [not_null]
+      - name: climatology_day
+        description: Day-of-year as it would be in a leap year, 1..366. The circular axis the window is measured on.
+        tests:
+          - not_null
+          - accepted_range: {min_value: 1, max_value: 366}
+      - name: for_year
+        description: The year this baseline is for, and the year excluded from it.
+        tests: [not_null]
+      - name: excludes_own_year
+        description: Whether the leave-one-year-out exclusion was applied.
+        tests: [not_null]
+      - name: observations
+        description: Observations in the baseline after the exclusion. Zero where none remain.
+        tests:
+          - not_null
+          - accepted_range: {min_value: 0}
+      - name: mean_temperature_2m_mean
+        tests:
+          - accepted_range: {min_value: -90, max_value: 60}
+      - name: stddev_temperature_2m_mean
+        description: >
+          Within-window standard deviation - variability around the seasonal
+          curve, not around the annual mean. Null only where the exclusion
+          leaves no observations.
+        tests:
+          - accepted_range: {min_value: 0, max_value: 30}

@@ -1068,6 +1068,99 @@ is capped at 24 months: thirty years at this grain would be over four million
 rows and, at 198 bytes each, would not fit in the allowance at all. A test
 asserts that arithmetic rather than restating the claim.
 
+## Gold: leakage-safe climatology
+
+Mean and standard deviation of daily temperature, per city per calendar day,
+smoothed over ±7 days, **computed excluding the year being labelled**.
+
+### What the leakage costs, measured
+
+A normal computed over all years includes the very day it is about to label:
+the observation contributes to its own μ and inflates its own σ by its own
+deviation. Every Z-score comes out too small.
+
+| | leakage-safe | leaky |
+|---|---:|---:|
+| shift in μ from the exclusion | 0.037 °C | — |
+| shift in σ | −0.07% | — |
+| **days labelled \|Z\| > 2.5** | **976** | **740** |
+
+The per-day shift is invisible in a spot check. It changes **a quarter of the
+extreme-day labels**, because the shift is small everywhere and the events live
+in the tail where small shifts decide membership. A model trained on the leaky
+labels is scoring against a target that has already seen its own answer, and
+its metrics come out flattering.
+
+Left as `climatology_exclude_own_year` (default true), so the leaky variant is
+built deliberately for comparison rather than reached by accident — and a test
+asserts that setting it false really does produce the leaky one, so a misread
+var cannot quietly ship the wrong thing under the right label.
+
+### How it is computed
+
+Leave-one-out over 31 reference years would mean re-aggregating each window
+once per excluded year. Instead each (city, day, source year) contributes
+`n`, `Σx`, `Σx²`, and the exclusion is a subtraction, with
+σ² = (Σx² − (Σx)²/n)/(n−1) recovering the deviation.
+
+That identity is easy to get subtly wrong and the result still looks like a
+number, so it is **cross-checked against Postgres's own `stddev_samp`** on the
+no-exclusion case: μ agrees exactly, σ to 2×10⁻¹⁵.
+
+### ±7 days, and the circle
+
+A single day's normal rests on ~30 observations, one per year, and at that
+sample size σ is noise. The window gives 15 calendar days × ~30 years ≈ **455
+observations**. It is circular — 1 January draws on 25 December through
+8 January — because a non-circular window would build the year's first and last
+weeks from half the data, exactly where the northern winter extremes sit.
+
+Measured on `climatology_day`, the day-of-year a date *would* have in a leap
+year, because raw `day_of_year` gives 31 December two different numbers.
+
+### Leap day
+
+Keyed on `month_day`, so 29 February is its own row rather than colliding with
+1 March. Its **own** sample is a quarter the size — eight leap years in
+thirty-two — but its **window** is full, drawn from 22 February to 7 March in
+every year. A test asserts the leap-day window is within 20% of 28 February's;
+an implementation that filtered the window to leap years would show a quarter.
+
+### σ is never zero, and null means something
+
+No σ is zero — 455 observations across a fortnight cannot be identical.
+
+**1 098 rows have a null σ**: 3 cities × 366 days, for `london`, `reykjavik`
+and `sydney` — each of which currently holds a *single* year, from the ING-03
+archival samples. Leave-one-year-out removes their only year and leaves
+nothing. Null is the honest answer; falling back to the all-years value would
+silently reintroduce the exact leakage the model removes. A test asserts nulls
+appear **only** where the reference period is one year.
+
+### The σ sanity check, and a correction to it
+
+| city | within-window σ | σ of all days pooled |
+|---|---:|---:|
+| lagos | **0.631** | 1.329 |
+| singapore | 0.704 | **0.873** |
+| delhi | 2.148 | 6.977 |
+| cairo | 2.269 | — |
+| phoenix | 3.221 | 9.163 |
+
+**Singapore is the least variable city — on the pooled σ.** On the
+*within-window* σ, Lagos is slightly lower. Both measurements are correct and
+they answer different questions: Lagos has a 3.4 °C seasonal swing against
+Singapore's 1.6 °C, but is marginally steadier *around* that curve.
+
+The climatology needs the second quantity, because a Z-score should measure
+departure from the seasonal normal, not from the annual mean. Both orderings
+are asserted, each against the σ it is actually about.
+
+Moscow has not finished backfilling, so the "largest σ" half of the check
+**skips rather than passes** — a check that silently passes on absent data is
+worse than one that says it is waiting. Phoenix leads so far at 3.221 °C,
+which is what a desert with a large seasonal swing should look like.
+
 ## Licence
 
 [MIT](LICENSE)
