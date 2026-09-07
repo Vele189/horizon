@@ -9,6 +9,7 @@ select
     name,
     country,
     country_code,
+    region,
     latitude::double precision      as latitude,
     longitude::double precision     as longitude,
     elevation_m::real               as elevation_m,

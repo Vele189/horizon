@@ -841,6 +841,61 @@ All 15 configured zones are checked against `pg_timezone_names`: Python's
 `zoneinfo` and Postgres's tz database are different databases, and cities.yml
 validates against the first.
 
+## Gold: `dim_cities`
+
+One row per city, built from `config/cities.yml` — **never from observation
+data**. A dimension inferred from what happened to land would list fourteen
+cities during a backfill and would quietly lose one whose ingestion failed. The
+registry says what the set *is*; the facts say what has been observed of it, and
+the gap between them is what the reconciliation report exists to surface.
+
+| | |
+|---|---|
+| rows | 15, one per city |
+| columns | `city_id`, `name`, `country`, `country_code`, `region`, `latitude`, `longitude`, `elevation_m`, `timezone`, `koppen`, `hemisphere`, `season_model`, `role` |
+| materialised | table, in `gold_marts` |
+
+### These are grid cells, not weather stations
+
+The original draft called this `dim_weather_stations`. Open-Meteo serves ERA5
+reanalysis — a physical model reconciled with observations onto a regular grid,
+not readings from an instrument at a named place. There is no station, no
+instrument history, no siting metadata and no station identifier to join on,
+and the station framing would misdescribe the source to anyone who knows the
+domain.
+
+So the coordinates here are what was *asked for*; the `api_latitude`,
+`api_longitude` and `api_elevation_m` on every fact row are what *replied*.
+London's 51.5074/−0.1278 at 11 m resolves to 51.4938/−0.1630 at 16 m.
+
+### `hemisphere` is derived twice, on purpose
+
+`cities.py` computes it from `lat >= 0` and seeds it; `dim_cities` recomputes it
+in SQL from the latitude column. Neither is authoritative — a test asserts they
+agree, so a drift between Python and SQL is caught rather than absorbed.
+
+That matters more than it looks. The season mapping reads this column, so for
+the five southern cities a wrong value doesn't mislabel summer and winter, it
+**inverts** them. Verified by planting `hemisphere = 'north'` on Sydney: the
+cross-check fails, and passes again once the seed is restored.
+
+### `region` was added to `cities.yml`
+
+The column didn't exist. Rather than derive it from `country_code` in SQL —
+which would put the mapping in a second place and make adding a city a two-file
+edit — it is now a validated field on the registry, constrained to six
+continent-level values. Deliberately coarse: it groups fifteen cities in a
+dashboard filter rather than encoding geography, and a finer scheme would put
+most of them in a bucket of one.
+
+### One dbt operational note
+
+**A `--full-refresh` seed drops its table with `CASCADE`**, taking dependent
+views with it — `stg_cities` vanished and every model reading it errored until
+the next `dbt build`. Changing a seed's column set requires `--full-refresh`,
+so the two go together: `dbt build --full-refresh`, not `dbt seed
+--full-refresh` alone.
+
 ## Licence
 
 [MIT](LICENSE)

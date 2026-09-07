@@ -1,0 +1,87 @@
+version: 2
+
+models:
+  - name: dim_cities
+    description: >
+      One row per target city, built from config/cities.yml rather than from
+      observation data.
+
+
+      **These are grid cells, not weather stations.** Open-Meteo serves ERA5
+      reanalysis: a physical model reconciled with observations onto a regular
+      grid, not readings from an instrument at a named place. The original
+      project draft called this table `dim_weather_stations`, and that framing
+      would misdescribe the source to anyone who knows the domain — there is no
+      station, no instrument history, no siting metadata, and no station
+      identifier to join on. A request is snapped to the nearest cell, which is
+      why every observation row carries the `api_latitude`, `api_longitude` and
+      `api_elevation_m` that actually answered: London's 51.5074/-0.1278 at
+      11 m resolves to 51.4938/-0.1630 at 16 m.
+
+
+      The coordinates here are therefore the city's own reference point, and
+      `elevation_m` is the city's elevation rather than the grid cell's. They
+      are what was asked for; the fact tables record what replied.
+
+
+      Built from the registry and not from the facts on purpose. A dimension
+      inferred from landed data would list fourteen cities during a backfill
+      and would quietly lose one whose ingestion failed.
+
+    tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [city_id]
+
+    columns:
+      - name: city_id
+        description: Slug, and the join key to every fact table.
+        tests: [unique, not_null]
+      - name: name
+        tests: [not_null]
+      - name: country
+        tests: [not_null]
+      - name: region
+        description: >
+          Continent-level, deliberately coarse - this groups fifteen cities in
+          a dashboard filter rather than encoding geography. A finer scheme
+          would put most of them in a bucket of one.
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Africa', 'Asia', 'Europe', 'North America', 'Oceania',
+                       'South America']
+      - name: latitude
+        description: City-centre reference point, not the grid cell that answered.
+        tests:
+          - not_null
+          - accepted_range:
+              min_value: -90
+              max_value: 90
+      - name: longitude
+        tests:
+          - not_null
+          - accepted_range:
+              min_value: -180
+              max_value: 180
+      - name: elevation_m
+        description: The city's elevation, not the grid cell's; carried as a model feature.
+        tests:
+          - not_null
+          - accepted_range:
+              min_value: -430
+              max_value: 5100
+      - name: timezone
+        description: IANA zone, so a local-time view is possible downstream.
+        tests: [not_null]
+      - name: koppen
+        description: Köppen-Geiger classification.
+        tests: [not_null]
+      - name: hemisphere
+        description: >
+          Derived from the sign of the latitude in SQL, not carried over from
+          configuration. The season mapping reads this, so for the five
+          southern cities a wrong value inverts summer and winter.
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['north', 'south']

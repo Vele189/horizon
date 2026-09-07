@@ -35,6 +35,7 @@ cities:
     name: Singapore
     country: Singapore
     country_code: SG
+    region: Asia
     lat: 1.3521
     lon: 103.8198
     elevation_m: 15
@@ -50,6 +51,7 @@ cities:
     name: Lagos
     country: Nigeria
     country_code: NG
+    region: Africa
     lat: 6.5244
     lon: 3.3792
     elevation_m: 10
@@ -65,6 +67,7 @@ cities:
     name: Delhi
     country: India
     country_code: IN
+    region: Asia
     lat: 28.6139
     lon: 77.2090
     elevation_m: 216
@@ -79,6 +82,7 @@ cities:
     name: Cairo
     country: Egypt
     country_code: EG
+    region: Africa
     lat: 30.0444
     lon: 31.2357
     elevation_m: 23
@@ -93,6 +97,7 @@ cities:
     name: Phoenix
     country: United States
     country_code: US
+    region: North America
     lat: 33.4484
     lon: -112.0740
     elevation_m: 331
@@ -107,6 +112,7 @@ cities:
     name: Tokyo
     country: Japan
     country_code: JP
+    region: Asia
     lat: 35.6762
     lon: 139.6503
     elevation_m: 40
@@ -126,6 +132,7 @@ cities:
     name: Portland
     country: United States
     country_code: US
+    region: North America
     lat: 45.5152
     lon: -122.6784
     elevation_m: 15
@@ -146,6 +153,7 @@ cities:
     name: London
     country: United Kingdom
     country_code: GB
+    region: Europe
     lat: 51.5074
     lon: -0.1278
     elevation_m: 11
@@ -165,6 +173,7 @@ cities:
     name: Moscow
     country: Russia
     country_code: RU
+    region: Europe
     lat: 55.7558
     lon: 37.6173
     elevation_m: 156
@@ -186,6 +195,7 @@ cities:
     name: Reykjavík
     country: Iceland
     country_code: IS
+    region: Europe
     lat: 64.1466
     lon: -21.9426
     elevation_m: 61
@@ -205,6 +215,7 @@ cities:
     name: São Paulo
     country: Brazil
     country_code: BR
+    region: South America
     lat: -23.5505
     lon: -46.6333
     elevation_m: 760
@@ -225,6 +236,7 @@ cities:
     name: Johannesburg
     country: South Africa
     country_code: ZA
+    region: Africa
     lat: -26.2041
     lon: 28.0473
     elevation_m: 1753
@@ -240,6 +252,7 @@ cities:
     name: Sydney
     country: Australia
     country_code: AU
+    region: Oceania
     lat: -33.8688
     lon: 151.2093
     elevation_m: 58
@@ -262,6 +275,7 @@ cities:
     name: Buenos Aires
     country: Argentina
     country_code: AR
+    region: South America
     lat: -34.6037
     lon: -58.3816
     elevation_m: 25
@@ -281,6 +295,7 @@ cities:
     name: Auckland
     country: New Zealand
     country_code: NZ
+    region: Oceania
     lat: -36.8485
     lon: 174.7633
     elevation_m: 26

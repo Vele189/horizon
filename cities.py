@@ -41,6 +41,12 @@ _VALID_DIRECTIONS: frozenset[str] = frozenset({"hot", "cold"})
 _VALID_SEASON_MODELS: frozenset[str] = frozenset(
     {"four_season", "wet_dry", "seasonless"}
 )
+# Continent-level, deliberately coarse: this exists to group fifteen cities in
+# a dashboard filter, not to encode geography. A finer scheme (UN M49
+# subregions, say) would put most of these in a bucket of one.
+_VALID_REGIONS: frozenset[str] = frozenset(
+    {"Africa", "Asia", "Europe", "North America", "Oceania", "South America"}
+)
 # Köppen classes are two or three characters: a main group, a precipitation
 # letter, and an optional temperature letter.
 _KOPPEN_MAIN: frozenset[str] = frozenset("ABCDE")
@@ -105,6 +111,7 @@ class City:
     name: str
     country: str
     country_code: str
+    region: str
     lat: float
     lon: float
     elevation_m: float
@@ -170,6 +177,12 @@ class City:
             raise CityConfigError(
                 f"{self.id}: koppen {koppen!r} is not a valid classification "
                 f"(main group must be one of {sorted(_KOPPEN_MAIN)})."
+            )
+
+        if self.region not in _VALID_REGIONS:
+            raise CityConfigError(
+                f"{self.id}: region must be one of {sorted(_VALID_REGIONS)}, "
+                f"got {self.region!r}."
             )
 
         if self.season_model not in _VALID_SEASON_MODELS:
@@ -294,6 +307,7 @@ def _build_city(raw: Any, index: int) -> City:
         name=str(raw["name"]),
         country=str(raw["country"]),
         country_code=str(raw["country_code"]),
+        region=str(raw["region"]),
         timezone=str(raw["timezone"]),
         koppen=str(raw["koppen"]),
         season_model=str(raw["season_model"]),

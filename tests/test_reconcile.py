@@ -54,6 +54,7 @@ def city() -> City:
         name="Reconciliation Test",
         country="Testland",
         country_code="ZZ",
+        region="Europe",
         lat=51.5,
         lon=-0.1,
         elevation_m=10.0,

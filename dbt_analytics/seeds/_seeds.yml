@@ -13,6 +13,7 @@ seeds:
         name: text
         country: text
         country_code: text
+        region: text
         latitude: double precision
         longitude: double precision
         elevation_m: real
