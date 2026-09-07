@@ -651,6 +651,68 @@ staleness moves no number that matters. A month means the pipeline has stopped,
 which does. Anything tighter would fail continuously during a normal backfill
 and teach everyone to ignore the check.
 
+## Silver: deduplication
+
+Bronze is append-only — re-ingesting a window inserts a second copy rather than
+replacing the first, and there is no unique constraint on the natural key
+because one would reject a legitimate re-ingest. Deduplication is therefore
+silver's job.
+
+**PostgreSQL has no `QUALIFY` clause.** That is Snowflake, BigQuery and DuckDB
+syntax. The Postgres form is a `row_number()` subquery filtered to rank 1:
+
+```sql
+select … from (
+    select …, row_number() over (
+        partition by city_id, observation_time
+        order by ingested_at desc, id desc
+    ) as _dedup_rank
+    from bronze_raw.observations_daily
+) ranked
+where _dedup_rank = 1
+```
+
+Both grains share one macro,
+[`deduplicate_observations`](dbt_analytics/macros/deduplicate_observations.sql).
+Columns are read from the relation rather than a hand-maintained list — bronze
+has already lost a column once (`source_url`), and a list would have needed the
+same edit or kept selecting something that no longer exists.
+
+The `id desc` tiebreaker is not decoration. The loader stamps **one
+`ingested_at` per run**, so two copies of a window landed by the same run tie
+on the sort key and `row_number()` would pick between them differently on each
+build.
+
+| | bronze rows | staging rows | removed |
+|---|---:|---:|---:|
+| daily | 61 127 | 60 396 | 731 (1.20%) |
+| hourly | 280 728 | 274 920 | 5 808 (2.07%) |
+
+Measured 2026-09-07, mid-backfill. The daily figure is one city-year landed
+twice by an out-of-band loader run that bypassed the manifest; the hourly
+figure is `cairo` and `london`, where an archival sample took a calendar year
+and overlapped the later trailing-24-month window by 121 days each.
+
+### Uniqueness is not enough, and the tests know it
+
+`unique_combination_of_columns` proves *one* row survives per key. It says
+nothing about *which*. Reversing the sort to `ingested_at asc` leaves it green
+and silently serves the oldest copy of every observation — so
+`assert_{grain}_keeps_the_newest_ingest` checks the survivor carries the
+greatest `ingested_at` bronze holds for its key.
+
+Verified by mutation rather than assumed. Three deliberate breakages, and what
+caught each:
+
+| mutation | caught by |
+|---|---|
+| `where _dedup_rank = 1` removed | uniqueness (both), and no-observation-lost |
+| order flipped to `asc` | **only** keeps-the-newest-ingest, on 731 rows |
+| partition narrowed to `city_id` | **only** no-observation-lost |
+
+Each singular test is the sole thing standing between one real defect and a
+green build.
+
 ## Licence
 
 [MIT](LICENSE)
