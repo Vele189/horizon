@@ -528,13 +528,33 @@ class TableSize:
     total_bytes: int
     table_bytes: int
     index_bytes: int
+    dead_rows: int = 0
+    #: (column, average bytes) for the widest column, and the row's total
+    #: payload — enough to say where the space actually goes.
+    widest_column: tuple[str, float] | None = None
+    payload_bytes: float = 0.0
 
     @property
     def bytes_per_row(self) -> float:
         return self.total_bytes / self.rows if self.rows else 0.0
 
+    @property
+    def dead_share(self) -> float:
+        """Rows deleted or updated but not yet vacuumed.
+
+        ``pg_total_relation_size`` counts them, so a table that has been loaded
+        and cleared a few times reads far larger than it is — 31 MB against a
+        true 12 MB, in the first measurement taken here.
+        """
+        total = self.rows + self.dead_rows
+        return self.dead_rows / total if total else 0.0
+
     def share_of_neon_budget(self) -> float:
         return self.total_bytes / NEON_STORAGE_BUDGET_BYTES
+
+    def project(self, rows: int) -> int:
+        """This table at ``rows`` rows, at the density measured here."""
+        return round(self.bytes_per_row * rows)
 
 
 def table_size(engine: Engine, grain: Grain) -> TableSize:
@@ -552,12 +572,47 @@ def table_size(engine: Engine, grain: Grain) -> TableSize:
             ),
             {"t": qualified},
         ).one()
+        dead = connection.execute(
+            text(
+                "select coalesce(n_dead_tup, 0) from pg_stat_user_tables "
+                "where schemaname = :s and relname = :r"
+            ),
+            {"s": BRONZE_SCHEMA, "r": table},
+        ).scalar() or 0
+
+        widest: tuple[str, float] | None = None
+        payload = 0.0
+        if rows:
+            columns = connection.execute(
+                text(
+                    "select column_name from information_schema.columns "
+                    "where table_schema = :s and table_name = :r "
+                    "order by ordinal_position"
+                ),
+                {"s": BRONZE_SCHEMA, "r": table},
+            ).scalars().all()
+            averages = connection.execute(
+                text(
+                    "select "
+                    + ", ".join(
+                        f'avg(pg_column_size("{c}")) as "{c}"' for c in columns
+                    )
+                    + f" from {qualified}"
+                )
+            ).one()
+            sizes = {c: float(v or 0.0) for c, v in zip(columns, averages)}
+            payload = sum(sizes.values())
+            widest = max(sizes.items(), key=lambda kv: kv[1])
+
     return TableSize(
         table=qualified,
         rows=rows,
         total_bytes=total,
         table_bytes=relation,
         index_bytes=indexes,
+        dead_rows=dead,
+        widest_column=widest,
+        payload_bytes=payload,
     )
 
 
@@ -682,6 +737,13 @@ def _print_report(
             if nulls:
                 unpopulated.append(column)
 
+    if unpopulated:
+        print(
+            f"\n  columns carrying nulls: {unpopulated}. Bronze preserves nulls "
+            "rather than\n  filling them, so these are a finding to explain, "
+            "not necessarily a defect."
+        )
+
     size = table_size(engine, grain)
     print(
         f"\n  {size.table}: {_bytes(size.total_bytes)} "
@@ -689,6 +751,17 @@ def _print_report(
     )
     if size.rows:
         print(f"  {size.bytes_per_row:.0f} bytes/row including indexes")
+    if size.dead_share > 0.1:
+        print(
+            f"  {size.dead_rows:,} dead rows ({size.dead_share:.0%}) are counted "
+            f"in that figure — run VACUUM FULL {size.table} for the true size"
+        )
+    if size.widest_column and size.payload_bytes:
+        column, average = size.widest_column
+        print(
+            f"  widest column is {column} at {average:.0f} B, "
+            f"{average / size.payload_bytes:.0%} of the row payload"
+        )
     print(
         f"  {size.share_of_neon_budget():.1%} of Neon's "
         f"{_bytes(NEON_STORAGE_BUDGET_BYTES)} free-plan allowance "
