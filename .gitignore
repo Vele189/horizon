@@ -32,6 +32,11 @@ data/raw/
 machine_learning/artifacts/*
 !machine_learning/artifacts/.gitkeep
 
+# metrics.json is the exception, and deliberately so. The baseline scores it
+# holds are the target a model is measured against, and a target is only fixed
+# in advance if it is committed in advance. The .joblib beside it stays out.
+!machine_learning/artifacts/metrics.json
+
 # ---------------------------------------------------------------------------
 # dbt
 # ---------------------------------------------------------------------------

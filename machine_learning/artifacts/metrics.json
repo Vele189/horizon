@@ -1,0 +1,245 @@
+{
+  "baselines": {
+    "base_rate": {
+      "fitted_on": "train",
+      "params": {
+        "rate": 0.05509330138232488
+      },
+      "test": {
+        "base_rate": 0.13578650364448624,
+        "brier": 0.12385992196381423,
+        "lift": 1.0,
+        "positives": 1155,
+        "pr_auc": 0.13578650364448624,
+        "rows": 8506
+      },
+      "train": {
+        "base_rate": 0.05509330138232488,
+        "brier": 0.0520580295251212,
+        "lift": 1.0,
+        "positives": 2483,
+        "pr_auc": 0.05509330138232488,
+        "rows": 45069
+      },
+      "validation": {
+        "base_rate": 0.0852157943067034,
+        "brier": 0.07886142728736023,
+        "lift": 1.0,
+        "positives": 464,
+        "pr_auc": 0.0852157943067034,
+        "rows": 5445
+      }
+    },
+    "climatology": {
+      "fitted_on": "train",
+      "params": {
+        "cells": 317,
+        "collapsed_to_city_rate": true,
+        "median_rows_per_cell": 168.0,
+        "min_rows_per_cell": 21,
+        "overall_rate": 0.05509330138232488,
+        "smoothing": "inf",
+        "smoothing_grid": [
+          0.0,
+          1.0,
+          5.0,
+          10.0,
+          20.0,
+          50.0,
+          100.0,
+          500.0,
+          2000.0,
+          "inf"
+        ],
+        "smoothing_search": [
+          {
+            "smoothing": 0.0,
+            "validation_brier": 0.0811645198437154,
+            "validation_pr_auc": 0.07920343802269983
+          },
+          {
+            "smoothing": 1.0,
+            "validation_brier": 0.08114574668016489,
+            "validation_pr_auc": 0.07836501799204709
+          },
+          {
+            "smoothing": 5.0,
+            "validation_brier": 0.08107400815450595,
+            "validation_pr_auc": 0.07835151313375854
+          },
+          {
+            "smoothing": 10.0,
+            "validation_brier": 0.08099080433497179,
+            "validation_pr_auc": 0.07820562877522767
+          },
+          {
+            "smoothing": 20.0,
+            "validation_brier": 0.08084199873814146,
+            "validation_pr_auc": 0.07797961282159781
+          },
+          {
+            "smoothing": 50.0,
+            "validation_brier": 0.08049898838778653,
+            "validation_pr_auc": 0.07818352836240022
+          },
+          {
+            "smoothing": 100.0,
+            "validation_brier": 0.08013875072809405,
+            "validation_pr_auc": 0.07823994596363054
+          },
+          {
+            "smoothing": 500.0,
+            "validation_brier": 0.0794241696915781,
+            "validation_pr_auc": 0.08162551624958576
+          },
+          {
+            "smoothing": 2000.0,
+            "validation_brier": 0.07920750767619525,
+            "validation_pr_auc": 0.08704452469654504
+          },
+          {
+            "smoothing": "inf",
+            "validation_brier": 0.07913460416386674,
+            "validation_pr_auc": 0.09936126547607739
+          }
+        ]
+      },
+      "test": {
+        "base_rate": 0.13578650364448624,
+        "brier": 0.12453788639471097,
+        "lift": 1.1150999306033376,
+        "positives": 1155,
+        "pr_auc": 0.15141552079083645,
+        "rows": 8506
+      },
+      "train": {
+        "base_rate": 0.05509330138232488,
+        "brier": 0.0516212972700933,
+        "lift": 1.3581150579231467,
+        "positives": 2483,
+        "pr_auc": 0.07482304219803353,
+        "rows": 45069
+      },
+      "validation": {
+        "base_rate": 0.0852157943067034,
+        "brier": 0.07913460416386674,
+        "lift": 1.1659958847354341,
+        "positives": 464,
+        "pr_auc": 0.09936126547607739,
+        "rows": 5445
+      }
+    },
+    "persistence": {
+      "fitted_on": "train",
+      "params": {
+        "after_anomaly": 0.1999195494770716,
+        "after_quiet": 0.04663832984994012,
+        "train_rows_per_cell": {
+          "after_anomaly": 2486,
+          "after_quiet": 42583,
+          "when_unknown": 0
+        },
+        "when_unknown": 0.05509330138232488,
+        "window_days": 7
+      },
+      "test": {
+        "base_rate": 0.13578650364448624,
+        "brier": 0.1146156621653148,
+        "lift": 1.6888273852986966,
+        "positives": 1155,
+        "pr_auc": 0.22931996590876963,
+        "rows": 8506
+      },
+      "train": {
+        "base_rate": 0.05509330138232488,
+        "brier": 0.05083352772033802,
+        "lift": 1.5261725062953126,
+        "positives": 2483,
+        "pr_auc": 0.08408188185074578,
+        "rows": 45069
+      },
+      "validation": {
+        "base_rate": 0.0852157943067034,
+        "brier": 0.07729256420435957,
+        "lift": 1.2900750198388051,
+        "positives": 464,
+        "pr_auc": 0.10993476753079992,
+        "rows": 5445
+      }
+    }
+  },
+  "generated_at": "2026-09-07T08:31:53+00:00",
+  "label": {
+    "horizon_days": 7,
+    "window": "t+1 .. t+7 inclusive"
+  },
+  "schema_version": 1,
+  "snapshot": {
+    "cities": 6,
+    "first_date": "1995-01-31",
+    "last_date": "2026-09-01",
+    "last_date_by_city": {
+      "cairo": "2026-08-26",
+      "delhi": "2026-08-26",
+      "lagos": "2026-08-31",
+      "phoenix": "2026-08-26",
+      "singapore": "2026-09-01",
+      "tokyo": "1998-12-24"
+    },
+    "rows": 59090,
+    "rows_by_city": {
+      "cairo": 11531,
+      "delhi": 11531,
+      "lagos": 11536,
+      "phoenix": 11531,
+      "singapore": 11537,
+      "tokyo": 1424
+    }
+  },
+  "split": {
+    "periods": [
+      {
+        "end": "2018-12-31",
+        "name": "train",
+        "start": "1995-01-01"
+      },
+      {
+        "end": "2021-12-31",
+        "name": "validation",
+        "start": "2019-01-01"
+      },
+      {
+        "end": null,
+        "name": "test",
+        "start": "2022-01-01"
+      }
+    ],
+    "purge_days": 7,
+    "summary": [
+      {
+        "base_rate": 0.05509330138232488,
+        "end": "2018-12-24",
+        "positives": 2483,
+        "rows": 45069,
+        "split": "train",
+        "start": "1995-01-31"
+      },
+      {
+        "base_rate": 0.0852157943067034,
+        "end": "2021-12-24",
+        "positives": 464,
+        "rows": 5445,
+        "split": "validation",
+        "start": "2019-01-01"
+      },
+      {
+        "base_rate": 0.13578650364448624,
+        "end": "2026-09-01",
+        "positives": 1155,
+        "rows": 8506,
+        "split": "test",
+        "start": "2022-01-01"
+      }
+    ]
+  }
+}

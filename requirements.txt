@@ -17,3 +17,10 @@ dbt-postgres==1.11.0
 # Machine learning. numpy arrives with pandas anyway; features.py imports it
 # directly, so it is pinned here rather than relied on as a transitive.
 numpy==2.5.3
+
+# average_precision_score and brier_score_loss, from ML-03 onwards. Hand-rolling
+# them was the alternative and it is the wrong one: the baselines and the model
+# have to be scored by the *same* function or the comparison is void, and the
+# difference would hide in tie handling — where a rule-based baseline puts
+# thousands of rows on one score and a trained model puts none.
+scikit-learn==1.9.0

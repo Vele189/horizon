@@ -102,6 +102,7 @@ __all__ = [
     "missing_report",
     "on_daily_calendar",
     "require_grain",
+    "trailing_anomaly_counts",
 ]
 
 log = logging.getLogger(__name__)
@@ -473,8 +474,10 @@ def _rolling(grouped, window: int, statistic: str) -> pd.Series:
     )
 
 
-def _anomaly_counts(calendar: pd.DataFrame) -> dict[str, pd.Series]:
-    """Count flagged days in the trailing window, and how many were scorable.
+def trailing_anomaly_counts(
+    calendar: pd.DataFrame, window: int
+) -> tuple[pd.Series, pd.Series]:
+    """Days flagged, and days scorable, over the trailing ``window`` — inclusive of t.
 
     A null ``is_anomaly`` is not a quiet day — it is a day with no baseline to
     score against, and 1 095 of them exist for the three cities holding a
@@ -482,35 +485,49 @@ def _anomaly_counts(calendar: pd.DataFrame) -> dict[str, pd.Series]:
     day was ordinary on no evidence, and would put it in the denominator of
     every rate computed downstream.
 
-    Two columns rather than one coerced one. ``anomaly_days_trailing30`` counts
-    the days flagged ``true``, so where the window holds unscored days it is a
-    *lower bound*; ``anomaly_days_scored30`` is how many of the 30 carried a
-    flag at all. Equal to 30, the count is exact; below it, the caller can see
-    the count is partial rather than read a quiet month off a coverage gap.
+    So two series rather than one coerced one. The first counts days flagged
+    ``true``, and is a *lower bound* wherever the window holds unscored days;
+    the second is how many of the window carried a flag at all. Equal to the
+    window, the count is exact; below it, the caller can see the count is
+    partial rather than read a quiet month off a coverage gap.
 
-    Both require all 30 calendar days to be present in the record — a window
-    spanning a hole is null, the same rule the rollings follow.
+    Both require every calendar day of the window to be present in the record —
+    a window spanning a hole is null, the same rule the rollings follow.
+
+    Args:
+        calendar: A frame from :func:`on_daily_calendar`, so a row offset is a
+            day offset.
+        window: Trailing days, counting *t* as one of them.
+
+    Returns:
+        ``(flagged, scored)``, both aligned to ``calendar``.
     """
     observed = calendar["is_observed"].to_numpy(dtype=bool)
     flag = calendar["is_anomaly"]
     known = flag.notna().to_numpy(dtype=bool)
     hit = known & flag.fillna(False).to_numpy(dtype=bool)
 
-    window = ANOMALY_COUNT_WINDOW
-    counts: dict[str, pd.Series] = {}
-    for name, values in (
-        (f"anomaly_days_trailing{window}", hit),
-        (f"anomaly_days_scored{window}", known),
-    ):
+    counted = []
+    for values in (hit, known):
         # NaN on unobserved days, so min_periods=window rejects any window
         # that spans one instead of treating the hole as a quiet day.
         series = pd.Series(
             np.where(observed, values.astype(float), np.nan), index=calendar.index
         )
-        counts[name] = _rolling(
-            series.groupby(calendar["city_id"], sort=False), window, "sum"
+        counted.append(
+            _rolling(series.groupby(calendar["city_id"], sort=False), window, "sum")
         )
-    return counts
+    return counted[0], counted[1]
+
+
+def _anomaly_counts(calendar: pd.DataFrame) -> dict[str, pd.Series]:
+    """The trailing counts under the names the feature matrix gives them."""
+    window = ANOMALY_COUNT_WINDOW
+    flagged, scored = trailing_anomaly_counts(calendar, window)
+    return {
+        f"anomaly_days_trailing{window}": flagged,
+        f"anomaly_days_scored{window}": scored,
+    }
 
 
 def _add_null_bookkeeping(features: pd.DataFrame) -> None:

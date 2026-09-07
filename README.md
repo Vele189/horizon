@@ -1654,6 +1654,142 @@ function of the anomaly flag alone. Temperature and pressure are not inputs to
 it, and a test rewrites both — +60 °C, pressure negated — and requires the label
 frame to come back identical.
 
+## Baselines, fixed in advance
+
+`machine_learning/baselines.py` scores two baselines and writes them to
+`machine_learning/artifacts/metrics.json`, **committed before any model is
+trained**. A PR-AUC with nothing beside it is not a result: average precision
+for a random ranker is the positive rate, and the positive rate here is 5.51%
+in the training period and 13.58% in the test one, so the same 0.20 is strong on
+one and poor on the other.
+
+| | rows | positives | base rate | PR-AUC | lift | Brier |
+|---|---:|---:|---:|---:|---:|---:|
+| no-skill reference | 8 506 | 1 155 | 13.58% | 0.1358 | 1.00× | 0.12386 |
+| **persistence** | 8 506 | 1 155 | 13.58% | **0.2293** | **1.69×** | **0.11462** |
+| **climatology** | 8 506 | 1 155 | 13.58% | 0.1514 | 1.12× | 0.12454 |
+
+Test split, both fitted on train only. **The model has to beat 0.2293.**
+
+### The split is purged, not just cut
+
+Train to 2018, validate 2019–2021, test from 2022 — the proposal's split. But
+cutting on the date alone is not enough: the label at *t* is an anomaly in
+t+1 .. t+7, so a row dated 2018-12-31 is labelled by days that belong to
+validation. Seven rows per city per boundary is a rounding error in row count
+and not one in principle — it is the training set being told what happened next.
+
+`PURGE_DAYS` drops them, so train ends 2018-12-24. The test that matters runs
+the split with the purge **off** and requires the disjointness check to raise,
+so the purge is a fact rather than an intention.
+
+### Persistence: a rule, calibrated
+
+The rule is the proposal's — an anomaly next week if one occurred this week —
+but a rule emits a flag, and a flag has no Brier score worth having: 0 and 1
+make every mistake maximally confident. So the rule is calibrated on the
+training split and the baseline emits the resulting probability. The ranking is
+unchanged, so PR-AUC is the rule's own; only the calibration is fixed.
+
+| training cell | rows | P(anomaly next week) |
+|---|---:|---:|
+| after an anomalous week | 2 486 | **19.99%** |
+| after a quiet week | 42 583 | 4.66% |
+| week could not be judged | 0 | — |
+
+A 4.3× separation, and it holds up out of sample in every city — 1.15× in
+Phoenix to 2.27× in Delhi.
+
+That empty third cell is not decoration. It held **36 rows** until the signal
+was moved to be computed before the population is trimmed rather than after.
+The seven-day window was falling off the start of the *slice* instead of the
+start of the record — the same mistake as measuring a warm-up against the
+request rather than the data, for the third time in this workstream. It is now
+computed once, on the whole record, and `build_metrics` refuses a population
+that arrives without it.
+
+### Climatology: the week-of-year signal does not survive the split
+
+This is the interesting one. Fitted and scored **inside** the training period,
+the (city, week-of-year) climatology is worth 2.47× no-skill, so the seasonal
+structure is real. Carried across the split it is worth **less than nothing**:
+
+| | lift |
+|---|---:|
+| train, in-sample | 2.47× |
+| validation | 0.93× |
+| test | **0.91×** |
+| test, fitted on test (the ceiling) | 2.53× |
+
+The last row is the point. The test period has just as much (city, week)
+structure as the training period — **it is different structure**. The anomaly
+mix flips:
+
+| | cold | hot |
+|---|---:|---:|
+| train 1995–2018 | 347 | 224 |
+| test 2022–2026 | 61 | **231** |
+
+Hot extremes fall in different weeks than cold ones, so a climatology fitted on
+a cold-dominated era points at the wrong weeks for a hot-dominated one. It is
+not stale in a way more data fixes: refitting on train *and* validation still
+only reaches 1.18×.
+
+So validation shrinks the week term away entirely. The pseudo-count is chosen on
+validation Brier over a grid that **runs to infinity**, and infinity is what it
+picks:
+
+| pseudo-count | 0 | 20 | 100 | 500 | 2 000 | ∞ |
+|---|---:|---:|---:|---:|---:|---:|
+| validation Brier | 0.08116 | 0.08084 | 0.08014 | 0.07942 | 0.07921 | **0.07913** |
+| validation PR-AUC | 0.0792 | 0.0780 | 0.0782 | 0.0816 | 0.0870 | **0.0994** |
+
+The first version of this grid stopped at 100 and reported a "tuned" value that
+was simply its own edge — validation Brier was still falling there. A parameter
+chosen at the boundary of its grid is clipped, not tuned, and a test now
+requires the grid to reach its limit.
+
+At the limit every week cell collapses to its city's own rate, and the surviving
+baseline is a per-city base rate at 1.12×. The limit is *computed* rather than
+approached, because at a large finite pseudo-count the week term survives as a
+rounding-sized perturbation that still breaks ties — and it breaks them the
+wrong way, costing 0.0275 of PR-AUC against the exact collapse.
+
+This is recorded as a test that fails if the raw week climatology ever ranks
+above random out of sample, so the finding gets revisited rather than quietly
+invalidated.
+
+### What ML-04 should take from this
+
+- **Beat 0.2293.** That is persistence on test, and it is not a weak opponent.
+- Seasonal features are informative and **non-stationary**. `day_of_year_sin` /
+  `cos` carry real signal — the in-sample ceiling is 2.53× — but the mapping
+  from season to anomaly risk has changed within the record. A model that fits
+  it hard on 1995–2018 will be fitting a regime that has gone.
+- The base rate moves from 5.51% to 13.58% across the split, so **every
+  probability trained on the early record is systematically low**. The proposal
+  asks for a calibration curve; this is what it will show.
+
+### The target is fixed against a snapshot, and the file says which
+
+`metrics.json` records the row count, city list and last date it was computed
+on — 59 090 rows across 6 cities to 2026-09-01. The backfill is not finished,
+and when more cities land these numbers change.
+
+So the test that compares the committed file against a fresh run **skips with a
+reason** when the snapshot has moved, naming the command to rebuild it. A test
+that silently passed on a rebuilt file would defeat the point of committing one;
+a test that failed on every new city would be noise. The file is not wrong when
+it goes stale, it is stale — and it has to be rebuilt and re-committed *before*
+a model is compared against it, or "fixed in advance" quietly stops being true.
+
+Two more guards on the file itself: the payload must be strict JSON, since the
+infinite pseudo-count would otherwise be written as a bare `Infinity` that
+Python reads back happily and no other parser accepts; and two runs over the
+same rows in different orders must agree to the last digit, which they did not
+until `build_metrics` sorted its input — a Brier score is a mean over a float
+array, and a mean is summation-order dependent in its final ULP.
+
 ## Licence
 
 [MIT](LICENSE)
