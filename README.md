@@ -526,6 +526,56 @@ therefore easy to stop noticing:
 365 of them (1.0%) are a second copy of an observation already present.
 ```
 
+## Reconciliation
+
+Expected against actual, per city, with every gap catalogued and categorised.
+
+```bash
+python ingestion/reconcile.py --grain daily
+python ingestion/reconcile.py --grain hourly --anchor 2026-09-02 --write docs/
+```
+
+Committed artefacts:
+[`docs/ingestion-reconciliation-daily.md`](docs/ingestion-reconciliation-daily.md),
+[`docs/ingestion-reconciliation-hourly.md`](docs/ingestion-reconciliation-hourly.md).
+
+A gap is not automatically an error — ERA5 has genuine boundaries and the
+backfill is quota-bound across days — but every one is *named*, because the
+failure this guards against is a hole nobody notices until a thirty-year
+climatology is quietly computed over twenty-eight. Every gap over three days
+lands in exactly one category:
+
+| category | meaning | status |
+|---|---|---|
+| archive boundary | Outside what ERA5 can serve. Nothing can fill it. | accepted |
+| not ingested | Inside the servable range; the backfill has not reached it. | accepted while in progress |
+| api limitation | A completed unit recorded fewer rows than its window. | structurally prevented |
+| **unexplained** | Fetched, recorded complete, and missing anyway. | **must be zero** |
+
+`api limitation` is empty by construction rather than by luck: the client
+asserts the returned row count against the requested range *before* parsing,
+and the loader asserts it again before writing, so a short response raises
+instead of landing. A non-empty result there means one of those assertions has
+been weakened.
+
+**Hourly is fully reconciled** — 15/15 cities, 17 544 observations each, delta
+zero, no gaps. **Daily is mid-backfill**: 16 gaps, all `not ingested`, none
+unexplained.
+
+### Two discrepancies that are not gaps
+
+- **Duplicates.** `singapore` daily carries 365 rows more than it has distinct
+  observations: one city-year landed twice, once by an out-of-band loader run
+  that bypassed the manifest. Legal, and silver deduplicates it.
+- **Surplus.** `cairo` and `london` hourly each hold 5 880 observations
+  *before* the anchored window — the ING-03 archival samples, which took a
+  calendar year rather than the trailing-24-month window. Real data the range
+  did not ask about.
+
+The report separates these from each other and from `delta`, because a row
+count above expectation is as much a discrepancy as one below, and the two
+have different causes.
+
 ## Licence
 
 [MIT](LICENSE)
