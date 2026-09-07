@@ -1,0 +1,68 @@
+version: 2
+
+models:
+  - name: int_climatology_window
+    description: >
+      The +/-N day smoothing window, as an explicit day-to-day mapping.
+
+
+      A single calendar day's normal rests on ~30 observations, one per
+      reference year, and at that sample size sigma is noise: a Z-score against
+      it says more about which thirty days happened to be sampled than about
+      the weather. Widening to +/-7 days gives 15 calendar days x ~30 years
+      about 455 observations, which is a stable estimate of a distribution that
+      genuinely varies slowly across a fortnight.
+
+
+      The window is **circular**. 1 January's neighbourhood runs from
+      25 December to 8 January, and a non-circular window would build the
+      year's first and last weeks from half the data - exactly where the
+      northern winter extremes are.
+
+
+      Ephemeral: it is a 5,490-row mapping that exists to be joined, and
+      materialising it would leave an object nobody queries.
+    columns:
+      - name: target_day
+        description: The day whose window this row belongs to, on the leap-year day-of-year axis.
+      - name: source_day
+        description: A day that contributes to that window.
+      - name: day_offset
+        description: Signed distance in days, -N to +N. Zero is the target day itself.
+
+  - name: int_climatology_contributions
+    description: >
+      Each source year's contribution to each target day's window: the count
+      and the power sums of everything that year contributed.
+
+
+      These are the pieces a leave-one-year-out baseline is assembled from.
+      Sums rather than a recomputed aggregate because the whole point is to
+      subtract: computing a leave-one-out mean directly would mean
+      re-aggregating the window once per excluded year, thirty-one passes over
+      the same rows. With n, sum(x) and sum(x^2) the exclusion is arithmetic,
+      and sigma^2 = (sum(x^2) - sum(x)^2/n) / (n-1) recovers the deviation. A
+      test cross-checks the result against Postgres's own stddev_samp on the
+      case where nothing is excluded, so the algebra is verified rather than
+      trusted.
+    columns:
+      - name: city_id
+        description: '{{ doc("col_city_id") }}'
+      - name: target_day
+        description: The day whose window this contribution belongs to.
+      - name: source_year
+        description: The year contributing. This is the year removed when a baseline for it is built.
+      - name: observations
+        description: Rows this year contributed to this window.
+      - name: sum_mean
+        description: Sum of daily mean temperature over those rows.
+      - name: sum_sq_mean
+        description: Sum of squares, for the variance identity.
+      - name: sum_max
+        description: Sum of the daily maximum.
+      - name: sum_sq_max
+        description: Sum of squares of the daily maximum.
+      - name: sum_min
+        description: Sum of the daily minimum.
+      - name: sum_sq_min
+        description: Sum of squares of the daily minimum.

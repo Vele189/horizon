@@ -1291,6 +1291,51 @@ Both findings are recorded as executable tests, including a guard that fires if
 Phoenix ever *does* clear the threshold, so the reasoning gets revisited rather
 than silently invalidated.
 
+## Lineage
+
+![dbt lineage: bronze source through silver staging and intermediate to gold marts](docs/images/lineage.png)
+
+```bash
+python dbt_analytics/dbt_env.py -- dbt docs generate
+python dbt_analytics/render_lineage.py     # regenerates docs/images/lineage.svg
+```
+
+`dbt build` is green end to end: **190 nodes, PASS=190, WARN=0, ERROR=0**, and
+no deprecation warnings. Every model, source and seed carries a description,
+and **every column in every layer is documented** — not just gold.
+
+Shared column descriptions live in `models/_docs.md` as dbt doc blocks.
+`city_id` appears in nine models, and nine copies is nine chances to drift — a
+test asserts every one resolves to the same text, which is how the five
+different descriptions it had accumulated were found.
+
+### The diagram is generated, not screenshotted
+
+[`render_lineage.py`](dbt_analytics/render_lineage.py) lays the DAG out by
+layer from `target/manifest.json`. dbt's own docs site draws a force-directed
+graph, which is fine to explore and poor to read at a glance: the layers are
+the whole point of a medallion architecture and a force layout does not show
+them. SVG stays crisp at any size, diffs as text, and needs no browser; the PNG
+beside it is rasterised for the README. A test regenerates the SVG and fails if
+it differs, so the picture cannot go stale.
+
+### Drawing it found a real defect
+
+`int_climatology_contributions` selected from `fact_weather_observations` and
+`dim_date` — both marts. The lineage ran **staging → marts → intermediate →
+marts**, with arrows pointing backwards into the intermediate column.
+Everything built and all 190 nodes passed; the graph was simply not a layering
+anyone could follow.
+
+It now reads `stg_observations_daily` and derives the calendar columns it needs
+from a `climatology_day_of()` macro shared with `dim_date`, so the two
+derivations cannot drift — and a drift would have been quiet, since both would
+still produce a number between 1 and 366. Two tests now enforce it: no model
+may depend on a later layer, and the intermediate layer may read only staging.
+
+That is the argument for this ticket in one example. The DAG was correct,
+tested, and unreadable, and only drawing it made the difference visible.
+
 ## Licence
 
 [MIT](LICENSE)

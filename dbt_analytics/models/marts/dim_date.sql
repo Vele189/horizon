@@ -69,9 +69,7 @@ attributes as (
         -- measured on — raw day_of_year cannot serve, because 31 December is
         -- 365 in a common year and 366 in a leap one, so a window around it
         -- would draw on different days depending on the year.
-        extract(doy from make_date(2024,
-            extract(month from date_day)::int,
-            extract(day   from date_day)::int))::int as climatology_day,
+        {{ climatology_day_of('date_day') }} as climatology_day,
 
         -- Day-of-year as if every year were common, for anything that needs a
         -- contiguous numeric axis rather than a key. 29 February shares day 59

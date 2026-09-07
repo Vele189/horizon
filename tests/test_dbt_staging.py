@@ -35,6 +35,16 @@ STAGING = DBT_DIR / "models" / "staging"
 GRAINS = ("daily", "hourly")
 
 
+
+def arguments_of(test: dict, name: str) -> dict:
+    """Arguments of a generic test, as dbt 1.12 nests them.
+
+    dbt deprecated top-level arguments in favour of an `arguments` block, so
+    the shape these tests read changed under them. Reading through one helper
+    means the next such change is one edit rather than four.
+    """
+    return test[name].get("arguments", test[name])
+
 @pytest.fixture(scope="module")
 def macro() -> str:
     return MACRO.read_text(encoding="utf-8")
@@ -113,7 +123,7 @@ def test_each_model_is_uniqueness_tested_on_the_natural_key(
         m for m in staging_yml["models"] if m["name"] == f"stg_observations_{grain}"
     )
     combos = [
-        t["unique_combination_of_columns"]["combination_of_columns"]
+        arguments_of(t, "unique_combination_of_columns")["combination_of_columns"]
         for t in model["tests"]
         if "unique_combination_of_columns" in t
     ]
@@ -202,7 +212,7 @@ def ranges_for(staging_yml, model_name: str) -> dict[str, dict]:
     for column in model.get("columns", []):
         for test in column.get("tests", []) or []:
             if isinstance(test, dict) and "accepted_range" in test:
-                found[column["name"]] = test["accepted_range"]
+                found[column["name"]] = arguments_of(test, "accepted_range")
     return found
 
 

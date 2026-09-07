@@ -24,7 +24,7 @@ seeds:
         role: text
     columns:
       - name: city_id
-        description: Slug, and the join key to every observation table.
+        description: '{{ doc("col_city_id") }}'
         tests: [unique, not_null]
       - name: timezone
         description: >
@@ -39,4 +39,35 @@ seeds:
         tests:
           - not_null
           - accepted_values:
-              values: ['north', 'south']
+              arguments:
+                values: ['north', 'south']
+      - name: name
+        description: >
+          The city's common English name, for display.
+      - name: country
+        description: >
+          Country name, for display.
+      - name: country_code
+        description: >
+          ISO 3166-1 alpha-2 code.
+      - name: region
+        description: >
+          Continent-level grouping, deliberately coarse - it groups fifteen cities in a dashboard filter rather than encoding geography.
+      - name: latitude
+        description: >
+          The city's reference coordinate - what was asked for, not the grid cell that answered.
+      - name: longitude
+        description: >
+          The city's reference coordinate. See `latitude`.
+      - name: elevation_m
+        description: >
+          The city's own elevation in metres, carried as a model feature. Not the grid cell's.
+      - name: koppen
+        description: >
+          Koppen-Geiger climate classification.
+      - name: season_model
+        description: '{{ doc("col_season_model") }}'
+      - name: role
+        description: >
+          Why this city is in the set - the analytical job it does. Null where it is simply representative.
+

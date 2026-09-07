@@ -36,11 +36,12 @@ models:
 
     tests:
       - unique_combination_of_columns:
-          combination_of_columns: [city_id, observation_time]
+          arguments:
+            combination_of_columns: [city_id, observation_time]
 
     columns:
       - name: city_id
-        description: Slug from config/cities.yml.
+        description: '{{ doc("col_city_id") }}'
         tests: [not_null]
       - name: observation_time
         description: Midnight UTC of the aggregated day.
@@ -61,46 +62,54 @@ models:
       - name: temperature_2m_max
         tests:
           - accepted_range:
-              min_value: -90
-              max_value: 60
+              arguments:
+                min_value: -90
+                max_value: 60
       - name: temperature_2m_min
         tests:
           - accepted_range:
-              min_value: -90
-              max_value: 60
+              arguments:
+                min_value: -90
+                max_value: 60
       - name: temperature_2m_mean
         tests:
           - accepted_range:
-              min_value: -90
-              max_value: 60
+              arguments:
+                min_value: -90
+                max_value: 60
       - name: apparent_temperature_max
         tests:
           - accepted_range:
-              min_value: -90
-              max_value: 60
+              arguments:
+                min_value: -90
+                max_value: 60
       - name: apparent_temperature_min
         tests:
           - accepted_range:
-              min_value: -90
-              max_value: 60
+              arguments:
+                min_value: -90
+                max_value: 60
       - name: apparent_temperature_mean
         tests:
           - accepted_range:
-              min_value: -90
-              max_value: 60
+              arguments:
+                min_value: -90
+                max_value: 60
       - name: dew_point_2m_mean
         tests:
           - accepted_range:
-              min_value: -90
-              max_value: 60
+              arguments:
+                min_value: -90
+                max_value: 60
       - name: pressure_msl_mean
         description: >
           Reduced to mean sea level, so the record MSL range applies - 870 hPa
           in Typhoon Tip to 1084.8 hPa at Agata, Siberia, rounded outwards.
         tests:
           - accepted_range:
-              min_value: 850
-              max_value: 1085
+              arguments:
+                min_value: 850
+                max_value: 1085
       - name: surface_pressure_mean
         description: >
             Pressure at the grid cell's own elevation, NOT reduced to sea level -
@@ -110,78 +119,126 @@ models:
             above what a kPa or inHg mix-up would produce.
         tests:
           - accepted_range:
-              min_value: 700
-              max_value: 1085
+              arguments:
+                min_value: 700
+                max_value: 1085
       - name: wind_speed_10m_max
         description: Stored km/h; bounded in m/s via the kmh_to_ms macro.
         tests:
           - accepted_range:
-              expression: "{{ kmh_to_ms('wind_speed_10m_max') }}"
-              min_value: 0
-              max_value: 120
+              arguments:
+                expression: "{{ kmh_to_ms('wind_speed_10m_max') }}"
+                min_value: 0
+                max_value: 120
       - name: wind_speed_10m_mean
         description: Stored km/h; bounded in m/s via the kmh_to_ms macro.
         tests:
           - accepted_range:
-              expression: "{{ kmh_to_ms('wind_speed_10m_mean') }}"
-              min_value: 0
-              max_value: 120
+              arguments:
+                expression: "{{ kmh_to_ms('wind_speed_10m_mean') }}"
+                min_value: 0
+                max_value: 120
       - name: wind_gusts_10m_max
         description: Stored km/h; bounded in m/s via the kmh_to_ms macro.
         tests:
           - accepted_range:
-              expression: "{{ kmh_to_ms('wind_gusts_10m_max') }}"
-              min_value: 0
-              max_value: 120
+              arguments:
+                expression: "{{ kmh_to_ms('wind_gusts_10m_max') }}"
+                min_value: 0
+                max_value: 120
       - name: wind_direction_10m_dominant
         tests:
           - accepted_range:
-              min_value: 0
-              max_value: 360
+              arguments:
+                min_value: 0
+                max_value: 360
       - name: relative_humidity_2m_mean
         tests:
           - accepted_range:
-              min_value: 0
-              max_value: 100
+              arguments:
+                min_value: 0
+                max_value: 100
       - name: cloud_cover_mean
         tests:
           - accepted_range:
-              min_value: 0
-              max_value: 100
+              arguments:
+                min_value: 0
+                max_value: 100
       - name: precipitation_sum
         tests:
           - accepted_range:
-              min_value: 0
+              arguments:
+                min_value: 0
       - name: rain_sum
         tests:
           - accepted_range:
-              min_value: 0
+              arguments:
+                min_value: 0
       - name: snowfall_sum
         description: Centimetres, unlike every other depth in the row. See snowfall_sum_mm.
         tests:
           - accepted_range:
-              min_value: 0
+              arguments:
+                min_value: 0
       - name: snowfall_sum_mm
         description: snowfall_sum in millimetres, so it can be compared with precipitation_sum and rain_sum without anyone having to remember the source's inconsistency. Derived by the cm_to_mm macro.
         tests:
           - accepted_range:
-              min_value: 0
+              arguments:
+                min_value: 0
       - name: precipitation_hours
         description: Hours of precipitation in the day; cannot exceed 24.
         tests:
           - accepted_range:
-              min_value: 0
-              max_value: 24
+              arguments:
+                min_value: 0
+                max_value: 24
       - name: shortwave_radiation_sum
         tests:
           - accepted_range:
-              min_value: 0
+              arguments:
+                min_value: 0
       - name: weather_code
         description: WMO 4677 present-weather code.
         tests:
           - accepted_range:
-              min_value: 0
-              max_value: 99
+              arguments:
+                min_value: 0
+                max_value: 99
+      - name: api_latitude
+        description: '{{ doc("col_api_latitude") }}'
+      - name: api_longitude
+        description: '{{ doc("col_api_longitude") }}'
+      - name: api_elevation_m
+        description: '{{ doc("col_api_elevation_m") }}'
+      - name: temperature_2m_max
+        description: '{{ doc("col_temperature_2m_max") }}'
+      - name: temperature_2m_min
+        description: '{{ doc("col_temperature_2m_min") }}'
+      - name: temperature_2m_mean
+        description: '{{ doc("col_temperature_2m_mean") }}'
+      - name: apparent_temperature_max
+        description: '{{ doc("col_apparent_temperature") }}'
+      - name: apparent_temperature_min
+        description: '{{ doc("col_apparent_temperature") }}'
+      - name: apparent_temperature_mean
+        description: '{{ doc("col_apparent_temperature") }}'
+      - name: precipitation_sum
+        description: '{{ doc("col_precipitation") }}'
+      - name: rain_sum
+        description: >
+          Liquid precipitation, mm. A component of `precipitation_sum` and never larger than it.
+      - name: wind_direction_10m_dominant
+        description: '{{ doc("col_wind_direction") }}'
+      - name: relative_humidity_2m_mean
+        description: '{{ doc("col_relative_humidity") }}'
+      - name: dew_point_2m_mean
+        description: '{{ doc("col_dew_point") }}'
+      - name: cloud_cover_mean
+        description: '{{ doc("col_cloud_cover") }}'
+      - name: shortwave_radiation_sum
+        description: >
+          Downward shortwave radiation, MJ/m^2 - not W/m^2.
 
   - name: stg_observations_hourly
     description: >
@@ -200,10 +257,12 @@ models:
 
     tests:
       - unique_combination_of_columns:
-          combination_of_columns: [city_id, observation_time]
+          arguments:
+            combination_of_columns: [city_id, observation_time]
 
     columns:
       - name: city_id
+        description: '{{ doc("col_city_id") }}'
         tests: [not_null]
       - name: observation_time
         description: Top of the hour, UTC.
@@ -218,64 +277,159 @@ models:
       - name: temperature_2m
         tests:
           - accepted_range:
-              min_value: -90
-              max_value: 60
+              arguments:
+                min_value: -90
+                max_value: 60
       - name: apparent_temperature
         tests:
           - accepted_range:
-              min_value: -90
-              max_value: 60
+              arguments:
+                min_value: -90
+                max_value: 60
       - name: dew_point_2m
         tests:
           - accepted_range:
-              min_value: -90
-              max_value: 60
+              arguments:
+                min_value: -90
+                max_value: 60
       - name: pressure_msl
         tests:
           - accepted_range:
-              min_value: 850
-              max_value: 1085
+              arguments:
+                min_value: 850
+                max_value: 1085
       - name: surface_pressure
         description: At the grid cell's elevation, not sea level - see the daily model's note.
         tests:
           - accepted_range:
-              min_value: 700
-              max_value: 1085
+              arguments:
+                min_value: 700
+                max_value: 1085
       - name: wind_speed_10m
         description: Stored km/h; bounded in m/s via the kmh_to_ms macro.
         tests:
           - accepted_range:
-              expression: "{{ kmh_to_ms('wind_speed_10m') }}"
-              min_value: 0
-              max_value: 120
+              arguments:
+                expression: "{{ kmh_to_ms('wind_speed_10m') }}"
+                min_value: 0
+                max_value: 120
       - name: wind_gusts_10m
         description: Stored km/h; bounded in m/s via the kmh_to_ms macro.
         tests:
           - accepted_range:
-              expression: "{{ kmh_to_ms('wind_gusts_10m') }}"
-              min_value: 0
-              max_value: 120
+              arguments:
+                expression: "{{ kmh_to_ms('wind_gusts_10m') }}"
+                min_value: 0
+                max_value: 120
       - name: wind_direction_10m
         tests:
           - accepted_range:
-              min_value: 0
-              max_value: 360
+              arguments:
+                min_value: 0
+                max_value: 360
       - name: relative_humidity_2m
         tests:
           - accepted_range:
-              min_value: 0
-              max_value: 100
+              arguments:
+                min_value: 0
+                max_value: 100
       - name: cloud_cover
         tests:
           - accepted_range:
-              min_value: 0
-              max_value: 100
+              arguments:
+                min_value: 0
+                max_value: 100
       - name: precipitation
         tests:
           - accepted_range:
-              min_value: 0
+              arguments:
+                min_value: 0
       - name: weather_code
         tests:
           - accepted_range:
-              min_value: 0
-              max_value: 99
+              arguments:
+                min_value: 0
+                max_value: 99
+      - name: id
+        description: >
+          Bronze surrogate key, carried through so a silver row traces to the exact bronze row it came from.
+      - name: city_id
+        description: '{{ doc("col_city_id") }}'
+      - name: ingested_at
+        description: '{{ doc("col_ingested_at") }}'
+      - name: batch_id
+        description: '{{ doc("col_batch_id") }}'
+      - name: api_latitude
+        description: '{{ doc("col_api_latitude") }}'
+      - name: api_longitude
+        description: '{{ doc("col_api_longitude") }}'
+      - name: api_elevation_m
+        description: '{{ doc("col_api_elevation_m") }}'
+      - name: temperature_2m
+        description: '{{ doc("col_temperature_2m_mean") }}'
+      - name: apparent_temperature
+        description: '{{ doc("col_apparent_temperature") }}'
+      - name: relative_humidity_2m
+        description: '{{ doc("col_relative_humidity") }}'
+      - name: dew_point_2m
+        description: '{{ doc("col_dew_point") }}'
+      - name: pressure_msl
+        description: '{{ doc("col_pressure_msl") }}'
+      - name: wind_direction_10m
+        description: '{{ doc("col_wind_direction") }}'
+      - name: precipitation
+        description: '{{ doc("col_precipitation") }}'
+      - name: cloud_cover
+        description: '{{ doc("col_cloud_cover") }}'
+      - name: weather_code
+        description: '{{ doc("col_weather_code") }}'
+
+  - name: stg_cities
+    description: >
+      The city registry, typed and made available to SQL.
+
+
+      `config/cities.yml` is the single source; dbt_analytics/export_cities.py
+      generates the seed from it and a test asserts the two agree, because two
+      copies of the same list is one copy and one liability. The timezone is
+      the column that earns this model its place - it is what makes a
+      local-time view possible downstream without every model re-deriving it.
+    columns:
+      - name: city_id
+        description: '{{ doc("col_city_id") }}'
+        tests: [unique, not_null]
+      - name: name
+        description: >
+          The city's common English name, for display.
+      - name: country
+        description: >
+          Country name, for display.
+      - name: country_code
+        description: >
+          ISO 3166-1 alpha-2 code.
+      - name: region
+        description: >
+          Continent-level grouping, deliberately coarse - it groups fifteen cities in a dashboard filter rather than encoding geography.
+      - name: latitude
+        description: >
+          The city's reference coordinate - what was asked for, not the grid cell that answered.
+      - name: longitude
+        description: >
+          The city's reference coordinate. See `latitude`.
+      - name: elevation_m
+        description: >
+          The city's own elevation in metres, carried as a model feature. Not the grid cell's.
+      - name: timezone
+        description: >
+          IANA zone name, so a local-time view is possible downstream without re-deriving it.
+      - name: hemisphere
+        description: '{{ doc("col_hemisphere") }}'
+      - name: koppen
+        description: >
+          Koppen-Geiger climate classification.
+      - name: season_model
+        description: '{{ doc("col_season_model") }}'
+      - name: role
+        description: >
+          Why this city is in the set - the analytical job it does. Null where it is simply representative.
+

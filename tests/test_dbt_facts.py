@@ -46,6 +46,16 @@ def query(engine, sql: str, **params):
         return connection.execute(text(sql), params).fetchall()
 
 
+
+def arguments_of(test: dict, name: str) -> dict:
+    """Arguments of a generic test, as dbt 1.12 nests them.
+
+    dbt deprecated top-level arguments in favour of an `arguments` block, so
+    the shape these tests read changed under them. Reading through one helper
+    means the next such change is one edit rather than four.
+    """
+    return test[name].get("arguments", test[name])
+
 @pytest.fixture(scope="module")
 def fact_doc() -> dict:
     marts = yaml.safe_load(
@@ -126,7 +136,7 @@ def test_the_yaml_declares_both_relationships(fact_doc) -> None:
     for column in fact_doc["columns"]:
         for test in column.get("tests", []) or []:
             if isinstance(test, dict) and "relationships" in test:
-                declared[column["name"]] = test["relationships"]
+                declared[column["name"]] = arguments_of(test, "relationships")
     assert declared["city_id"]["to"] == "ref('dim_cities')"
     assert declared["city_id"]["field"] == "city_id"
     assert declared["date_key"]["to"] == "ref('dim_date')"

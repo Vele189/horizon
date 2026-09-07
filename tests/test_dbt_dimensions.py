@@ -34,6 +34,16 @@ REQUIRED_COLUMNS = (
 )
 
 
+
+def arguments_of(test: dict, name: str) -> dict:
+    """Arguments of a generic test, as dbt 1.12 nests them.
+
+    dbt deprecated top-level arguments in favour of an `arguments` block, so
+    the shape these tests read changed under them. Reading through one helper
+    means the next such change is one edit rather than four.
+    """
+    return test[name].get("arguments", test[name])
+
 @pytest.fixture(scope="module")
 def marts_yml() -> dict:
     return yaml.safe_load(
@@ -223,7 +233,7 @@ def test_the_description_distinguishes_asked_from_answered(dim_cities_doc) -> No
 def test_region_is_constrained(dim_cities_doc) -> None:
     region = next(c for c in dim_cities_doc["columns"] if c["name"] == "region")
     values = next(
-        t["accepted_values"]["values"] for t in region["tests"]
+        arguments_of(t, "accepted_values")["values"] for t in region["tests"]
         if isinstance(t, dict) and "accepted_values" in t
     )
     assert set(values) == {c.region for c in load_cities()}

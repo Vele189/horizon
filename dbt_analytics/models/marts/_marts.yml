@@ -30,11 +30,12 @@ models:
 
     tests:
       - unique_combination_of_columns:
-          combination_of_columns: [city_id]
+          arguments:
+            combination_of_columns: [city_id]
 
     columns:
       - name: city_id
-        description: Slug, and the join key to every fact table.
+        description: '{{ doc("col_city_id") }}'
         tests: [unique, not_null]
       - name: name
         tests: [not_null]
@@ -48,28 +49,32 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['Africa', 'Asia', 'Europe', 'North America', 'Oceania',
-                       'South America']
+              arguments:
+                values: ['Africa', 'Asia', 'Europe', 'North America', 'Oceania',
+                         'South America']
       - name: latitude
         description: City-centre reference point, not the grid cell that answered.
         tests:
           - not_null
           - accepted_range:
-              min_value: -90
-              max_value: 90
+              arguments:
+                min_value: -90
+                max_value: 90
       - name: longitude
         tests:
           - not_null
           - accepted_range:
-              min_value: -180
-              max_value: 180
+              arguments:
+                min_value: -180
+                max_value: 180
       - name: elevation_m
         description: The city's elevation, not the grid cell's; carried as a model feature.
         tests:
           - not_null
           - accepted_range:
-              min_value: -430
-              max_value: 5100
+              arguments:
+                min_value: -430
+                max_value: 5100
       - name: timezone
         description: IANA zone, so a local-time view is possible downstream.
         tests: [not_null]
@@ -84,7 +89,25 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['north', 'south']
+              arguments:
+                values: ['north', 'south']
+      - name: name
+        description: >
+          The city's common English name, for display.
+      - name: country
+        description: >
+          Country name, for display.
+      - name: country_code
+        description: >
+          ISO 3166-1 alpha-2 code.
+      - name: longitude
+        description: >
+          The city's reference coordinate. See `latitude`.
+      - name: season_model
+        description: '{{ doc("col_season_model") }}'
+      - name: role
+        description: >
+          Why this city is in the set - the analytical job it does. Null where it is simply representative.
 
   - name: dim_date
     description: >
@@ -115,7 +138,8 @@ models:
       size, which is true and worth knowing rather than hidden.
     tests:
       - unique_combination_of_columns:
-          combination_of_columns: [date_day]
+          arguments:
+            combination_of_columns: [date_day]
     columns:
       - name: date_day
         description: The calendar day, and the grain of this table.
@@ -124,7 +148,8 @@ models:
         description: Raw 1..366. Do not group a climatology by this - see the model description.
         tests:
           - not_null
-          - accepted_range: {min_value: 1, max_value: 366}
+          - accepted_range:
+              arguments: {min_value: 1, max_value: 366}
       - name: day_of_year_common
         description: >
           Day of year as if every year were common, for anything needing a
@@ -132,30 +157,73 @@ models:
           so nothing after it shifts.
         tests:
           - not_null
-          - accepted_range: {min_value: 1, max_value: 365}
+          - accepted_range:
+              arguments: {min_value: 1, max_value: 365}
       - name: month_day
         description: MM-DD. The stable climatology join key.
         tests: [not_null]
       - name: month
         tests:
           - not_null
-          - accepted_range: {min_value: 1, max_value: 12}
+          - accepted_range:
+              arguments: {min_value: 1, max_value: 12}
       - name: season_northern
         description: Meteorological season for a northern city. Not "the" season.
         tests:
           - not_null
           - accepted_values:
-              values: ['winter', 'spring', 'summer', 'autumn']
+              arguments:
+                values: ['winter', 'spring', 'summer', 'autumn']
       - name: season_southern
         description: The same months six away. December is summer here.
         tests:
           - not_null
           - accepted_values:
-              values: ['winter', 'spring', 'summer', 'autumn']
+              arguments:
+                values: ['winter', 'spring', 'summer', 'autumn']
       - name: is_leap_day
         tests: [not_null]
       - name: is_leap_year
         tests: [not_null]
+      - name: year
+        description: >
+          Calendar year of the observation, in UTC.
+      - name: quarter
+        description: >
+          Calendar quarter, 1-4.
+      - name: month
+        description: >
+          Calendar month, 1-12.
+      - name: day_of_month
+        description: >
+          Day within the month, 1-31.
+      - name: month_name
+        description: >
+          Month name, padded by `to_char`. For display only.
+      - name: day_name
+        description: >
+          Weekday name, padded by `to_char`. For display only.
+      - name: iso_day_of_week
+        description: >
+          ISO weekday, 1 (Monday) to 7 (Sunday).
+      - name: iso_week
+        description: >
+          ISO week number.
+      - name: iso_year
+        description: >
+          ISO week-numbering year, which differs from the calendar year across a year boundary.
+      - name: is_weekend
+        description: >
+          Saturday or Sunday. Present for completeness; weather does not observe it.
+      - name: is_leap_day
+        description: >
+          Whether this row is 29 February.
+      - name: is_leap_year
+        description: >
+          Whether the calendar year has 366 days.
+      - name: climatology_day
+        description: >
+          Day-of-year as it would be in a leap year, 1-366. The circular axis the climatology window is measured on.
 
   - name: dim_city_season
     description: >
@@ -178,25 +246,42 @@ models:
       in every seasonal aggregate.
     tests:
       - unique_combination_of_columns:
-          combination_of_columns: [city_id, month]
+          arguments:
+            combination_of_columns: [city_id, month]
     columns:
       - name: city_id
+        description: '{{ doc("col_city_id") }}'
         tests: [not_null]
       - name: month
         tests:
           - not_null
-          - accepted_range: {min_value: 1, max_value: 12}
+          - accepted_range:
+              arguments: {min_value: 1, max_value: 12}
       - name: season
         tests:
           - not_null
           - accepted_values:
-              values: ['winter', 'spring', 'summer', 'autumn', 'wet', 'dry',
-                       'year_round']
+              arguments:
+                values: ['winter', 'spring', 'summer', 'autumn', 'wet', 'dry',
+                         'year_round']
       - name: season_model
         tests:
           - not_null
           - accepted_values:
-              values: ['four_season', 'wet_dry', 'seasonless']
+              arguments:
+                values: ['four_season', 'wet_dry', 'seasonless']
+      - name: city_id
+        description: '{{ doc("col_city_id") }}'
+      - name: month
+        description: >
+          Calendar month, 1-12.
+      - name: hemisphere
+        description: '{{ doc("col_hemisphere") }}'
+      - name: season_model
+        description: '{{ doc("col_season_model") }}'
+      - name: season
+        description: >
+          The season this month falls in for this city, resolved against its hemisphere and regime.
 
   - name: fact_weather_observations
     description: >
@@ -229,15 +314,17 @@ models:
       than against a constant so it stays true either way.
     tests:
       - unique_combination_of_columns:
-          combination_of_columns: [city_id, date_key]
+          arguments:
+            combination_of_columns: [city_id, date_key]
     columns:
       - name: city_id
-        description: Foreign key to dim_cities.
+        description: '{{ doc("col_city_id") }}'
         tests:
           - not_null
           - relationships:
-              to: ref('dim_cities')
-              field: city_id
+              arguments:
+                to: ref('dim_cities')
+                field: city_id
       - name: date_key
         description: >
           Foreign key to dim_date, and the grain. The UTC calendar day the
@@ -246,8 +333,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('dim_date')
-              field: date_day
+              arguments:
+                to: ref('dim_date')
+                field: date_day
       - name: observation_time
         description: >
           The exact instant, carried alongside the key so a mart row can join
@@ -256,42 +344,104 @@ models:
         tests: [not_null]
       - name: temperature_2m_min
         tests:
-          - accepted_range: {min_value: -90, max_value: 60}
+          - accepted_range:
+              arguments: {min_value: -90, max_value: 60}
       - name: temperature_2m_max
         tests:
-          - accepted_range: {min_value: -90, max_value: 60}
+          - accepted_range:
+              arguments: {min_value: -90, max_value: 60}
       - name: temperature_2m_mean
         tests:
-          - accepted_range: {min_value: -90, max_value: 60}
+          - accepted_range:
+              arguments: {min_value: -90, max_value: 60}
       - name: precipitation_sum
         tests:
-          - accepted_range: {min_value: 0}
+          - accepted_range:
+              arguments: {min_value: 0}
       - name: wind_speed_10m_max
         description: km/h, bounded in m/s through the kmh_to_ms macro.
         tests:
           - accepted_range:
-              expression: "{{ kmh_to_ms('wind_speed_10m_max') }}"
-              min_value: 0
-              max_value: 120
+              arguments:
+                expression: "{{ kmh_to_ms('wind_speed_10m_max') }}"
+                min_value: 0
+                max_value: 120
       - name: wind_gusts_10m_max
         tests:
           - accepted_range:
-              expression: "{{ kmh_to_ms('wind_gusts_10m_max') }}"
-              min_value: 0
-              max_value: 120
+              arguments:
+                expression: "{{ kmh_to_ms('wind_gusts_10m_max') }}"
+                min_value: 0
+                max_value: 120
       - name: pressure_msl_mean
         tests:
-          - accepted_range: {min_value: 850, max_value: 1085}
+          - accepted_range:
+              arguments: {min_value: 850, max_value: 1085}
       - name: surface_pressure_mean
         description: At the grid cell's elevation, not reduced to sea level.
         tests:
-          - accepted_range: {min_value: 700, max_value: 1085}
+          - accepted_range:
+              arguments: {min_value: 700, max_value: 1085}
       - name: relative_humidity_2m_mean
         tests:
-          - accepted_range: {min_value: 0, max_value: 100}
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 100}
       - name: batch_id
         description: The ingestion run that produced the underlying row.
         tests: [not_null]
+      - name: api_latitude
+        description: '{{ doc("col_api_latitude") }}'
+      - name: api_longitude
+        description: '{{ doc("col_api_longitude") }}'
+      - name: api_elevation_m
+        description: '{{ doc("col_api_elevation_m") }}'
+      - name: temperature_2m_min
+        description: '{{ doc("col_temperature_2m_min") }}'
+      - name: temperature_2m_max
+        description: '{{ doc("col_temperature_2m_max") }}'
+      - name: temperature_2m_mean
+        description: '{{ doc("col_temperature_2m_mean") }}'
+      - name: apparent_temperature_min
+        description: '{{ doc("col_apparent_temperature") }}'
+      - name: apparent_temperature_max
+        description: '{{ doc("col_apparent_temperature") }}'
+      - name: apparent_temperature_mean
+        description: '{{ doc("col_apparent_temperature") }}'
+      - name: dew_point_2m_mean
+        description: '{{ doc("col_dew_point") }}'
+      - name: precipitation_sum
+        description: '{{ doc("col_precipitation") }}'
+      - name: rain_sum
+        description: >
+          Liquid precipitation, mm. A component of `precipitation_sum` and never larger than it.
+      - name: snowfall_sum
+        description: >
+          Snowfall, **centimetres** - unlike every other depth in the row, which is millimetres. See `snowfall_sum_mm`.
+      - name: snowfall_sum_mm
+        description: >
+          Snowfall in millimetres, so it is comparable with `precipitation_sum` and `rain_sum` without anyone having to remember the source's inconsistency.
+      - name: precipitation_hours
+        description: >
+          Hours of the day with measurable precipitation, 0-24.
+      - name: wind_speed_10m_mean
+        description: '{{ doc("col_wind_speed") }}'
+      - name: wind_gusts_10m_max
+        description: '{{ doc("col_wind_gusts") }}'
+      - name: wind_direction_10m_dominant
+        description: '{{ doc("col_wind_direction") }}'
+      - name: pressure_msl_mean
+        description: '{{ doc("col_pressure_msl") }}'
+      - name: relative_humidity_2m_mean
+        description: '{{ doc("col_relative_humidity") }}'
+      - name: cloud_cover_mean
+        description: '{{ doc("col_cloud_cover") }}'
+      - name: shortwave_radiation_sum
+        description: >
+          Downward shortwave radiation, MJ/m^2 - not W/m^2.
+      - name: weather_code
+        description: '{{ doc("col_weather_code") }}'
+      - name: ingested_at
+        description: '{{ doc("col_ingested_at") }}'
 
   - name: fact_weather_hourly
     description: >
@@ -328,14 +478,17 @@ models:
       sea-level pressure down to 949.6 hPa.
     tests:
       - unique_combination_of_columns:
-          combination_of_columns: [city_id, observation_hour]
+          arguments:
+            combination_of_columns: [city_id, observation_hour]
     columns:
       - name: city_id
+        description: '{{ doc("col_city_id") }}'
         tests:
           - not_null
           - relationships:
-              to: ref('dim_cities')
-              field: city_id
+              arguments:
+                to: ref('dim_cities')
+                field: city_id
       - name: observation_hour
         description: Top of the hour, UTC. The grain.
         tests: [not_null]
@@ -344,8 +497,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('dim_date')
-              field: date_day
+              arguments:
+                to: ref('dim_date')
+                field: date_day
       - name: pressure_msl
         description: >
           Sea-level pressure, which is what tendency is computed on. Surface
@@ -353,32 +507,72 @@ models:
           compare Johannesburg's 822 hPa against London's 1013 the moment
           anything aggregated across cities.
         tests:
-          - accepted_range: {min_value: 850, max_value: 1085}
+          - accepted_range:
+              arguments: {min_value: 850, max_value: 1085}
       - name: pressure_tendency_3h
         description: >
           Change in sea-level pressure over three hours, hPa. The synoptic
           standard. Null for the first three hours of each city's series.
         tests:
-          - accepted_range: {min_value: -60, max_value: 60}
+          - accepted_range:
+              arguments: {min_value: -60, max_value: 60}
       - name: pressure_tendency_24h
         description: >
           Change over 24 hours, hPa. A fall of roughly 24 hPa in 24 hours at
           mid-latitudes is the definition of a "bomb cyclone". Null for the
           first 24 hours of each city's series.
         tests:
-          - accepted_range: {min_value: -120, max_value: 120}
+          - accepted_range:
+              arguments: {min_value: -120, max_value: 120}
       - name: wind_gusts_10m
         tests:
           - accepted_range:
-              expression: "{{ kmh_to_ms('wind_gusts_10m') }}"
-              min_value: 0
-              max_value: 120
+              arguments:
+                expression: "{{ kmh_to_ms('wind_gusts_10m') }}"
+                min_value: 0
+                max_value: 120
       - name: temperature_2m
         tests:
-          - accepted_range: {min_value: -90, max_value: 60}
+          - accepted_range:
+              arguments: {min_value: -90, max_value: 60}
       - name: relative_humidity_2m
         tests:
-          - accepted_range: {min_value: 0, max_value: 100}
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 100}
+      - name: city_id
+        description: '{{ doc("col_city_id") }}'
+      - name: api_latitude
+        description: '{{ doc("col_api_latitude") }}'
+      - name: api_longitude
+        description: '{{ doc("col_api_longitude") }}'
+      - name: api_elevation_m
+        description: '{{ doc("col_api_elevation_m") }}'
+      - name: surface_pressure
+        description: '{{ doc("col_surface_pressure") }}'
+      - name: wind_speed_10m
+        description: '{{ doc("col_wind_speed") }}'
+      - name: wind_gusts_10m
+        description: '{{ doc("col_wind_gusts") }}'
+      - name: wind_direction_10m
+        description: '{{ doc("col_wind_direction") }}'
+      - name: temperature_2m
+        description: '{{ doc("col_temperature_2m_mean") }}'
+      - name: apparent_temperature
+        description: '{{ doc("col_apparent_temperature") }}'
+      - name: dew_point_2m
+        description: '{{ doc("col_dew_point") }}'
+      - name: relative_humidity_2m
+        description: '{{ doc("col_relative_humidity") }}'
+      - name: precipitation
+        description: '{{ doc("col_precipitation") }}'
+      - name: cloud_cover
+        description: '{{ doc("col_cloud_cover") }}'
+      - name: weather_code
+        description: '{{ doc("col_weather_code") }}'
+      - name: ingested_at
+        description: '{{ doc("col_ingested_at") }}'
+      - name: batch_id
+        description: '{{ doc("col_batch_id") }}'
 
   - name: fact_climatology
     description: >
@@ -420,14 +614,17 @@ models:
       answer rather than a silent fallback to the leaky value.
     tests:
       - unique_combination_of_columns:
-          combination_of_columns: [city_id, month_day, for_year]
+          arguments:
+            combination_of_columns: [city_id, month_day, for_year]
     columns:
       - name: city_id
+        description: '{{ doc("col_city_id") }}'
         tests:
           - not_null
           - relationships:
-              to: ref('dim_cities')
-              field: city_id
+              arguments:
+                to: ref('dim_cities')
+                field: city_id
       - name: month_day
         description: MM-DD. The leap-stable climatology key.
         tests: [not_null]
@@ -435,7 +632,8 @@ models:
         description: Day-of-year as it would be in a leap year, 1..366. The circular axis the window is measured on.
         tests:
           - not_null
-          - accepted_range: {min_value: 1, max_value: 366}
+          - accepted_range:
+              arguments: {min_value: 1, max_value: 366}
       - name: for_year
         description: The year this baseline is for, and the year excluded from it.
         tests: [not_null]
@@ -446,17 +644,52 @@ models:
         description: Observations in the baseline after the exclusion. Zero where none remain.
         tests:
           - not_null
-          - accepted_range: {min_value: 0}
+          - accepted_range:
+              arguments: {min_value: 0}
       - name: mean_temperature_2m_mean
         tests:
-          - accepted_range: {min_value: -90, max_value: 60}
+          - accepted_range:
+              arguments: {min_value: -90, max_value: 60}
       - name: stddev_temperature_2m_mean
         description: >
           Within-window standard deviation - variability around the seasonal
           curve, not around the annual mean. Null only where the exclusion
           leaves no observations.
         tests:
-          - accepted_range: {min_value: 0, max_value: 30}
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 30}
+      - name: city_id
+        description: '{{ doc("col_city_id") }}'
+      - name: reference_years
+        description: >
+          Distinct years contributing to the window.
+      - name: excluded_observations
+        description: >
+          How many observations the exclusion removed. Zero at the edges of the record, where the labelled year contributed nothing to this window.
+      - name: mean_temperature_2m_mean
+        description: >
+          Baseline mean daily temperature for this city and calendar day, excluding the labelled year.
+      - name: mean_temperature_2m_max
+        description: >
+          Baseline mean of the daily maximum.
+      - name: stddev_temperature_2m_max
+        description: >
+          Baseline standard deviation of the daily maximum.
+      - name: mean_temperature_2m_min
+        description: >
+          Baseline mean of the daily minimum.
+      - name: stddev_temperature_2m_min
+        description: >
+          Baseline standard deviation of the daily minimum.
+      - name: observations_all_years
+        description: >
+          Observations in the window across every reference year, including the one being labelled.
+      - name: mean_temperature_2m_mean_all_years
+        description: >
+          The published normal, including the labelled year. Carried for display and so the cost of the leakage is measurable rather than asserted.
+      - name: stddev_temperature_2m_mean_all_years
+        description: >
+          The all-years standard deviation. See `mean_temperature_2m_mean_all_years`.
 
   - name: fact_weather_anomalies
     description: >
@@ -506,26 +739,31 @@ models:
       a distinction ML-05 will need to make deliberately.
     tests:
       - unique_combination_of_columns:
-          combination_of_columns: [city_id, date_key]
+          arguments:
+            combination_of_columns: [city_id, date_key]
     columns:
       - name: city_id
+        description: '{{ doc("col_city_id") }}'
         tests:
           - not_null
           - relationships:
-              to: ref('dim_cities')
-              field: city_id
+              arguments:
+                to: ref('dim_cities')
+                field: city_id
       - name: date_key
         tests:
           - not_null
           - relationships:
-              to: ref('dim_date')
-              field: date_day
+              arguments:
+                to: ref('dim_date')
+                field: date_day
       - name: z_temperature_2m_mean
         description: >
           (observed - mu) / sigma against the leakage-safe baseline. Null where
           no such baseline exists.
         tests:
-          - accepted_range: {min_value: -12, max_value: 12}
+          - accepted_range:
+              arguments: {min_value: -12, max_value: 12}
       - name: departure_c
         description: >
           The same departure in degrees. The Z-score answers "how unusual"; this
@@ -535,6 +773,38 @@ models:
         description: hot, cold, none - or null where the day could not be scored.
         tests:
           - accepted_values:
-              values: ['hot', 'cold', 'none']
+              arguments:
+                values: ['hot', 'cold', 'none']
       - name: is_anomaly
         description: abs(z) over the threshold. Null where z is null.
+      - name: city_id
+        description: '{{ doc("col_city_id") }}'
+      - name: date_key
+        description: '{{ doc("col_date_key") }}'
+      - name: month_day
+        description: >
+          MM-DD. The leap-stable climatology join key.
+      - name: year
+        description: >
+          Calendar year of the observation, in UTC.
+      - name: temperature_2m_mean
+        description: '{{ doc("col_temperature_2m_mean") }}'
+      - name: mean_temperature_2m_mean
+        description: >
+          Baseline mean daily temperature for this city and calendar day, excluding the labelled year.
+      - name: stddev_temperature_2m_mean
+        description: >
+          Baseline standard deviation, excluding the labelled year. Null only where the exclusion leaves nothing.
+      - name: baseline_observations
+        description: >
+          Observations behind the baseline this day was scored against.
+      - name: excludes_own_year
+        description: >
+          Whether the baseline excluded the labelled year. Always true unless the leaky variant was built on purpose.
+      - name: z_temperature_2m_max
+        description: >
+          Z-score of the daily maximum against its own baseline.
+      - name: z_temperature_2m_min
+        description: >
+          Z-score of the daily minimum. Often the most anomalous of the three in a heat wave, since hot nights are its distinguishing feature.
+
