@@ -122,7 +122,7 @@ def _sidebar_controls() -> None:
     if st.sidebar.button(
         "Refresh data",
         icon=":material/refresh:",
-        use_container_width=True,
+        width="stretch",
         help=f"Results are cached for {hours} hours. This drops them and re-reads.",
     ):
         clear_caches()

@@ -95,15 +95,26 @@ from __future__ import annotations
 from typing import Final, Literal, Mapping, Sequence
 
 __all__ = [
+    "ANOMALY_BREAKS",
+    "ANOMALY_Z_THRESHOLD",
     "COLD_HUE_DEGREES",
     "DIVERGING",
+    "MARKER_MAX_PX",
+    "MARKER_MIN_PX",
+    "MARKER_Z_CAP",
     "Mode",
     "NEUTRAL",
     "SURFACE",
     "WARM_HUE_DEGREES",
+    "anomaly_colour",
+    "anomaly_key_html",
+    "anomaly_step",
     "chrome",
     "diverging_scale",
+    "map_chrome",
+    "marker_diameter",
     "resolve_mode",
+    "size_key_html",
 ]
 
 Mode = Literal["light", "dark"]
@@ -250,3 +261,161 @@ for _mode, _steps in DIVERGING.items():
     _assert_shape(_steps)
     if len(_steps) != len(DIVERGING["light"]):
         raise ValueError("light and dark ramps must have the same number of steps")
+
+
+# ---------------------------------------------------------------------------
+# The map's surface, and what a number turns into on it
+# ---------------------------------------------------------------------------
+#
+# The basemap is dark in both page themes, so the map uses the **dark** ramp
+# whichever theme the page is in. The ramp is chosen by the surface it is
+# painted on, not by the theme of the page around it — a light-mode ramp on a
+# dark basemap would be validated against a background that is not there.
+#
+# Three of the four basemap tokens are chrome tokens already defined above.
+# Only the land tone is new, and it is deliberately close to the ocean:
+# measured at 6.7 apart, the coastline reads without the basemap competing
+# with fifteen coloured points for attention.
+
+MAP_MODE: Final[Mode] = "dark"
+
+_MAP: Final[Mapping[str, str]] = {
+    "ocean": _CHROME["dark"]["plane"],
+    "land": "#1c1c1a",
+    "coastline": _CHROME["dark"]["axis"],
+    # Every filled marker carries a 2px ring in this. On a chart the ring is
+    # drawn in the *surface* colour, but a map has no single surface — a point
+    # may sit on ocean, on land, or across a coastline. So the ring is muted
+    # ink instead, which clears both grounds by a wide margin (39.8 against
+    # land, 46.4 against ocean).
+    #
+    # It is load-bearing rather than decorative. The neutral step is a dark
+    # grey and so is the land: the fill alone separates by only 7.5, under the
+    # 8 that counts as distinct. The ring is what makes a city reporting no
+    # departure visible at all, which is why every marker has one and why it
+    # never varies — a constant outline cannot be mistaken for an encoding.
+    "ring": _CHROME["dark"]["ink_muted"],
+}
+
+
+def map_chrome() -> Mapping[str, str]:
+    """Basemap tones: ocean, land, coastline, and the marker ring."""
+    return _MAP
+
+
+# The project's anomaly flag, from dbt's `anomaly_z_threshold` var. Repeated
+# here because the *palette* has to know it: the breaks are placed so that
+# "flagged as an anomaly" and "painted in one of the two outermost steps" are
+# the same statement, and a test asserts they cannot come apart.
+ANOMALY_Z_THRESHOLD: Final[float] = 2.5
+
+# Where one step of colour becomes the next, in units of |Z|. Four breaks per
+# arm, so with the neutral in the middle the nine steps are used exactly.
+ANOMALY_BREAKS: Final[tuple[float, ...]] = (0.5, 1.5, ANOMALY_Z_THRESHOLD, 3.5)
+
+
+def anomaly_step(z: float) -> int:
+    """Index into the ramp for a signed Z-score.
+
+    Binned rather than continuous. Nine steps that a reader can count against
+    a key beat a smooth gradient they can only guess at, and the boundaries
+    are the ones the warehouse already reasons in — the outermost two steps
+    are exactly the rows `is_anomaly` is true for.
+    """
+    magnitude = abs(z)
+    # Strictly greater, because dbt's flag is `abs(z) > threshold` and a Z of
+    # exactly 2.5 is therefore *not* an anomaly. Binning at `>=` would paint
+    # that one value in a flagged colour, and the map would disagree with the
+    # warehouse on the single row where the question is live.
+    distance = sum(1 for boundary in ANOMALY_BREAKS if magnitude > boundary)
+    if distance == 0:
+        return NEUTRAL_INDEX
+    return NEUTRAL_INDEX + (distance if z > 0 else -distance)
+
+
+def anomaly_colour(z: float, mode: Mode = MAP_MODE) -> str:
+    """The colour a signed Z-score is painted."""
+    return DIVERGING[mode][anomaly_step(z)]
+
+
+# Marker sizing. Area is proportional to |Z| above a floor, so a diameter goes
+# as its square root — encoding magnitude by *radius* would quadruple the
+# apparent size of a doubled anomaly.
+MARKER_MIN_PX: Final[float] = 8.0
+MARKER_MAX_PX: Final[float] = 40.0
+
+# Where the scale tops out. The largest |Z| in thirty years of the marts is
+# 5.09, so the cap costs nothing today and stops one freak day from shrinking
+# every other city to a dot if a larger one ever lands.
+MARKER_Z_CAP: Final[float] = 5.0
+
+
+def marker_diameter(z: float) -> float:
+    """Pixel diameter for a signed Z-score.
+
+    The floor is not a compromise, it is the encoding: a city half a sigma from
+    its own normal *is* nothing happening, and the map's job is to show where
+    something is. Near-normal cities settling into equal small dots is the
+    correct reading, and the exact number is in the tooltip either way.
+    """
+    magnitude = min(abs(z), MARKER_Z_CAP)
+    span = MARKER_MAX_PX - MARKER_MIN_PX
+    return MARKER_MIN_PX + span * (magnitude / MARKER_Z_CAP) ** 0.5
+
+
+def anomaly_key_html(mode: Mode = MAP_MODE) -> str:
+    """The colour key, labelled in the units it encodes.
+
+    A diverging ramp with no numbers on it asks the reader to believe that
+    darker means more. Labelling the breaks turns it into something they can
+    read a value off.
+    """
+    tokens = chrome(mode)
+    swatches = "".join(
+        f'<span style="flex:1;height:14px;background:{colour};'
+        f'border:1px solid {tokens["axis"]};"></span>'
+        for colour in DIVERGING[mode]
+    )
+    labels = "".join(
+        f'<span style="flex:1;text-align:right;transform:translateX(50%);">{value}</span>'
+        for value in (
+            *(f"−{break_}" for break_ in reversed(ANOMALY_BREAKS)),
+            *(f"+{break_}" for break_ in ANOMALY_BREAKS),
+            "",
+        )
+    )
+    return (
+        f'<div style="margin:0.25rem 0 0.5rem 0;">'
+        f'<div style="display:flex;gap:2px;">{swatches}</div>'
+        f'<div style="display:flex;gap:2px;font-size:0.7rem;'
+        f'color:{tokens["ink_muted"]};margin-top:0.2rem;">{labels}</div>'
+        f'<div style="display:flex;justify-content:space-between;'
+        f'font-size:0.75rem;color:{tokens["ink_muted"]};margin-top:0.15rem;">'
+        f"<span>colder than normal</span><span>Z-score</span>"
+        f"<span>warmer than normal</span></div></div>"
+    )
+
+
+def size_key_html(mode: Mode = MAP_MODE, *, samples: Sequence[float] = (1.0, 2.5, 4.0)) -> str:
+    """Reference circles, so size can be read rather than estimated.
+
+    Plotly draws no key for a size channel. Without one, area is decoration —
+    the reader can see that a point is bigger and not what bigger means.
+    """
+    tokens = chrome(mode)
+    ring = _MAP["ring"]
+    largest = marker_diameter(max(samples))
+    circles = "".join(
+        f'<div style="display:flex;flex-direction:column;align-items:center;'
+        f'justify-content:flex-end;min-width:{largest + 8:.0f}px;">'
+        f'<span style="width:{marker_diameter(value):.0f}px;'
+        f'height:{marker_diameter(value):.0f}px;border-radius:50%;'
+        f'border:2px solid {ring};background:{NEUTRAL[mode]};"></span>'
+        f'<span style="font-size:0.7rem;color:{tokens["ink_muted"]};'
+        f'margin-top:0.25rem;">|Z| {value:g}</span></div>'
+        for value in samples
+    )
+    return (
+        f'<div style="display:flex;gap:0.75rem;align-items:flex-end;'
+        f'margin:0.25rem 0 0.5rem 0;">{circles}</div>'
+    )

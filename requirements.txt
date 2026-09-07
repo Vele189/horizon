@@ -20,6 +20,18 @@ streamlit==1.63.0
 pandas==3.0.5
 SQLAlchemy==2.0.52
 
+# The charting library, from BI-03. Every figure is built with graph_objects
+# rather than plotly.express: express infers encodings from a frame's dtypes,
+# and this project decides them — which colour a Z-score takes and how large a
+# marker is are in dashboard/theme.py, measured, and under test.
+plotly==7.0.0
+
+# config/cities.yml is the city registry *and* the fixture the validation gate
+# reads its seven dated events from. The map offers those dates as jump
+# targets, so it loads the registry through cities.py rather than restating
+# them — which is what makes them one fact instead of two.
+PyYAML==6.0.2
+
 # pandas requires numpy regardless; pinned so the deployment resolves to the
 # same version the marts were built and the model was trained against.
 numpy==2.5.3

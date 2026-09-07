@@ -30,6 +30,7 @@ actually read Neon — is ``tests/check_connection.py``.
 from __future__ import annotations
 
 import ast
+import datetime as dt
 import math
 import re
 import sys
@@ -52,7 +53,17 @@ from sqlalchemy.exc import (  # noqa: E402
     ProgrammingError,
 )
 
+from sqlalchemy import text as sa_text  # noqa: E402
+
 from dashboard import theme  # noqa: E402
+from dashboard.database import GOLD_SCHEMA as GOLD  # noqa: E402
+
+
+def _registry_events():
+    """The seven dated extremes, collected at import so they can parametrize."""
+    from dashboard.views.anomaly_map import _events
+
+    return list(_events())
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DASHBOARD_DIR = PROJECT_ROOT / "dashboard"
@@ -910,24 +921,43 @@ def test_every_view_reads_only_promoted_gold() -> None:
     from dashboard import views
 
     for module in views.ORDER:
-        sql = module.VIEW.probe_sql
-        assert "bronze_raw" not in sql and "silver_staging" not in sql
+        for statement in _sql_literals(Path(module.__file__)):
+            assert "bronze_raw" not in statement and "silver_staging" not in statement, (
+                f"{module.VIEW.title} reaches for a layer that was never promoted"
+            )
         assert module.VIEW.source_table.startswith("gold_marts.")
 
 
-def test_the_diverging_views_share_one_key() -> None:
-    """Three views encode a signed anomaly, and they must explain it identically.
+def _sql_literals(path: Path) -> Iterator[str]:
+    """Every string in a module that looks like a query."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if "select " in node.value.lower():
+                yield node.value
+        elif isinstance(node, ast.JoinedStr):
+            rendered = "".join(
+                part.value for part in node.values if isinstance(part, ast.Constant)
+            )
+            if "select " in rendered.lower():
+                yield rendered
+
+
+def test_the_pending_views_declare_their_encoding() -> None:
+    """The stubs still explain which key they will carry.
 
     Storm Dynamics is the exception and says so in its own words rather than
     silently omitting a legend.
     """
-    from dashboard import views
+    from dashboard.views import _scaffold, climate_matrix, risk_horizon, storm_dynamics
 
-    diverging = [m for m in views.ORDER if m.VIEW.encoding == "diverging"]
-    assert len(diverging) == 3
-    other = [m for m in views.ORDER if m.VIEW.encoding != "diverging"]
-    assert [m.VIEW.title for m in other] == ["Storm Dynamics"]
-    assert "BI-03" in other[0].VIEW.encoding
+    pending = (climate_matrix, risk_horizon, storm_dynamics)
+    for module in pending:
+        assert isinstance(module.VIEW, _scaffold.PendingView)
+
+    diverging = [m for m in pending if m.VIEW.encoding == "diverging"]
+    assert [m.VIEW.title for m in diverging] == ["Climate Matrix", "Risk Horizon"]
+    assert "BI-03" in storm_dynamics.VIEW.encoding
 
 
 def test_the_shell_holds_no_sql_and_no_colour() -> None:
@@ -946,21 +976,63 @@ def test_the_shell_holds_no_sql_and_no_colour() -> None:
 APP = str(PROJECT_ROOT / "dashboard" / "app.py")
 
 
+def _stub_frame(sql: str) -> pd.DataFrame:
+    """A plausible answer for whichever query was asked, without a database."""
+    from dashboard.views import views_probe_fields
+
+    if "min(date_key)" in sql and "last_scored_day" in sql:
+        return pd.DataFrame(
+            [{
+                "first_day": dt.date(1995, 1, 1),
+                "last_day": dt.date(2026, 9, 2),
+                "last_scored_day": dt.date(2026, 9, 2),
+            }]
+        )
+    if "observed_days" in sql:
+        return pd.DataFrame(
+            [{"city_id": "delhi", "first_day": dt.date(1995, 1, 1),
+              "last_day": dt.date(2026, 9, 2), "observed_days": 11568, "scored_days": 11568}]
+        )
+    if "dim_cities" in sql and "longitude" in sql:
+        return pd.DataFrame(
+            [
+                {"city_id": "delhi", "name": "Delhi", "country": "India",
+                 "latitude": 28.6, "longitude": 77.2, "observed_c": 35.0,
+                 "baseline_c": 28.7, "baseline_sigma": 1.3, "z": 4.79,
+                 "departure_c": 6.3, "is_anomaly": True,
+                 "baseline_observations": 465.0, "observed": True},
+                {"city_id": "moscow", "name": "Moscow", "country": "Russia",
+                 "latitude": 55.8, "longitude": 37.6, "observed_c": None,
+                 "baseline_c": None, "baseline_sigma": None, "z": None,
+                 "departure_c": None, "is_anomaly": None,
+                 "baseline_observations": None, "observed": False},
+            ]
+        )
+    # A stub view's coverage probe: one row with every field it asks for.
+    return pd.DataFrame([{field: 1 for field in views_probe_fields()}])
+
+
 @pytest.fixture
 def offline(monkeypatch):
     """Run the app with the warehouse replaced, so nothing reaches a network.
 
-    Both seams have to be closed: the shell calls ``warehouse_status`` for its
-    sidebar, and a view calls ``run_query`` for its probe. ``_scaffold`` bound
-    ``run_query`` at import, so it is patched where it is used rather than
-    where it is defined.
+    Every seam has to be closed, and there are more than one: the shell calls
+    ``warehouse_status`` for its sidebar, the stubs call ``run_query`` through
+    ``_scaffold``, and the map calls it in its own module. Each bound the name
+    at import, so each is patched where it is used rather than where it is
+    defined — a single patch on ``dashboard.database`` would leave the map
+    talking to Neon in a test that claims to be offline.
     """
     from dashboard import database as module
+    from dashboard import views
     from dashboard.views import _scaffold
 
     def install(*, status=None, query=None, source=None):
         monkeypatch.setattr(module, "warehouse_status", status or (lambda: {"cities": 15}))
-        monkeypatch.setattr(_scaffold, "run_query", query or (lambda sql, *a, **k: pd.DataFrame()))
+        answer = query or (lambda sql, *a, **k: _stub_frame(sql))
+        for bound in (_scaffold, *views.ORDER):
+            if hasattr(bound, "run_query"):
+                monkeypatch.setattr(bound, "run_query", answer)
         if source is not None:
             monkeypatch.setattr(module, "resolve_database_url", source)
 
@@ -984,8 +1056,7 @@ def test_every_view_renders_and_none_of_them_raises(offline) -> None:
 
     from dashboard import views
 
-    fields = {field for module in views.ORDER for field in module.VIEW.probe_labels}
-    offline(query=lambda sql, *a, **k: pd.DataFrame([{field: 1 for field in fields}]))
+    offline()
 
     for module in views.ORDER:
         script = (
@@ -995,7 +1066,8 @@ def test_every_view_renders_and_none_of_them_raises(offline) -> None:
         app = AppTest.from_string(script, default_timeout=30).run()
         assert not app.exception, f"{module.VIEW.title} raised: {app.exception}"
         assert [element.value for element in app.title] == [module.VIEW.title]
-        assert len(app.metric) == len(module.VIEW.probe_labels)
+        # A stub shows one metric per probe field; the built map shows its own.
+        assert app.metric, f"{module.VIEW.title} rendered nothing measurable"
 
 
 def test_the_shell_renders_its_default_view(offline) -> None:
@@ -1005,7 +1077,7 @@ def test_the_shell_renders_its_default_view(offline) -> None:
     from dashboard import views
 
     first = views.ORDER[0].VIEW
-    offline(query=lambda sql, *a, **k: pd.DataFrame([{f: 1 for f in first.probe_labels}]))
+    offline()
 
     app = AppTest.from_file(APP, default_timeout=30).run()
     assert not app.exception
@@ -1113,17 +1185,48 @@ def _pinned(path: Path) -> set[str]:
     return names
 
 
-def _third_party_imports(directory: Path) -> set[str]:
-    """Top-level modules imported under a directory, minus stdlib and our own."""
-    first_party = {"dashboard", "config", "ingestion", "machine_learning", "serving"}
+FIRST_PARTY = {"dashboard", "config", "cities", "ingestion", "machine_learning", "serving"}
+
+
+def _imports_of(path: Path) -> set[str]:
     found: set[str] = set()
-    for path in _python_modules(directory):
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if isinstance(node, ast.Import):
-                found.update(alias.name.split(".")[0] for alias in node.names)
-            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-                found.add(node.module.split(".")[0])
-    return found - set(sys.stdlib_module_names) - first_party
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            found.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            found.add(node.module.split(".")[0])
+    return found
+
+
+def _third_party_imports(directory: Path) -> set[str]:
+    """Third-party modules a directory needs, following its first-party imports.
+
+    Transitive through our own modules on purpose. The map reads the city
+    registry through ``cities.py``, whose own dependency is PyYAML — and a scan
+    that stopped at the directory boundary would call PyYAML unused and then
+    call it missing, in two different tests, for the same reason. What the
+    deployment needs is what the *reachable* code imports.
+    """
+    seen: set[Path] = set()
+    queue = list(_python_modules(directory))
+    found: set[str] = set()
+
+    while queue:
+        path = queue.pop()
+        if path in seen:
+            continue
+        seen.add(path)
+        for name in _imports_of(path):
+            found.add(name)
+            if name in FIRST_PARTY:
+                module = PROJECT_ROOT / f"{name}.py"
+                package = PROJECT_ROOT / name
+                if module.exists():
+                    queue.append(module)
+                elif package.is_dir():
+                    queue.extend(_python_modules(package))
+
+    return found - set(sys.stdlib_module_names) - FIRST_PARTY
 
 
 def test_the_deployment_manifest_covers_what_the_dashboard_imports() -> None:
@@ -1189,3 +1292,406 @@ def test_every_deployment_pin_earns_its_place() -> None:
     assert not unexplained, (
         "pinned for the deployment but imported by nothing: " + ", ".join(sorted(unexplained))
     )
+
+
+# --------------------------------------------------------------------------
+# BI-03 — the Global Anomaly Map. What a number turns into.
+# --------------------------------------------------------------------------
+
+
+def test_the_colour_break_is_the_warehouse_s_flag() -> None:
+    """The map and the mart must agree on what counts as an anomaly.
+
+    dbt flags ``abs(z) > 2.5``, strictly. Binning the palette at ``>=`` would
+    paint a Z of exactly 2.5 in a flagged colour, and the picture would
+    contradict the table on the one value where the question is live. Checked
+    across the range rather than at the boundary alone, because an off-by-one
+    here is invisible everywhere except at a single point.
+    """
+    outermost = {0, 1, len(theme.DIVERGING["dark"]) - 2, len(theme.DIVERGING["dark"]) - 1}
+    for hundredths in range(-600, 601):
+        z = hundredths / 100
+        painted_as_anomaly = theme.anomaly_step(z) in outermost
+        flagged_by_dbt = abs(z) > theme.ANOMALY_Z_THRESHOLD
+        assert painted_as_anomaly is flagged_by_dbt, f"disagreement at Z {z}"
+
+
+def test_the_step_boundary_sits_exactly_on_the_threshold() -> None:
+    """Named separately, because it is the value the last test would lose."""
+    assert theme.anomaly_step(2.50) == theme.anomaly_step(2.49)
+    assert theme.anomaly_step(2.51) != theme.anomaly_step(2.50)
+    assert theme.ANOMALY_Z_THRESHOLD in theme.ANOMALY_BREAKS
+
+
+def test_colour_carries_direction_and_only_direction() -> None:
+    """Equal and opposite Z-scores take mirrored steps, never the same one."""
+    middle = theme.NEUTRAL_INDEX
+    for z in (0.9, 2.0, 3.0, 4.5):
+        assert theme.anomaly_step(z) + theme.anomaly_step(-z) == 2 * middle
+        assert theme.anomaly_step(z) > middle > theme.anomaly_step(-z)
+    assert theme.anomaly_step(0.0) == middle
+
+
+def test_size_encodes_magnitude_by_area_not_radius() -> None:
+    """A doubled anomaly must not look four times the size.
+
+    Area proportional to |Z| means diameter goes as its square root. Encoding
+    magnitude on the radius is the classic bubble-chart lie, and it exaggerates
+    exactly the values a reader is most likely to quote.
+    """
+    floor, cap = theme.MARKER_MIN_PX, theme.MARKER_Z_CAP
+
+    def area_above_floor(z: float) -> float:
+        return theme.marker_diameter(z) ** 2 - floor**2
+
+    # Compared as ratios rather than absolutes: the floor offsets both.
+    doubled = area_above_floor(2.0) - area_above_floor(1.0)
+    assert theme.marker_diameter(2.0) < 2 * theme.marker_diameter(1.0)
+    assert doubled > 0
+
+    assert theme.marker_diameter(0.0) == pytest.approx(floor)
+    assert theme.marker_diameter(cap) == pytest.approx(theme.MARKER_MAX_PX)
+    assert theme.marker_diameter(cap * 3) == pytest.approx(theme.MARKER_MAX_PX)
+
+    magnitudes = [i / 20 for i in range(0, 120)]
+    sizes = [theme.marker_diameter(z) for z in magnitudes]
+    assert sizes == sorted(sizes), "size is not monotone in |Z|"
+    assert all(theme.marker_diameter(z) == theme.marker_diameter(-z) for z in magnitudes)
+
+
+def test_the_smallest_marker_still_clears_the_mark_minimum() -> None:
+    """8px is the floor below which a dot stops being a mark."""
+    assert theme.MARKER_MIN_PX >= 8
+
+
+def test_the_map_reads_the_dark_ramp_whatever_the_page_theme_is() -> None:
+    """The ramp follows the surface it is painted on, not the page around it.
+
+    The basemap is dark in both themes, so a light-mode ramp would be one
+    validated against a background that is not on screen.
+    """
+    assert theme.MAP_MODE == "dark"
+    assert theme.anomaly_colour(3.0) in theme.DIVERGING["dark"]
+    ground = theme.map_chrome()
+    assert ground["ocean"] == theme.chrome("dark")["plane"]
+    assert ground["ring"] == theme.chrome("dark")["ink_muted"]
+
+
+def test_the_marker_ring_is_what_makes_a_quiet_city_visible() -> None:
+    """The neutral fill does not separate from the land; the ring does.
+
+    This is the measurement the ring exists for, and it is asserted rather
+    than commented because the day someone "tidies" the ring away is the day
+    every unremarkable city vanishes into the basemap.
+    """
+    ground = theme.map_chrome()
+    neutral = theme.NEUTRAL["dark"]
+
+    fill_vs_land = min(separation(neutral, ground["land"], d) for d in (None, *_MACHADO))
+    ring_vs_land = min(separation(ground["ring"], ground["land"], d) for d in (None, *_MACHADO))
+
+    assert fill_vs_land < SEPARATION_TARGET, "the comment about why the ring exists is stale"
+    assert ring_vs_land > 20, "the ring no longer carries the mark"
+
+
+# --------------------------------------------------------------------------
+# BI-03 — every city, every time.
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def day_frame():
+    """Two cities: one scored, one with nothing ingested."""
+    from dashboard.views import anomaly_map
+
+    frame = pd.DataFrame(
+        [
+            {"city_id": "delhi", "name": "Delhi", "country": "India",
+             "latitude": 28.6, "longitude": 77.2, "observed_c": 35.0,
+             "baseline_c": 28.7, "baseline_sigma": 1.32, "z": 4.79,
+             "departure_c": 6.34, "is_anomaly": True,
+             "baseline_observations": 465.0, "observed": True},
+            {"city_id": "moscow", "name": "Moscow", "country": "Russia",
+             "latitude": 55.8, "longitude": 37.6, "observed_c": None,
+             "baseline_c": None, "baseline_sigma": None, "z": None,
+             "departure_c": None, "is_anomaly": None,
+             "baseline_observations": None, "observed": False},
+            {"city_id": "london", "name": "London", "country": "United Kingdom",
+             "latitude": 51.5, "longitude": -0.13, "observed_c": 18.2,
+             "baseline_c": None, "baseline_sigma": None, "z": None,
+             "departure_c": None, "is_anomaly": None,
+             "baseline_observations": None, "observed": True},
+        ]
+    )
+    return anomaly_map.prepare(frame, dt.date(2009, 8, 9))
+
+
+def test_the_query_keeps_every_city_whether_or_not_it_was_scored() -> None:
+    """A left join from the dimension, not an inner join on the fact.
+
+    An inner join would redraw the world every time the backfill advanced, and
+    a reader would have no way to tell "normal here" from "nothing ingested
+    here" — which are opposite statements about the same blank space.
+    """
+    from dashboard.views import anomaly_map
+
+    sql = " ".join(anomaly_map._DAY_SQL.lower().split())
+    assert "from gold_marts.dim_cities c" in sql
+    assert "left join gold_marts.fact_weather_anomalies" in sql
+    # The date filter belongs in the join, not in a where clause — moving it
+    # would turn the left join back into an inner one for every other city.
+    assert "and a.date_key = :day" in sql
+    assert "where" not in sql.split("order by")[0]
+
+
+def test_an_unscored_city_is_kept_and_marked_rather_than_dropped(day_frame) -> None:
+    from dashboard.views import anomaly_map
+
+    assert len(day_frame) == 3
+    unscored = day_frame[day_frame["z"].isna()]
+    assert set(unscored["name"]) == {"Moscow", "London"}
+    assert unscored["colour"].isna().all(), "an unscored city was given an anomaly colour"
+    assert unscored["diameter"].isna().all(), "an unscored city was given a magnitude"
+
+    figure = anomaly_map._figure(day_frame)
+    symbols = {trace.marker.symbol for trace in figure.data}
+    assert "circle-open" in symbols, "absence is not carried by shape"
+
+
+def test_the_two_absences_are_told_apart(day_frame) -> None:
+    """Waiting on the backfill and waiting on a baseline are different states."""
+    moscow = day_frame.loc[day_frame["city_id"] == "moscow", "tooltip"].iloc[0]
+    london = day_frame.loc[day_frame["city_id"] == "london", "tooltip"].iloc[0]
+
+    assert "no observation for this date" in moscow
+    assert "no baseline yet" in london
+    assert "18.2 °C observed" in london, "an observation we have was not shown"
+
+
+def test_the_tooltip_carries_everything_the_criteria_ask_for(day_frame) -> None:
+    """City, date, observed temperature, baseline mu, and the Z-score."""
+    tooltip = day_frame.loc[day_frame["city_id"] == "delhi", "tooltip"].iloc[0]
+
+    assert "Delhi" in tooltip and "India" in tooltip
+    assert "09 August 2009" in tooltip
+    assert "35.0 °C" in tooltip and "observed" in tooltip
+    assert "28.7 °C" in tooltip and "baseline μ" in tooltip
+    assert "Z +4.79" in tooltip
+    assert "+6.3 °C" in tooltip and "departure" in tooltip
+    assert "465 reference observations" in tooltip
+
+
+def test_the_figure_paints_from_the_palette(day_frame) -> None:
+    from dashboard.views import anomaly_map
+
+    figure = anomaly_map._figure(day_frame)
+    ground = theme.map_chrome()
+
+    scored = [t for t in figure.data if t.marker.symbol != "circle-open"][0]
+    assert set(scored.marker.color) <= set(theme.DIVERGING["dark"])
+    assert scored.marker.line.color == ground["ring"]
+    assert figure.layout.geo.landcolor == ground["land"]
+    assert figure.layout.geo.oceancolor == ground["ocean"]
+    assert figure.layout.showlegend is False
+
+
+# --------------------------------------------------------------------------
+# BI-03 — the DBT-11 verification, asked of the picture.
+# --------------------------------------------------------------------------
+
+
+def _event(city_id="tokyo", city="Tokyo", direction="hot", date=dt.date(2018, 7, 23)):
+    from dashboard.views.anomaly_map import Event
+
+    return Event(city_id=city_id, city=city, date=date, direction=direction, description="…")
+
+
+def _coverage_row(city_id, observed_days, scored_days):
+    return pd.DataFrame(
+        [{"city_id": city_id, "first_day": dt.date(1995, 1, 1),
+          "last_day": dt.date(1998, 12, 31), "observed_days": observed_days,
+          "scored_days": scored_days}]
+    )
+
+
+@pytest.mark.parametrize(
+    "z, flagged, direction, expected",
+    [
+        (4.79, True, "hot", "pass"),
+        (-4.79, True, "cold", "pass"),
+        (1.10, False, "hot", "weak"),
+        (-3.20, True, "hot", "fail"),
+        (3.20, True, "cold", "fail"),
+    ],
+)
+def test_the_verdict_reads_the_event_not_just_the_number(
+    z, flagged, direction, expected
+) -> None:
+    """A hot event reading cold is a failure, not a pass with a large number.
+
+    Magnitude alone would call a 3.2-sigma cold snap a successful verification
+    of a documented heat wave, which is the one answer that would let a broken
+    climatology through.
+    """
+    from dashboard.views.anomaly_map import verify
+
+    frame = pd.DataFrame([{"city_id": "tokyo", "z": z, "is_anomaly": flagged}])
+    state, sentence = verify(_event(direction=direction), frame, _coverage_row("tokyo", 1461, 1461))
+
+    assert state == expected
+    assert f"{z:+.2f}" in sentence
+
+
+def test_an_uningested_event_is_pending_and_never_passes() -> None:
+    """The gate's own rule, and the reason it exists.
+
+    "A missing city skips with a reason; it does not pass" — a verification
+    that went green on absent data is the specific failure DBT-11 was written
+    to prevent, wearing the costume of success.
+    """
+    from dashboard.views.anomaly_map import verify
+
+    empty = pd.DataFrame(
+        [{"city_id": "moscow", "z": None, "is_anomaly": None}]
+    )
+    state, sentence = verify(
+        _event(city_id="moscow", city="Moscow"), empty, _coverage_row("moscow", 0, 0)
+    )
+    assert state == "pending"
+    assert "cannot be checked yet" in sentence
+    assert "nothing ingested for this city yet" in sentence
+
+
+def test_pending_names_which_absence_it_is() -> None:
+    """Ingested-but-unscored is not the same claim as never-ingested."""
+    from dashboard.views.anomaly_map import verify
+
+    frame = pd.DataFrame([{"city_id": "london", "z": None, "is_anomaly": None}])
+    _, sentence = verify(
+        _event(city_id="london", city="London"), frame, _coverage_row("london", 365, 0)
+    )
+    assert "is ingested, but no baseline" in sentence
+
+
+def test_the_events_come_from_the_registry_rather_than_being_restated() -> None:
+    """cities.yml is the fixture the gate reads; the map must read the same one."""
+    from cities import load_cities
+
+    from dashboard.views.anomaly_map import _events
+
+    registry = {
+        city.id: city.validation_event.date
+        for city in load_cities()
+        if city.validation_event is not None
+    }
+    offered = {event.city_id: event.date for event in _events()}
+
+    assert offered == registry
+    assert len(offered) == 7
+
+
+# --------------------------------------------------------------------------
+# BI-03 — against a real warehouse. The local one: a test that bills a quota
+# is a test nobody runs, and Neon holds a copy of exactly these marts.
+# --------------------------------------------------------------------------
+
+
+def _map_day(engine, day: dt.date) -> pd.DataFrame:
+    """Run the map's own query, so the test exercises what ships."""
+    from dashboard.views.anomaly_map import _DAY_SQL, prepare
+
+    with engine.connect() as connection:
+        frame = pd.read_sql_query(sa_text(_DAY_SQL), connection, params={"day": day})
+    return prepare(frame, day)
+
+
+@pytest.mark.parametrize(
+    "event", _registry_events(), ids=lambda e: f"{e.city_id}-{e.date}"
+)
+def test_a_documented_extreme_lights_the_map_up(engine, event) -> None:
+    """DBT-11, asked of the picture rather than of the warehouse.
+
+    Every one of the seven currently **skips**: the daily backfill is
+    quota-bound and none of these seven cities has a scored observation on its
+    event date yet. That is reported rather than passed, for the reason the
+    gate itself gives — a check that goes green on absent data is worse than no
+    check. Each skip names what is missing, and each becomes a real assertion
+    the moment the backfill reaches it, with no edit here.
+    """
+    from dashboard.views.anomaly_map import _CITY_COVERAGE_SQL, verify
+
+    frame = _map_day(engine, event.date)
+    assert len(frame) == 15, "the map lost a city"
+
+    with engine.connect() as connection:
+        coverage = pd.read_sql_query(sa_text(_CITY_COVERAGE_SQL), connection)
+
+    state, sentence = verify(event, frame, coverage)
+    if state == "pending":
+        pytest.skip(sentence.replace("**", ""))
+
+    assert state == "pass", sentence
+
+    row = frame.loc[frame["city_id"] == event.city_id].iloc[0]
+    # "Visibly lights up" is two channels, and both are checked: the colour is
+    # one of the flagged steps, and the marker is near the top of the size
+    # scale. A verdict that passed while the point stayed small and grey would
+    # be true about the data and false about the map.
+    outermost = {0, 1, len(theme.DIVERGING["dark"]) - 2, len(theme.DIVERGING["dark"]) - 1}
+    assert theme.anomaly_step(row["z"]) in outermost
+    assert row["diameter"] > theme.marker_diameter(theme.ANOMALY_Z_THRESHOLD)
+
+
+def test_the_map_lights_up_on_the_strongest_anomaly_the_marts_hold(engine) -> None:
+    """The mechanism, proven on data that exists.
+
+    Not a DBT-11 event — none of those is reachable yet — so this makes no
+    claim about the climatology. It makes the claim BI-03 is responsible for:
+    that a large Z-score in the mart becomes a large, pole-coloured, flagged
+    marker on the map, end to end through the shipped query and encoding.
+    """
+    with engine.connect() as connection:
+        row = connection.execute(
+            sa_text(
+                f"""select city_id, date_key, z_temperature_2m_mean as z
+                      from {GOLD} .fact_weather_anomalies
+                     where z_temperature_2m_mean is not null
+                     order by abs(z_temperature_2m_mean) desc
+                     limit 1""".replace(" .", ".")
+            )
+        ).fetchone()
+
+    if row is None:
+        pytest.skip("no scored anomalies in the warehouse yet")
+
+    frame = _map_day(engine, row.date_key)
+    assert len(frame) == 15
+
+    hit = frame.loc[frame["city_id"] == row.city_id].iloc[0]
+    outermost = {0, 1, len(theme.DIVERGING["dark"]) - 2, len(theme.DIVERGING["dark"]) - 1}
+
+    assert bool(hit["is_anomaly"]) is True
+    assert theme.anomaly_step(hit["z"]) in outermost, "the strongest day is not pole-coloured"
+    assert hit["diameter"] == pytest.approx(theme.MARKER_MAX_PX, abs=1.5), (
+        "the strongest day in thirty years does not reach the top of the size scale"
+    )
+    assert f"Z {hit['z']:+.2f}" in hit["tooltip"]
+
+
+def test_the_map_plots_every_registered_city_at_its_registered_coordinates(engine) -> None:
+    """Fifteen cities, at the coordinates cities.yml gives, on any date.
+
+    Checked against the registry rather than against dim_cities, so a mistake
+    that entered the warehouse would still be caught here.
+    """
+    from cities import load_cities
+
+    registry = {city.id: (city.lat, city.lon) for city in load_cities()}
+    frame = _map_day(engine, dt.date(2009, 8, 9))
+
+    assert len(frame) == len(registry) == 15
+    assert set(frame["city_id"]) == set(registry)
+    for _, row in frame.iterrows():
+        latitude, longitude = registry[row["city_id"]]
+        assert row["latitude"] == pytest.approx(latitude, abs=1e-4)
+        assert row["longitude"] == pytest.approx(longitude, abs=1e-4)

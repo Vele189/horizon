@@ -3085,7 +3085,7 @@ arrive.
 
 | Page | Reads | Chart lands in |
 |---|---|---|
-| Global Anomaly Map | `fact_weather_anomalies` | BI-03 |
+| Global Anomaly Map | `fact_weather_anomalies` | **built — BI-03** |
 | Climate Matrix | `fact_weather_anomalies` | BI-03 |
 | Storm Dynamics | `fact_weather_hourly` | BI-03 |
 | Risk Horizon | `fact_ml_predictions` | BI-04 |
@@ -3097,6 +3097,143 @@ and inventing them to fill the gap is what makes a scatter unreadable. BI-03
 resolves it by encoding something other than identity — small multiples, or a
 density surface with one city highlighted — rather than by stretching the
 palette.
+
+## The Global Anomaly Map
+
+Where is it abnormally hot or cold, on a chosen day? Fifteen points on a dark
+basemap, sized by how far a city sat from its own seasonal normal and coloured
+by which way.
+
+### Fifteen cities, always
+
+The query left-joins the anomaly fact onto `dim_cities`, so every city in the
+registry is on the map at its own coordinates whether or not the warehouse has
+scored it. An inner join would have been shorter and would have redrawn the
+world every time the backfill advanced — and a reader would have had no way to
+tell *normal here* from *nothing ingested here*, which are opposite statements
+about the same blank space.
+
+So absence is drawn, and it is drawn by **shape** rather than colour: an
+unscored city is an open ring, because every fill on this map already means a
+number. Its tooltip says which absence it is, and there are three, waiting on
+different things:
+
+| | Means | Waits on |
+|---|---|---|
+| no observation for this date | the backfill has not reached this city-day | ingestion |
+| observed, no baseline yet | the day is ingested, no sigma to score against | reference years |
+| scored | a Z-score exists | — |
+
+London has a year of observations and no baseline; Moscow has nothing. Calling
+both "no data" would have been a false claim about the warehouse, so the map
+does not make it.
+
+### Two channels, one number
+
+Size carries magnitude, colour carries direction, and both come from the same
+signed Z-score. The redundancy is the point: size survives colour-vision
+deficiency and a greyscale print, colour survives a small marker, and the pair
+is what makes an event visible at a glance rather than findable on inspection.
+
+**Area is proportional to |Z|, so the diameter goes as its square root.**
+Encoding magnitude on the radius is the classic bubble lie — it quadruples the
+apparent size of a doubled anomaly, and it exaggerates exactly the values a
+reader is most likely to quote. The scale runs from 8 px to 40 px and caps at
+|Z| = 5; the largest departure in thirty years of the marts is 5.09, so the cap
+costs nothing today and stops one freak day from shrinking every other city to
+a dot if a larger one ever lands.
+
+The floor is not a compromise. A city half a sigma from its normal *is* nothing
+happening, and near-normal cities settling into equal small dots is the correct
+reading of a map whose job is to show where something is.
+
+Plotly draws no key for a size channel, so without one, area is decoration — a
+reader can see that a point is bigger and not what bigger means. There is a
+size key beside the colour key, with reference circles at |Z| of 1, 2.5 and 4.
+
+### The colour break is the warehouse's flag
+
+`theme.anomaly_step` bins at 0.5 / 1.5 / 2.5 / 3.5, so the two outermost steps
+of each arm hold exactly the rows dbt marks `is_anomaly`. The map and the mart
+cannot disagree about what counts as an anomaly.
+
+That equivalence had an off-by-one in the first version, and it is worth
+recording because it is invisible everywhere except at a single point. dbt
+flags `abs(z) > 2.5`, **strictly**. Binning at `>=` painted a Z of exactly 2.50
+in a flagged colour, so on that one value the picture contradicted the table. A
+test now walks 1 201 Z-scores from −6 to +6 and asserts the two statements
+agree at every one, with the boundary called out separately so it cannot be
+lost to a refactor of the range.
+
+### The ring is load-bearing
+
+Every filled marker carries a 2 px ring in muted ink. On a chart that ring is
+drawn in the *surface* colour, but a map has no single surface — a point may
+sit on ocean, on land, or across a coastline.
+
+It is not decoration. The neutral step is a dark grey and so is the land: the
+fill alone separates by **7.5**, under the 8 that counts as distinct. The ring
+clears both grounds by a wide margin — **39.8** against land, 46.4 against
+ocean — and is what makes a city reporting no departure visible at all. A test
+asserts both numbers, so the day someone tidies the ring away is the day the
+suite says which cities just vanished.
+
+Land and ocean sit only 6.7 apart, which is deliberate: the coastline reads
+without the basemap competing with fifteen coloured points for attention.
+
+The basemap is dark in both page themes, so the map uses the **dark** ramp
+whichever theme the page is in. The ramp follows the surface it is painted on,
+not the theme of the page around it — a light-mode ramp on a dark basemap would
+be one validated against a background that is not on screen. There are no map
+tiles: `Scattergeo` draws its own land and coastlines, so the page has no
+external tile dependency, no token, and nothing to fail behind a firewall.
+
+### Verified against a DBT-11 event: not yet, and the map says so
+
+This is the one checklist item BI-03 does not close, and the reason is
+ingestion rather than code.
+
+`config/cities.yml` carries seven dated extremes — the Day 8 validation gate's
+fixtures. **None of the seven can be checked against the current warehouse.**
+The daily backfill is quota-bound and has reached nine of fifteen cities; six of
+those nine have baselines deep enough to score:
+
+| Event | Why it cannot be checked yet |
+|---|---|
+| Tokyo, 23 Jul 2018 | the marts hold Tokyo to 31 Dec 1998 |
+| London, 19 Jul 2022 | 1998 is ingested, no baseline deep enough to score |
+| Sydney, 4 Jan 2020 | 2021 is ingested, no baseline deep enough to score |
+| Portland, 28 Jun 2021 | nothing ingested |
+| Moscow, 29 Jul 2010 | nothing ingested |
+| São Paulo, 30 Jul 2021 | nothing ingested |
+| Buenos Aires, 11 Jan 2022 | nothing ingested |
+
+Rather than assert nothing, the verification is **built and reports pending**,
+in two places at once.
+
+In the app, the date selector offers the seven events beside a free date
+picker. Choosing one jumps the map to that day and prints a verdict: *pass*
+when the city is flagged in the documented direction, *weak* when the departure
+agrees but does not clear 2.5, *fail* when a documented heat wave reads cold,
+and *pending* when there is nothing to check — naming which of the three
+absences it is. A hot event reading −3.2 is a **failure**, not a pass with a
+large number; magnitude alone would wave through a broken climatology, which is
+the one answer the gate exists to prevent.
+
+In the suite, the same seven parametrize a test that skips with that sentence
+as its reason. `pytest -rs` prints all seven. Each becomes a real assertion the
+moment the backfill reaches it, with no edit — and the assertion checks the
+*picture*, not just the data: the colour must be one of the flagged steps and
+the marker must be near the top of the size scale, because a verdict that
+passed while the point stayed small and grey would be true about the data and
+false about the map.
+
+**What is verified today** is the mechanism, on the strongest anomaly the marts
+actually hold — Delhi, 9 August 2009, Z +4.79. A test runs the shipped query
+and the shipped encoding end to end and asserts that day comes out flagged,
+pole-coloured, and at the top of the size scale. It makes no claim about the
+climatology, which is DBT-11's job; it makes the claim BI-03 is responsible
+for, which is that a large number in the mart becomes a large mark on the map.
 
 ## Licence
 

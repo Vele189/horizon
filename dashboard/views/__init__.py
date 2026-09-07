@@ -10,8 +10,28 @@ from __future__ import annotations
 
 from dashboard.views import anomaly_map, climate_matrix, risk_horizon, storm_dynamics
 
-__all__ = ["anomaly_map", "climate_matrix", "risk_horizon", "storm_dynamics", "ORDER"]
+__all__ = [
+    "ORDER",
+    "anomaly_map",
+    "climate_matrix",
+    "risk_horizon",
+    "storm_dynamics",
+    "views_probe_fields",
+]
 
 # The order the proposal lists them in, and the order they appear in the
 # sidebar. Declared once so the navigation and its test read the same list.
 ORDER = (anomaly_map, climate_matrix, storm_dynamics, risk_horizon)
+
+
+def views_probe_fields() -> set[str]:
+    """Every field a stub view's coverage probe reads.
+
+    Here rather than in the test so that adding a probe column is one edit, not
+    one edit and a puzzled test failure.
+    """
+    return {
+        field
+        for module in ORDER
+        for field in getattr(module.VIEW, "probe_labels", {})
+    }

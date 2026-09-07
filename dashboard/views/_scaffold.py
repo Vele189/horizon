@@ -1,15 +1,15 @@
-"""What a view looks like before it has a chart in it.
+"""What every view has in common, and what a view looks like before it has a chart.
 
-BI-02 builds the shell; the four views land in BI-03 and BI-04. A stub that
-said only "coming soon" would leave the thing this ticket is actually
-responsible for — that the app reaches Neon from every page, wakes it without
-erroring, and reuses one palette — untested until the day the charts arrive.
+Two dataclasses. :class:`ViewMeta` is the part the shell needs from every view
+whether or not it is built — its title, its place in the navigation, the
+question it answers and the one-line caption the acceptance criteria require.
+:class:`PendingView` adds what a *stub* needs: the ticket that fills it in, and
+a live probe of the mart it will read.
 
-So each stub renders the parts of its view that already exist: the question it
-answers, the plain-English caption it will carry, the colour key it will use,
-and a live probe of the table it will read. The probe is a real query through
-the real connection layer, which means opening any of the four pages exercises
-the cold-start path end to end.
+The stubs render a real query through the real connection layer rather than a
+"coming soon". BI-02 is responsible for the app reaching Neon from every page
+and waking it without erroring, and leaving three of the four pages inert would
+leave that unexercised until the day their charts arrive.
 """
 
 from __future__ import annotations
@@ -28,11 +28,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from dashboard import theme  # noqa: E402
 from dashboard.database import run_query  # noqa: E402
 
-__all__ = ["PendingView", "current_mode"]
+__all__ = ["PendingView", "ViewMeta", "current_mode"]
 
 
 def current_mode() -> theme.Mode:
-    """The palette mode matching the viewer's Streamlit theme."""
+    """The palette mode matching the viewer's Streamlit theme.
+
+    Views painted on their own dark surface — the map — do not use this; the
+    ramp follows the surface it sits on, not the theme of the page around it.
+    """
     return theme.resolve_mode(getattr(st.context.theme, "type", None))
 
 
@@ -44,29 +48,24 @@ def _readable(value: object) -> str:
     to ``str`` — turning 60,396 into 60396 on a page whose job is legibility.
     """
     if value is None or (isinstance(value, float) and math.isnan(value)):
-        return "\u2014"
+        return "—"
     if isinstance(value, numbers.Integral):
         return f"{int(value):,}"
     return str(value)
 
 
 @dataclass(frozen=True)
-class PendingView:
-    """One of the four views, before its chart exists.
+class ViewMeta:
+    """What the shell needs from a view, built or not.
 
     Attributes:
         title: Heading, and the label in the navigation.
-        question: The question the finished view answers, from §Workstream 4
-            of the proposal. Kept verbatim so the built view can be checked
-            against what was promised.
-        caption: The one-line plain-English caption the acceptance criteria
-            require every view to carry.
-        encoding: ``"diverging"`` for the views that colour by signed anomaly —
-            they render the shared key — or a sentence describing what the view
-            uses instead.
-        ticket: The ticket that fills this page in.
-        source: Which gold table it reads, and a query returning one row of
-            coverage facts about it.
+        question: The question the view answers, from §Workstream 4 of the
+            proposal. Kept verbatim so a built view can be checked against
+            what was promised.
+        caption: The one-line plain-English caption every view must carry.
+        source_table: The gold mart it reads. Named here so a test can assert
+            no view reaches for a layer that was never promoted.
     """
 
     title: str
@@ -74,9 +73,23 @@ class PendingView:
     url_path: str
     question: str
     caption: str
+    source_table: str
+
+
+@dataclass(frozen=True)
+class PendingView(ViewMeta):
+    """A view whose chart has not landed yet.
+
+    Attributes:
+        encoding: ``"diverging"`` for the views that colour by signed anomaly —
+            they render the shared key — or a sentence describing what the view
+            uses instead.
+        ticket: The ticket that fills this page in.
+        probe_sql: A query returning one row of coverage facts about the source.
+    """
+
     encoding: str
     ticket: str
-    source_table: str
     probe_sql: str
     probe_labels: Mapping[str, str]
 
@@ -85,19 +98,14 @@ class PendingView:
 
         st.title(self.title)
         st.caption(self.caption)
-
         st.markdown(f"**Answers:** {self.question}")
 
         if self.encoding == "diverging":
-            st.markdown(
-                theme.diverging_legend_html(mode),
-                unsafe_allow_html=True,
-            )
+            st.markdown(theme.diverging_legend_html(mode), unsafe_allow_html=True)
         else:
             st.info(self.encoding, icon=":material/palette:")
 
         st.divider()
-
         st.subheader("Source", anchor=False)
         st.caption(
             f"`{self.source_table}` on the serving database, read live through "
