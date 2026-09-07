@@ -944,21 +944,13 @@ def _sql_literals(path: Path) -> Iterator[str]:
                 yield rendered
 
 
-def test_the_pending_views_declare_their_encoding() -> None:
-    """The stubs still explain which key they will carry.
+def test_the_pending_view_declares_its_encoding() -> None:
+    """What is left of the scaffold, and it still explains its key."""
+    from dashboard.views import _scaffold, risk_horizon
 
-    Storm Dynamics is the exception and says so in its own words rather than
-    silently omitting a legend.
-    """
-    from dashboard.views import _scaffold, risk_horizon, storm_dynamics
-
-    pending = (risk_horizon, storm_dynamics)
-    for module in pending:
-        assert isinstance(module.VIEW, _scaffold.PendingView)
-
-    diverging = [m for m in pending if m.VIEW.encoding == "diverging"]
-    assert [m.VIEW.title for m in diverging] == ["Risk Horizon"]
-    assert "BI-" in storm_dynamics.VIEW.encoding
+    assert isinstance(risk_horizon.VIEW, _scaffold.PendingView)
+    assert risk_horizon.VIEW.encoding == "diverging"
+    assert risk_horizon.VIEW.ticket.startswith("BI-")
 
 
 def test_the_shell_holds_no_sql_and_no_colour() -> None:
@@ -994,6 +986,21 @@ def _stub_frame(sql: str) -> pd.DataFrame:
             [{"city_id": "delhi", "first_day": dt.date(1995, 1, 1),
               "last_day": dt.date(2026, 9, 2), "observed_days": 11568, "scored_days": 11568}]
         )
+    if "fact_weather_hourly" in sql:
+        rows = []
+        for day in range(40):
+            swing = (day % 20) - 10
+            for city_id, name in (("reykjavik", "Reykjavík"), ("singapore", "Singapore")):
+                rows.append({
+                    "city_id": city_id, "name": name,
+                    "date_key": f"2025-01-{day % 28 + 1:02d}",
+                    "peak_gust": 30.0 + 2.0 * abs(swing),
+                    "sharpest_fall": float(-abs(swing)),
+                    "sharpest_rise": float(abs(swing)),
+                    "hours": 24,
+                    "pressure_change_24h": float(swing),
+                })
+        return pd.DataFrame(rows)
     if "cross join years" in sql:
         rows = []
         for year in range(1995, 2027):
@@ -1975,3 +1982,228 @@ def test_every_registered_city_has_a_row_even_with_nothing_ingested(engine) -> N
     never = frame.groupby("city_id")["scored_days"].sum()
     assert (never == 0).any(), "the fixture for the absent case has gone stale"
     assert (never > 0).any()
+
+
+# --------------------------------------------------------------------------
+# BI-05 — Storm Dynamics. Where colour stops being able to carry identity.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_the_emphasis_accent_separates_from_the_context_it_sits_in(mode) -> None:
+    """A highlighted point has to read as picked out of the grey field.
+
+    Hue alone will not do it: a colour at the context ink's own lightness
+    collapses toward it once a CVD simulation flattens the chroma, which is why
+    the accent is moved in lightness as well as hue.
+    """
+    accent = theme.emphasis(mode)
+    context = theme.chrome(mode)["ink_muted"]
+    worst = min(separation(accent, context, d) for d in (None, *_MACHADO))
+
+    assert worst >= 15, f"the accent collapses into the context at {worst:.1f}"
+    assert contrast(accent, theme.SURFACE[mode]) >= 3.0
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_the_accent_does_not_borrow_a_hue_that_already_means_something(mode) -> None:
+    """Green means "the city you picked" and nothing else in this dashboard.
+
+    A colour that means "cold" on two views and "Reykjavík" on a third is one
+    colour doing two jobs, and the reader has no way to know which.
+    """
+    accent_hue = hue(theme.emphasis(mode))
+    for reserved in (hue(theme.DIVERGING[mode][0]), hue(theme.DIVERGING[mode][-1])):
+        gap = abs(accent_hue - reserved) % 360
+        assert min(gap, 360 - gap) >= 60, "the accent sits on an anomaly hue"
+
+
+def test_the_documented_accent_separations_cannot_go_stale() -> None:
+    """theme.py quotes both figures; recompute them."""
+    prose = _theme_prose()
+    quoted = re.search(
+        r"context ink by (\d+\.\d+) in light mode and (\d+\.\d+) in dark", prose
+    )
+    assert quoted, "theme.py no longer states the separations"
+    for index, mode in enumerate(("light", "dark")):
+        measured = min(
+            separation(theme.emphasis(mode), theme.chrome(mode)["ink_muted"], d)
+            for d in (None, *_MACHADO)
+        )
+        assert round(measured, 1) == float(quoted.group(index + 1))
+
+
+def test_colour_is_not_asked_to_carry_fifteen_identities() -> None:
+    """The finding that shaped this view, asserted rather than trusted.
+
+    Every trace is either the grey context or the single accent. A future edit
+    that started colouring by city would seat fifteen hues in a scatter, which
+    no palette supports and which the module docstring says was ruled out by
+    search rather than by taste.
+    """
+    from dashboard.views import storm_dynamics as storm
+
+    frame = _storm_frame()
+    for selected in (storm.ALL_CITIES, "Reykjavík"):
+        figure = storm._figure(frame, selected, "light")
+        painted = {trace.marker.color for trace in figure.data}
+        assert painted <= {theme.chrome("light")["ink_muted"], theme.emphasis("light")}
+        assert len(figure.data) <= 2, "a trace per city has crept in"
+
+
+def _storm_frame() -> pd.DataFrame:
+    """Two cities whose relationships differ, like the real ones do."""
+    rows = []
+    for day in range(120):
+        swing = (day % 30) - 15
+        rows.append({"city_id": "reykjavik", "name": "Reykjavík",
+                     "date_key": f"2025-01-{day % 28 + 1:02d}",
+                     "pressure_change_24h": float(swing),
+                     "peak_gust": 30.0 + 3.0 * abs(swing), "hours": 24})
+        rows.append({"city_id": "singapore", "name": "Singapore",
+                     "date_key": f"2025-01-{day % 28 + 1:02d}",
+                     "pressure_change_24h": float(swing) / 5,
+                     "peak_gust": 25.0 + (day % 7), "hours": 24})
+    frame = pd.DataFrame(rows)
+    frame["swing"] = frame["pressure_change_24h"].abs()
+    return frame
+
+
+def test_the_v_shape_is_why_the_signed_axis_is_kept() -> None:
+    """Signed reads as nothing; magnitude reads as the relationship.
+
+    This is the whole reason the caption quotes two numbers. A view that
+    reported only the signed coefficient would tell a reader there is no
+    relationship between pressure and wind, which is false.
+    """
+    from dashboard.views import storm_dynamics as storm
+
+    windy = _storm_frame()
+    windy = windy[windy["name"] == "Reykjavík"]
+    pooled = storm.overall(windy)
+
+    assert abs(pooled["signed"]) < 0.15, "the fixture is not V-shaped"
+    assert pooled["magnitude"] > 0.9, "magnitude does not recover the relationship"
+
+
+def test_the_correlation_is_ranked_not_least_squares() -> None:
+    """Gust distributions have a long right tail.
+
+    Pearson would let four storms set a city's coefficient; Spearman asks the
+    question the caption asks — when the barometer moves more, does the wind
+    rank higher.
+    """
+    from dashboard.views import storm_dynamics as storm
+
+    assert storm.CORRELATION_METHOD == "spearman"
+
+    frame = _storm_frame()
+    outlier = frame.copy()
+    outlier.loc[outlier.index[0], "peak_gust"] = 10_000.0
+
+    before = storm.correlations(frame)["Reykjavík"]
+    after = storm.correlations(outlier)["Reykjavík"]
+    assert abs(before - after) < 0.05, "one freak day moved the coefficient"
+
+
+def test_every_city_gets_its_own_coefficient() -> None:
+    """One pooled number would hide that the answer depends on the city."""
+    from dashboard.views import storm_dynamics as storm
+
+    per_city = storm.correlations(_storm_frame())
+    assert set(per_city.index) == {"Reykjavík", "Singapore"}
+    assert per_city.index[0] == "Reykjavík", "not sorted strongest first"
+    assert per_city["Reykjavík"] > per_city["Singapore"]
+
+
+def test_the_axes_are_the_ones_the_ticket_names() -> None:
+    from dashboard.views import storm_dynamics as storm
+
+    figure = storm._figure(_storm_frame(), storm.ALL_CITIES, "light")
+    assert "24-hour pressure change" in figure.layout.xaxis.title.text
+    assert "hPa" in figure.layout.xaxis.title.text
+    assert "Peak gust" in figure.layout.yaxis.title.text
+    assert "km/h" in figure.layout.yaxis.title.text
+
+
+def test_the_hourly_fact_is_aggregated_in_the_warehouse() -> None:
+    """A quarter of a million points cannot be drawn, and should not be sent.
+
+    Grouping to city-day is a 24-fold reduction that loses nothing the question
+    needs — "did this day have a pressure crash and a gale" is a question about
+    a day.
+    """
+    from dashboard.views.storm_dynamics import _DAILY_SQL
+
+    sql = " ".join(_DAILY_SQL.lower().split())
+    assert "fact_weather_hourly" in sql
+    assert "group by city_id, date_key" in sql
+    assert "max(wind_gusts_10m)" in sql
+    assert "pressure_tendency_24h" in sql
+    # The count is measured rather than inferred from the day count.
+    assert "count(*)" in sql and "as hours" in sql
+
+
+def test_the_kept_swing_is_the_larger_of_the_two_limbs() -> None:
+    """Keeping only falls would show one limb of the V and hide the other.
+
+    The rise behind a departing low is windy too, and that is half the physical
+    story the chart is meant to tell.
+    """
+    from dashboard.views.storm_dynamics import _DAILY_SQL
+
+    sql = " ".join(_DAILY_SQL.lower().split())
+    assert "abs(d.sharpest_fall) >= abs(d.sharpest_rise)" in sql
+    assert "min(pressure_tendency_24h)" in sql and "max(pressure_tendency_24h)" in sql
+
+
+def test_storm_dynamics_reads_the_complete_mart(engine) -> None:
+    """The one mart that has all fifteen cities, so this view has no gaps.
+
+    Asserted rather than assumed: if the hourly backfill ever became partial,
+    this view would quietly start answering a question about a subset.
+    """
+    from cities import load_cities
+
+    from dashboard.views.storm_dynamics import _DAILY_SQL
+
+    with engine.connect() as connection:
+        frame = pd.read_sql_query(sa_text(_DAILY_SQL), connection)
+
+    assert set(frame["city_id"]) == {city.id for city in load_cities()}
+    assert frame["peak_gust"].notna().all()
+    assert frame["pressure_change_24h"].notna().all()
+    # One row per city-day, which is what makes the point count bounded.
+    assert not frame.duplicated(["city_id", "date_key"]).any()
+
+
+def test_the_reported_relationship_is_the_one_the_data_has(engine) -> None:
+    """The caption's claim, recomputed against the warehouse.
+
+    The caption is generated from the frame on screen, so it cannot go stale on
+    its own — but the *shape* of the claim can: if the signed correlation ever
+    became strong, the sentence about a V would be wrong while still being
+    arithmetically correct.
+    """
+    from dashboard.views import storm_dynamics as storm
+    from dashboard.views.storm_dynamics import _DAILY_SQL
+
+    with engine.connect() as connection:
+        frame = pd.read_sql_query(sa_text(_DAILY_SQL), connection)
+    frame["swing"] = frame["pressure_change_24h"].abs()
+
+    pooled = storm.overall(frame)
+    assert abs(pooled["signed"]) < 0.15, (
+        "the signed relationship is no longer negligible — the caption's "
+        "explanation of the V no longer describes the data"
+    )
+    assert pooled["magnitude"] > pooled["signed"] + 0.2, (
+        "magnitude no longer recovers what the sign hides"
+    )
+
+    per_city = storm.correlations(frame)
+    assert len(per_city) == 15
+    assert per_city.iloc[0] - per_city.iloc[-1] > 0.2, (
+        "the spread across cities has collapsed — the second caption claims a "
+        "variation the data no longer shows"
+    )

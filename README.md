@@ -3087,16 +3087,16 @@ arrive.
 |---|---|---|
 | Global Anomaly Map | `fact_weather_anomalies` | **built — BI-03** |
 | Climate Matrix | `fact_weather_anomalies` | **built — BI-04** |
-| Storm Dynamics | `fact_weather_hourly` | BI-05 |
+| Storm Dynamics | `fact_weather_hourly` | **built — BI-05** |
 | Risk Horizon | `fact_ml_predictions` | BI-06 |
 
 One open question is recorded on the page it belongs to rather than deferred
 silently. Storm Dynamics is specified as a scatter "coloured by city" over
 fifteen cities; no colour-blind-safe categorical palette carries fifteen hues,
-and inventing them to fill the gap is what makes a scatter unreadable. BI-03
-resolves it by encoding something other than identity — small multiples, or a
-density surface with one city highlighted — rather than by stretching the
-palette.
+and inventing them to fill the gap is what makes a scatter unreadable. It was
+settled in BI-05 by dropping colour as the identity channel entirely — see
+§The Storm Dynamics scatter below for the search that ruled the alternative
+out.
 
 ## The Global Anomaly Map
 
@@ -3328,6 +3328,107 @@ started shipping city-days would fail rather than merely get slower.
 
 The toggles cost nothing because they re-read the same cached frame — one query
 serves all three views, and the metric is chosen after the data arrives.
+
+## The Storm Dynamics scatter
+
+Do pressure crashes track with wind extremes? One point per city-day: the
+largest 24-hour pressure change that day against the strongest gust that
+accompanied it. Two years of hourly observations for all fifteen cities — the
+one mart in this warehouse that is complete, so this is the only view with no
+gaps in it.
+
+### The naive answer is no, and it is wrong
+
+Signed pressure change against peak gust correlates at **ρ = −0.04**. Plotted
+and left there, the chart says pressure and wind have nothing to do with each
+other.
+
+The relationship is not linear, it is **V-shaped**. A passing low brings a
+sharp fall and then a sharp rise, and both limbs are windy, so the signed
+correlation cancels itself out. Against the *magnitude* of the swing — how far
+the barometer moved, ignoring which way — the same 10 950 days give
+**ρ = +0.31**.
+
+The chart keeps the signed axis the ticket asks for precisely because that is
+what makes the V visible, and the caption reports both numbers rather than the
+flattering one. Both are computed from the frame on screen, so the sentence
+cannot drift from the picture it describes.
+
+### And the honest answer is "in some cities"
+
+| | ρ, swing vs peak gust |
+|---|---:|
+| Reykjavík | +0.43 |
+| Auckland | +0.42 |
+| Johannesburg | +0.37 |
+| Sydney | +0.35 |
+| … | |
+| Phoenix | +0.03 |
+| Lagos | +0.02 |
+| Cairo | −0.06 |
+| Singapore | −0.08 |
+
+Mid-latitude cities sit under a storm track that drives pressure and wind
+together; tropical ones do not. The question has a different answer depending
+on where it is asked, and that variation *is* the finding — which is why every
+city's coefficient is on screen instead of one pooled number that would average
+Reykjavík and Singapore into a shrug.
+
+Spearman rather than Pearson. Gust distributions have a long right tail and a
+handful of storms would otherwise set a city's coefficient on their own; rank
+correlation asks the question the caption asks — when the barometer moves more,
+does the wind rank higher. A test drops a 10 000 km/h day into the fixture and
+requires the coefficient to move by less than 0.05.
+
+### Colour cannot carry fifteen identities, and that is measured
+
+BI-02 flagged this view's colour question and deferred it. Here is the answer,
+and it is a search rather than an opinion.
+
+Enumerating every triple of hues on a 15° grid, **no three are simultaneously**
+separable under protanopia and deuteranopia at all pairs, distinct from the
+muted ink the unselected points wear, and clear of the blue and red the anomaly
+scale already owns. The only triples that pass put a hue 18° from the anomaly
+blue — which would make one colour mean "cold" on two views and "a city" on a
+third.
+
+So this view does not encode identity in colour at all:
+
+- **One city is emphasised at a time** against a grey field, using a single
+  accent. One colour is easy where three are impossible.
+- **The identity of all fifteen lives in the sorted table**, where position
+  carries it — the channel that has no cap.
+
+The accent is green at hue 140°, 112° clear of both anomaly hues and separated
+from the context ink by **21.5** in light mode and **20.1** in dark, well past
+the 15 at which two colours stop being confusable. Hue alone would not have
+done it: a colour at the context ink's own lightness collapses toward it once a
+simulation flattens the chroma, so the accent is moved in lightness as well.
+Green appears nowhere else in the dashboard and encodes no measurement — it
+means "the thing you selected", which is a property of the interface rather
+than of the weather.
+
+### A quarter of a million points, drawn as eleven thousand
+
+The hourly fact holds 262 800 usable rows. A scatter cannot show them and
+should not be sent them, so the aggregation happens in the warehouse: one row
+per city-day, 10 950 points, a 24-fold reduction that loses nothing the
+question needs — "did this day have a pressure crash and a gale" is a question
+about a day.
+
+The signed change kept per day is the largest **by magnitude**, not the
+sharpest fall. Keeping only falls would show one limb of the V and hide that
+the rise behind a departing low is windy too, which is half the physical story.
+
+| | |
+|---|---:|
+| First render — uncached, including Neon resuming | 10.55 s |
+| **Cached render** | **0.124 s** |
+| Switching the highlighted city | 0.133 s |
+
+The hour count in the footnote is `count(*)` from the group, not the day count
+multiplied by 24 — the two agree today at 262 800, and only one of them would
+still be true on a day the archive is short.
 
 ## Licence
 

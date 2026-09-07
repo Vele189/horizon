@@ -95,6 +95,29 @@ clearing 2:1 — and against each other, because a screenshot of the hot view an
 one of the cold view are the same picture otherwise. They separate by 8.7 under
 protanopia.
 
+One accent, for emphasis rather than identity
+---------------------------------------------
+
+Storm Dynamics needed to colour a scatter *by city*, and fifteen cities is more
+identities than any palette carries. A search settles it rather than an
+opinion: enumerating every triple of hues on a 15° grid, no three are
+simultaneously separable under protanopia and deuteranopia at all pairs,
+distinct from the muted ink the unselected points wear, **and** clear of the
+blue and red the anomaly scale owns. The only triples that pass put a hue 18°
+from the anomaly blue, which would make one colour mean two things across the
+dashboard.
+
+So that view does not encode identity in colour at all. One city is emphasised
+at a time against a grey field, and the identity of all fifteen lives in a
+sorted table, where position carries it. That needs exactly **one** accent, and
+one is easy: green at hue 140°, 112° clear of both anomaly hues, and separated
+from the context ink by 21.5 in light mode and 20.1 in dark — well past the 15
+at which two colours stop being confusable.
+
+Green appears nowhere else in the dashboard and encodes no measurement. It
+means "the thing you selected", which is a property of the interface rather
+than of the weather.
+
 There is no accent hue
 ----------------------
 
@@ -112,6 +135,7 @@ from typing import Final, Literal, Mapping, Sequence
 
 __all__ = [
     "ANOMALY_BREAKS",
+    "EMPHASIS",
     "SEQUENTIAL",
     "ANOMALY_Z_THRESHOLD",
     "COLD_HUE_DEGREES",
@@ -128,6 +152,7 @@ __all__ = [
     "anomaly_step",
     "chrome",
     "diverging_scale",
+    "emphasis",
     "map_chrome",
     "sequential_key_html",
     "sequential_scale",
@@ -495,3 +520,14 @@ def sequential_key_html(direction: str, mode: Mode, bounds: Sequence[str]) -> st
     return (
         f'<div style="display:flex;gap:2px;margin:0.25rem 0 0.5rem 0;">{cells}</div>'
     )
+
+
+# The emphasis accent. Deliberately not on the ramp's hues, and deliberately at
+# a lightness well away from the context ink — hue alone does not separate two
+# colours that sit at the same lightness once a simulation flattens the chroma.
+EMPHASIS: Final[Mapping[Mode, str]] = {"light": "#145700", "dark": "#6bd852"}
+
+
+def emphasis(mode: Mode) -> str:
+    """The single colour meaning "the city you picked"."""
+    return EMPHASIS[mode]
