@@ -40,6 +40,7 @@ pd = pytest.importorskip("pandas")
 
 from ml_fixtures import (  # noqa: E402
     labelled_span,
+    repository_sources,
     rewrite_from,
     scored_population,
     spanning,
@@ -328,15 +329,12 @@ def test_no_random_splitter_appears_anywhere_in_the_codebase() -> None:
 
     This file is skipped, because it has to name what it forbids.
     """
-    offenders = []
-    for path in sorted(REPO_ROOT.rglob("*.py")):
-        relative = path.relative_to(REPO_ROOT)
-        if relative.parts[0] in {".venv", ".git"} or path == Path(__file__):
-            continue
-        text = path.read_text(encoding="utf-8", errors="replace")
-        for name in FORBIDDEN:
-            if name in text:
-                offenders.append(f"{relative}: {name}")
+    offenders = [
+        f"{relative}: {name}"
+        for relative, text in repository_sources(exclude={Path(__file__)})
+        for name in FORBIDDEN
+        if name in text
+    ]
 
     assert not offenders, (
         "a random splitter reached the codebase — a shuffled split leaks the "

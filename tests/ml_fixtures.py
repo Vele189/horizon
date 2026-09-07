@@ -102,3 +102,27 @@ def rewrite_from(
     changed.loc[later, "z_temperature_2m_mean"] *= -5.0
     changed.loc[later, "is_anomaly"] = ~changed.loc[later, "is_anomaly"]
     return changed
+
+
+def repository_sources(exclude: "set[Path] | None" = None):
+    """Every ``.py`` file in the repository, for the absence scans.
+
+    Two tickets ask for something to be *absent* — a random splitter (ML-04)
+    and a resampler (ML-05) — and absence is only checked if something walks
+    the tree. Not just the machine-learning package: the failure worth catching
+    is a quick shuffled split or an oversampler in a dashboard script, where
+    nobody would think to look.
+
+    The forbidden names themselves are deliberately not written here. A helper
+    every scan imports must not contain the strings those scans search for, or
+    the first thing each one finds is this docstring.
+    """
+    root = Path(__file__).resolve().parent.parent
+    skipped = exclude or set()
+    for path in sorted(root.rglob("*.py")):
+        relative = path.relative_to(root)
+        if relative.parts[0] in {".venv", ".git", "__pycache__"}:
+            continue
+        if path in skipped:
+            continue
+        yield relative, path.read_text(encoding="utf-8", errors="replace")

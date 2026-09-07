@@ -24,3 +24,5 @@ numpy==2.5.3
 # difference would hide in tie handling — where a rule-based baseline puts
 # thousands of rows on one score and a trained model puts none.
 scikit-learn==1.9.0
+xgboost==3.4.1
+joblib==1.6.0

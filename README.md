@@ -1886,6 +1886,153 @@ A second test plants the forbidden import in a temporary file and requires the
 scan to catch it, because a check that passes by finding nothing is otherwise
 indistinguishable from a check that looks nowhere.
 
+## The model
+
+`machine_learning/train.py` fits an XGBoost classifier on the training split,
+tunes it on validation, and scores it against the baselines that were committed
+before it existed.
+
+| test split | PR-AUC | lift | Brier | mean predicted |
+|---|---:|---:|---:|---:|
+| no-skill reference | 0.1358 | 1.00× | 0.12386 | — |
+| climatology baseline | 0.1514 | 1.12× | 0.12454 | — |
+| persistence baseline | 0.2293 | 1.69× | 0.11462 | — |
+| **model, weighted** *(as specified)* | 0.3303 | 2.43× | 0.22529 | 0.478 |
+| **model, unweighted** *(recommended)* | **0.3494** | **2.57×** | **0.11019** | 0.070 |
+
+**Both variants beat both baselines.** The recommended one beats persistence by
+52% on PR-AUC, and it beats it in every city individually — a test asserts that,
+because a pooled win can be one city carrying five:
+
+| city | base rate | model | persistence |
+|---|---:|---:|---:|
+| phoenix | 5.7% | 0.2244 (3.97×) | 0.0651 (1.15×) |
+| delhi | 5.2% | 0.3055 (5.90×) | 0.1178 (2.27×) |
+| lagos | 15.6% | 0.4420 (2.84×) | 0.3362 (2.16×) |
+| singapore | 23.7% | 0.4008 (1.69×) | 0.3013 (1.27×) |
+| cairo | 17.8% | 0.3609 (2.03×) | 0.2421 (1.36×) |
+
+### `scale_pos_weight` is oversampling, and the ticket asked for it to avoid oversampling
+
+The ticket specifies `scale_pos_weight` **rather than** resampling, on the
+grounds that SMOTE and undersampling distort the predicted probabilities the
+Risk Horizon view shows a reader directly. The premise is half right — those
+methods do distort probabilities — but the conclusion does not follow.
+Weighting the positive class by *k* is arithmetically the same operation as
+oversampling it *k*-fold. It distorts the probabilities the same way, for the
+same reason.
+
+At the observed ratio of **17.15**, here is what the dashboard would be
+showing. Test-set deciles, predicted against observed:
+
+| decile | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| weighted, predicted | .391 | .419 | .430 | .443 | .455 | .467 | .484 | .505 | .552 | .632 |
+| weighted, observed | .097 | .040 | .057 | .101 | .094 | .077 | .105 | .167 | .204 | .417 |
+| unweighted, predicted | .026 | .030 | .033 | .036 | .040 | .045 | .052 | .068 | .103 | .270 |
+| unweighted, observed | .061 | .046 | .071 | .076 | .061 | .102 | .120 | .169 | .220 | .431 |
+
+The weighted model's *quietest* decile is told to a reader as a 39% chance of
+an extreme week; it happens 10% of the time. Its mean prediction is **0.478
+against a base rate of 0.136**.
+
+So both are trained and both are recorded. The weighted model is the one the
+ticket specifies and the one saved to `model.joblib`; the unweighted one is
+what the ticket's own stated goal asks for, and on this data it does not even
+trade ranking for calibration — **it is better on both axes**. The
+recommendation is chosen on validation by the same rule as everything else, and
+a test pins the inflation so it cannot quietly stop being true.
+
+**No resampling anywhere.** A scan over every `.py` file in the repository
+forbids `imblearn`, the oversamplers and `sklearn.utils.resample`, with a
+companion test that plants one in a temp file and requires the scan to catch it
+— the same arrangement as the split scan.
+
+### The calibration failure ML-02 predicted
+
+Look at the unweighted row again. It is *under*-confident: it predicts 0.070
+where 0.136 happens, roughly half, and the shortfall runs through every decile.
+
+That is not a defect in the model. It is the non-stationary base rate this
+project recorded two tickets ago as a test: the positive rate is 5.51% in the
+training period and 13.58% in the test one, so a model fitted on the early
+record is correctly calibrated to a world that has since warmed. The ranking is
+sound — observed risk rises monotonically across the deciles — and the level is
+not.
+
+It was written down before the model existed, so it arrives as a confirmation
+rather than a surprise. **The Risk Horizon view should not print these
+probabilities raw.** A recalibration fitted on validation would fix the level
+without touching the ranking; that is a dashboard decision and it is not in
+this ticket, but it should not be discovered from a screenshot.
+
+### Tuned on validation, and there is no third argument
+
+`tune()` takes a training frame and a validation frame. Test cannot be passed
+to it. Twelve combinations — depth, learning rate, minimum child weight — with
+the number of rounds chosen by early stopping on validation average precision.
+
+The grid is deliberately small. Its top four candidates sit within 0.005 PR-AUC
+of each other on 5 445 validation rows holding 464 positives, which is already
+inside the noise; a larger search would be choosing between differences smaller
+than the number it is choosing on, and that is how a validation split gets
+overfitted without anyone touching test. The full search is recorded in
+`metrics.json`.
+
+The structural argument is backed by a behavioural one: a test rewrites every
+label in the test split, retunes, and requires identical parameters, identical
+round count, and identical predictions.
+
+### What the model actually leans on
+
+| feature | gain |
+|---|---:|
+| `z_temperature_2m_mean` | 0.143 |
+| `latitude` | 0.077 |
+| `anomaly_days_trailing30` | 0.075 |
+| `elevation_m` | 0.054 |
+| `temperature_2m_mean_roll30_mean` | 0.044 |
+
+The top two substantive features are the climatological anomaly state and the
+persistence count — the model is beating the persistence baseline partly by
+using it, which is the expected shape.
+
+**`latitude` and `elevation_m` together are 13.1% of the gain**, and they are
+constants per city. The model is not learning about latitude; it is learning
+*which city*, and city base rates run 5.2% to 23.7%. That is legitimate and
+useful with six cities in the set, and it will not transfer to a city the model
+has not seen. Worth knowing before anyone points this at a sixteenth city.
+
+### Reproducible, and checked in a fresh process
+
+The seed is fixed at 42 and the thread count at **one**. That second one is not
+caution: XGBoost's histogram builder is deterministic for a given thread count,
+not across thread counts — the per-thread gradient sums are added in whatever
+order the threads finish, and floating-point addition is not associative. A
+four-core laptop and a sixteen-core runner produce two different models. The
+whole search takes nine seconds on 45 069 rows by 27 columns, so a thread count
+that does not depend on the machine costs nothing worth having.
+
+The test runs the entire training path **twice in separate interpreters** and
+compares the metrics byte for byte, because an in-process repeat cannot see the
+failure worth catching. A companion test changes the seed and requires the
+model to change, so the seed is known to be doing something.
+
+### The target has to be the one that was fixed in advance
+
+`train.py` refuses to record a result unless the committed baselines were
+computed on the same warehouse snapshot. If a city has backfilled since, the
+baselines must be re-run and re-committed first — a model scored against a
+target that has moved is not being measured. Two tests exercise the refusal.
+
+The reverse holds too: re-running `baselines.py --write` keeps the recorded
+model block only while the snapshot still matches, and drops it with a warning
+when it does not, rather than leaving stale model scores sitting beside fresh
+baselines inviting a comparison nobody made.
+
+`model.joblib` is gitignored; `metrics.json` is not. That is the right way
+round — a binary nobody can diff is not evidence, and the numbers are.
+
 ## Licence
 
 [MIT](LICENSE)

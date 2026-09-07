@@ -95,7 +95,10 @@ log = logging.getLogger(__name__)
 #: 2 — ML-04 added ``split.embargo_days``, so a file records not only the trim
 #: that was applied at the end of each split but the one that was deliberately
 #: not applied at the start.
-METRICS_SCHEMA_VERSION: Final[int] = 2
+#: 3 — ML-05 added a top-level ``model`` block, written by ``train.py`` beside
+#: the baselines it is compared against. A file may legitimately lack it: the
+#: baselines exist before the model does, which is the whole point of them.
+METRICS_SCHEMA_VERSION: Final[int] = 3
 
 #: Pseudo-counts tried for the climatology's shrinkage, chosen on **validation**
 #: Brier. A (city, week) cell holds around 130 training rows here, so a cell
@@ -518,6 +521,29 @@ def write_metrics(payload: Mapping[str, Any], path: Path | None = None) -> Path:
     """
     destination = Path(path) if path is not None else metrics_path()
     destination.parent.mkdir(parents=True, exist_ok=True)
+
+    # A model block already in the file is kept only while it still describes
+    # the same data. If the snapshot has moved, the model's scores were
+    # measured against a target that no longer exists and leaving them beside
+    # the new baselines would invite exactly the comparison nobody made.
+    payload = dict(payload)
+    if destination.exists():
+        previous = json.loads(destination.read_text())
+        model = previous.get("model")
+        if model is not None:
+            if previous.get("snapshot") == payload.get("snapshot"):
+                payload["model"] = model
+            else:
+                log.warning(
+                    "dropping the recorded model: it was trained against "
+                    "%s rows to %s and the baselines now describe %s rows to "
+                    "%s. Retrain with train.py --write.",
+                    previous["snapshot"]["rows"],
+                    previous["snapshot"]["last_date"],
+                    payload["snapshot"]["rows"],
+                    payload["snapshot"]["last_date"],
+                )
+
     destination.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
     return destination
 
