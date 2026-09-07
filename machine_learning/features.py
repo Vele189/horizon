@@ -100,6 +100,8 @@ __all__ = [
     "gold_frame",
     "load_features",
     "missing_report",
+    "on_daily_calendar",
+    "require_grain",
 ]
 
 log = logging.getLogger(__name__)
@@ -303,6 +305,55 @@ def gold_frame(
     return frame
 
 
+def require_grain(
+    observations: pd.DataFrame, columns: Sequence[str]
+) -> pd.DataFrame:
+    """Check the grain, narrow to ``columns``, and sort. Shared with ML-02.
+
+    Both the feature matrix and the label depend on a row offset meaning a day
+    offset, so both need the same three guarantees before they compute
+    anything: the columns are there, no city-day repeats, and the rows are in
+    order. One implementation, because two would be free to drift and the
+    drift would be silent — a duplicated city-day makes a "7-day" window span
+    six days and still produces a plausible column of numbers.
+
+    Raises:
+        FeatureError: A required column is missing, or a city-day repeats.
+    """
+    missing = [name for name in columns if name not in observations.columns]
+    if missing:
+        raise FeatureError(
+            f"gold frame is missing {missing}. Expected {list(columns)}; "
+            f"got {list(observations.columns)}."
+        )
+
+    frame = observations.loc[:, list(columns)].copy()
+    frame["date_key"] = pd.to_datetime(frame["date_key"])
+    if "is_anomaly" in frame.columns:
+        # Nullable boolean, always. Left alone, this column arrives as `bool`
+        # from a fully-scored city and as `object` from one with nulls, so the
+        # dtypes would depend on which cities had backfilled — and a frame
+        # built for one city would not concatenate cleanly with a frame built
+        # for the next. `boolean` also keeps "unscored" distinguishable from
+        # False, which is the distinction the anomaly counts and the label are
+        # both built on.
+        frame["is_anomaly"] = frame["is_anomaly"].astype("boolean")
+
+    duplicated = frame.duplicated(subset=["city_id", "date_key"])
+    if duplicated.any():
+        offenders = frame.loc[duplicated, ["city_id", "date_key"]].head(5)
+        raise FeatureError(
+            f"{int(duplicated.sum())} duplicated city-days, e.g. "
+            f"{offenders.to_dict('records')}. The grain is one row per city "
+            "per day; a repeat makes every window span fewer days than it "
+            "claims."
+        )
+
+    frame = frame.sort_values(["city_id", "date_key"], kind="stable")
+    frame["is_observed"] = True
+    return frame
+
+
 def build_features(observations: pd.DataFrame) -> pd.DataFrame:
     """Turn gold rows into the feature matrix. Pure, and never touches a database.
 
@@ -324,35 +375,8 @@ def build_features(observations: pd.DataFrame) -> pd.DataFrame:
     Raises:
         FeatureError: A required column is missing, or a city-day repeats.
     """
-    missing = [name for name in REQUIRED_COLUMNS if name not in observations.columns]
-    if missing:
-        raise FeatureError(
-            f"gold frame is missing {missing}. Expected {list(REQUIRED_COLUMNS)}; "
-            f"got {list(observations.columns)}."
-        )
-
-    frame = observations.loc[:, list(REQUIRED_COLUMNS)].copy()
-    frame["date_key"] = pd.to_datetime(frame["date_key"])
-    # Nullable boolean, always. Left alone, this column arrives as `bool` from
-    # a fully-scored city and as `object` from one with nulls, so the matrix's
-    # dtypes would depend on which cities had backfilled — and a frame built
-    # for one city would not concatenate cleanly with a frame built for the
-    # next. `boolean` also keeps "unscored" distinguishable from False, which
-    # is the distinction the anomaly counts are built on.
-    frame["is_anomaly"] = frame["is_anomaly"].astype("boolean")
-    duplicated = frame.duplicated(subset=["city_id", "date_key"])
-    if duplicated.any():
-        offenders = frame.loc[duplicated, ["city_id", "date_key"]].head(5)
-        raise FeatureError(
-            f"{int(duplicated.sum())} duplicated city-days, e.g. "
-            f"{offenders.to_dict('records')}. The grain is one row per city "
-            "per day; a repeat makes every window span fewer days than it "
-            "claims."
-        )
-    frame = frame.sort_values(["city_id", "date_key"], kind="stable")
-    frame["is_observed"] = True
-
-    calendar = _on_daily_calendar(frame)
+    frame = require_grain(observations, REQUIRED_COLUMNS)
+    calendar = on_daily_calendar(frame)
     grouped = calendar.groupby("city_id", sort=False)
 
     # Accumulated and assigned in one go rather than written back column by
@@ -405,7 +429,7 @@ def build_features(observations: pd.DataFrame) -> pd.DataFrame:
     return features.loc[:, ordered].reset_index(drop=True)
 
 
-def _on_daily_calendar(frame: pd.DataFrame) -> pd.DataFrame:
+def on_daily_calendar(frame: pd.DataFrame) -> pd.DataFrame:
     """Reindex each city onto every day between its first and last observation.
 
     This is what makes a row offset a day offset. Inserted days carry nulls and
@@ -413,6 +437,10 @@ def _on_daily_calendar(frame: pd.DataFrame) -> pd.DataFrame:
     window spanning a hole is null rather than quietly reaching further back,
     and they are dropped before the matrix is returned because a day with no
     observation has no features and no label either.
+
+    Shared with ML-02, which needs the same discipline pointing the other way:
+    a forward window that reaches over a hole would call a day it never saw
+    quiet.
     """
     pieces: list[pd.DataFrame] = []
     for city_id, group in frame.groupby("city_id", sort=True):
@@ -426,7 +454,8 @@ def _on_daily_calendar(frame: pd.DataFrame) -> pd.DataFrame:
         # a city's latitude did not stop existing on a day it was not observed,
         # and leaving them null would only make the diagnostics noisier.
         for column in ("latitude", "elevation_m"):
-            reindexed[column] = reindexed[column].ffill().bfill()
+            if column in reindexed.columns:
+                reindexed[column] = reindexed[column].ffill().bfill()
         pieces.append(reindexed.reset_index())
     return pd.concat(pieces, ignore_index=True)
 

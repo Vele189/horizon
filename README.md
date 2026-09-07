@@ -1487,6 +1487,173 @@ a σ far too noisy to score against. The trade is deliberate, and it is recorded
 here rather than found later; `temperature_2m_mean_z_trailing30` is the
 strictly-backward companion for exactly this reason.
 
+## Target label
+
+`machine_learning/labels.py` builds the binary target: **does an anomaly occur
+on any day in t+1 .. t+7?** It is a separate module from `features.py` for one
+reason — this is the only place in the project where looking forward is
+correct, and a forward shift cannot be added to the feature builder by accident
+if the single deliberate one lives somewhere else.
+
+### The window is t+1 .. t+7, and both ends are load-bearing
+
+**t is excluded** because it is a feature. `anomaly_days_trailing30` counts
+today's flag, so a label window that also started today would hand the
+classifier its own answer through a column that looks entirely innocent.
+
+**t+7 is included** because "within a week" is seven days. An off-by-one at
+either end fails nothing on its own — it produces a slightly different positive
+rate and a model quietly answering a different question.
+
+So the boundary is asserted rather than described. One anomaly is dropped into
+an otherwise quiet series, and the test requires it to label **exactly** the
+seven rows before it:
+
+```
+day       23 24 25 26 27 28 29 [30] 31
+flag       .  .  .  .  .  .  .   X   .
+label      1  1  1  1  1  1  1   0   0
+           └──────── t+1..t+7 ───┘
+```
+
+Day 30 is negative on its own anomaly, and day 22 is negative too. Both ends
+are also covered by a parametrised sweep over offsets 0 through 9.
+
+### A positive is certain; a negative has to be earned
+
+| label | when |
+|---|---|
+| `True` | at least one day in the window is flagged |
+| `False` | no day is flagged **and all seven are scored** |
+| `<NA>` | otherwise — the window cannot be closed |
+
+The third row is where the last seven days of every series go, and they go
+there by the same rule as everything else rather than by a special case: at the
+end of the record the window runs off the edge, fewer than seven days are
+scored, and a negative cannot be earned. The three cities with no climatology
+baseline land there too — all 365 days of each — because a day that could never
+be flagged cannot make a week quiet.
+
+It also means a city ending in an anomalous week loses fewer than seven rows,
+which is not an exception but the same rule read the other way:
+
+| city | last day | tail rows lost | why |
+|---|---|---:|---|
+| cairo | quiet | 7 | nothing to see, window cannot close |
+| lagos | anomalous 31 Aug | 2 | earlier rows are positive on a window that never closes |
+| singapore | anomalous 2 Sep | 1 | the anomaly is the final day |
+
+**1 126 of 60 396 rows are unlabelled** — 1 095 for the three unscored cities,
+31 in the tails. `drop_unlabelled()` is a separate call, like `drop_warmup()`.
+
+### The positive rate is 6.93%, and the ticket expected 3–6%
+
+59 270 labelled city-days, **4 110 positive**. The gap from the expected band is
+accounted for rather than shrugged at.
+
+Under independence a daily rate *p* gives a weekly rate of 1−(1−p)⁷. Anomalies
+clump, so the observed rate is always below that, and the ratio between them is
+what the window construction actually controls:
+
+| | daily | independent 7-day | observed | ratio |
+|---|---:|---:|---:|---:|
+| pooled | 1.64% | 10.95% | **6.93%** | 0.633 |
+
+974 anomaly days fall in 587 runs — mean run 1.66 days, longest 12 — which is
+the clustering that ratio measures.
+
+Now feed the same arithmetic the number the 3–6% expectation was drawn from. A
+normal distribution puts 1.24% of days past 2.5σ; carried through the window
+and the clustering, that is **5.3%** — inside the band. The entire excess is
+that real residuals have fatter tails than a normal, which
+`fact_weather_anomalies` already measured at 1.65% a day against that
+theoretical 1.24%. The label is not wide; the tails are fat.
+
+That decomposition is the test, not a paragraph: it asserts the Gaussian rate
+lands in 3–6% and the observed one in 3–10%.
+
+### Rates run 4.6% to 15.3%, and the spread is one number
+
+| city | daily | independent | observed | ratio |
+|---|---:|---:|---:|---:|
+| tokyo | 3.92% | 24.42% | **15.27%** | 0.625 |
+| cairo | 2.02% | 13.28% | 8.71% | 0.656 |
+| lagos | 1.61% | 10.73% | 7.63% | 0.712 |
+| singapore | 1.67% | 11.11% | 7.54% | 0.678 |
+| phoenix | 1.25% | 8.46% | 5.16% | 0.610 |
+| delhi | 1.38% | 9.29% | 4.58% | 0.493 |
+
+Every city sits between **0.49 and 0.71** of its own independence bound. The
+threefold spread in positive rate is the spread in daily anomaly rates and
+nothing else — the window behaves the same everywhere. Tokyo leads because only
+four of its years have backfilled, so its σ is noisy and it flags 3.9% of days,
+which is the `fact_weather_anomalies` finding arriving intact rather than a new
+problem. A test asserts the ratio band per city, so a city that ever clusters
+differently fails rather than blending into an average.
+
+Six cities carry labels and five of them are hot climates. No mid-latitude city
+has backfilled, so the pooled rate is not yet representative of the fifteen-city
+set and will move when it is.
+
+### The base rate is not stationary, and ML-03 needs to know now
+
+The proposal splits chronologically — train to 2018, validate to 2021, test
+after. The positive rate is not the same in those three periods:
+
+| period | rows | positives | rate |
+|---|---:|---:|---:|
+| train 1995–2018 | 45 284 | 2 491 | **5.50%** |
+| validate 2019–2021 | 5 480 | 464 | **8.47%** |
+| test 2022–2026 | 8 506 | 1 155 | **13.58%** |
+
+It roughly doubles, then doubles again. This is the warming trend expressed
+through a climatology whose baseline spans the whole record — the positive
+corr(year, Z) already found in every city, landing directly on the target.
+
+A model trained at one base rate and scored at another is miscalibrated before
+it starts, and the proposal asks for a Brier score and a calibration curve. So
+this is recorded as a test that **fails if the shift disappears**, rather than
+as a note: the reasoning gets revisited rather than silently invalidated.
+
+### No feature can reconstruct the label
+
+Exact reconstruction is the wrong measure. On floating-point columns every
+value is unique, so "some function maps this column to the label" is true of
+all of them and the check passes vacuously. Rank AUC asks the question that
+matters — could this column alone order the city-days with every positive
+first — and answers 1.0 for a leaked label, 0.5 for noise, and is invariant to
+any monotone transform, so a leak cannot escape by being logged or negated.
+
+| feature | AUC |
+|---|---:|
+| `anomaly_days_trailing30` | **0.643** |
+| `z_temperature_2m_mean` | 0.557 |
+| `elevation_m` | 0.454 |
+| `temperature_2m_mean_roll7_var` | 0.527 |
+| everything else | within 0.012 of 0.5 |
+
+Nothing is close to reconstruction. The strongest is the persistence signal the
+proposal names as baseline one — a city that has been anomalous lately is more
+likely to be anomalous next week — and it is the thing the model has to beat,
+not a leak.
+
+`elevation_m` at 0.454 is worth naming: it is constant per city, so it is not
+measuring elevation but *which city*, and city rates run 4.6% to 15.3%. A model
+given static geography will learn base rates from it. That is legitimate and
+useful, and it is also why per-city evaluation is going to matter more than a
+pooled score.
+
+Two tests keep this honest. One asserts the maximum stays under 0.90 — the
+reconstruction bound — and under 0.75, a regression guard with deliberate
+headroom over the measured 0.643. The other proves the check can fail, by
+scoring a copied label (1.000) and a count taken over the label's own window
+(the shape a stray `shift(-1)` would produce) against noise.
+
+The construction makes this structural rather than lucky: the label is a
+function of the anomaly flag alone. Temperature and pressure are not inputs to
+it, and a test rewrites both — +60 °C, pressure negated — and requires the label
+frame to come back identical.
+
 ## Licence
 
 [MIT](LICENSE)
