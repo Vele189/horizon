@@ -1,0 +1,41 @@
+version: 2
+
+seeds:
+  - name: cities
+    description: >
+      The fifteen target cities, generated from config/cities.yml by
+      dbt_analytics/export_cities.py. Never edited by hand — a test asserts it
+      matches the YAML, because two copies of the same list is one copy and one
+      liability.
+    config:
+      column_types:
+        city_id: text
+        name: text
+        country: text
+        country_code: text
+        latitude: double precision
+        longitude: double precision
+        elevation_m: real
+        timezone: text
+        hemisphere: text
+        koppen: text
+        season_model: text
+        role: text
+    columns:
+      - name: city_id
+        description: Slug, and the join key to every observation table.
+        tests: [unique, not_null]
+      - name: timezone
+        description: >
+          IANA zone name. Stored so local-time views remain possible
+          downstream. Four entries are deliberate traps - Phoenix keeps
+          standard time all year on a US longitude, Reykjavik is UTC+0 year
+          round, Delhi is UTC+05:30 and breaks integer-hour arithmetic, and
+          Sydney and Auckland run daylight saving on the southern calendar.
+        tests: [not_null]
+      - name: hemisphere
+        description: Derived from the latitude, never configured.
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['north', 'south']

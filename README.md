@@ -779,6 +779,68 @@ Verified by mutation, as with the dedup tests: tightening the temperature
 ceiling to 30 °C or the humidity ceiling to 50% is caught immediately, so
 `accepted_range` is evaluating rather than passing vacuously.
 
+## Silver: UTC and the timezone traps
+
+Everything in silver is `timestamptz`. A `timestamp without time zone` is a
+wall-clock reading with no instant attached — it sorts and compares against
+other naive values without complaint, and means something different for each of
+fifteen cities. A test checks the catalogue rather than a column list, so a
+model added tomorrow is covered without anyone remembering.
+
+The city's IANA zone is carried on `stg_cities`, seeded from `cities.yml` by
+[`export_cities.py`](dbt_analytics/export_cities.py) — a test asserts the two
+agree, because two copies of the same list is one copy and one liability.
+
+### Local time is one-way, and that is not a shortcut
+
+`AT TIME ZONE` returns a *naive* wall-clock reading, and at a daylight-saving
+fall-back two different instants produce the same reading — so converting back
+cannot recover which. Measured across 274 920 hourly rows: **exactly 10 fail to
+round-trip**, one per DST-observing city per autumn transition, each in the
+repeated hour.
+
+That is clocks, not a bug. UTC is what silver stores and what everything joins
+on; `to_local_time()` exists for display. A test bounds the loss at four rows
+per city, so conversion breaking wholesale shows up as thousands rather than
+ten.
+
+### The four traps, verified against landed rows
+
+**Phoenix** keeps standard time all year on a US longitude. Across the 2025
+spring-forward, with Portland on the same longitude for contrast:
+
+```
+UTC 08:00   Phoenix 01:00   Portland 00:00
+UTC 09:00   Phoenix 02:00   Portland 01:00
+UTC 10:00   Phoenix 03:00   Portland 03:00   ← Portland skips 02:00; Phoenix walks through it
+```
+
+Phoenix takes **one** UTC offset across two years; Portland takes **two**. Both
+are asserted — "Phoenix never shifts" proves nothing on its own, since a
+pipeline that skipped conversion entirely would satisfy it perfectly.
+
+**Delhi** is UTC+05:30, and `observation_time + interval '5 hours'` looks like
+a conversion, passes review, and is wrong by half an hour for 1.4 billion
+people. **17 544 of 17 544** Delhi rows land on `:30`.
+
+**Sydney** runs DST on the southern calendar, so a hardcoded northern one is
+not merely wrong but *inverted* — adding an hour exactly where one should be
+subtracted, a two-hour error. January (high summer) is **+11**, July is **+10**,
+and the October transition moves the offset mid-file:
+
+```
+UTC 10-04 15:00   Sydney 10-05 01:00   offset 10:00
+UTC 10-04 16:00   Sydney 10-05 03:00   offset 11:00
+```
+
+**Reykjavik** is UTC+0 year round — the city where a broken conversion looks
+correct, which is why it is asserted to be exactly zero rather than left to
+pass by accident.
+
+All 15 configured zones are checked against `pg_timezone_names`: Python's
+`zoneinfo` and Postgres's tz database are different databases, and cities.yml
+validates against the first.
+
 ## Licence
 
 [MIT](LICENSE)
