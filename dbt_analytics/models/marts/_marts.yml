@@ -85,3 +85,115 @@ models:
           - not_null
           - accepted_values:
               values: ['north', 'south']
+
+  - name: dim_date
+    description: >
+      The date spine, one row per calendar day from the backfill's start to a
+      year beyond the archive edge.
+
+
+      Generated rather than derived from the facts. A spine built from what has
+      landed would have a hole wherever ingestion does, and a join against it
+      would hide the hole rather than reveal it - which is the opposite of what
+      a date dimension is for.
+
+
+      **There is no `season` column, deliberately.** A season is not a property
+      of a date: 15 December is summer in Sydney and winter in London, and the
+      same row of this table has to serve both. Both four-season answers are
+      carried side by side, and `dim_city_season` resolves the right one per
+      city including the two tropical regimes.
+
+
+      **The leap-year trap is why `month_day` exists.** `day_of_year` is 1..366,
+      so 1 March is day 60 in a common year and day 61 in a leap year.
+      Grouping a thirty-year climatology by `day_of_year` therefore mixes
+      1 March with 29 February and shifts every day after February by one in
+      three years out of four - a systematic error that reads as a seasonal
+      signal. `month_day` is stable across every year and is the join key the
+      climatology should use; 29 February then has a quarter of the sample
+      size, which is true and worth knowing rather than hidden.
+    tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [date_day]
+    columns:
+      - name: date_day
+        description: The calendar day, and the grain of this table.
+        tests: [unique, not_null]
+      - name: day_of_year
+        description: Raw 1..366. Do not group a climatology by this - see the model description.
+        tests:
+          - not_null
+          - accepted_range: {min_value: 1, max_value: 366}
+      - name: day_of_year_common
+        description: >
+          Day of year as if every year were common, for anything needing a
+          contiguous numeric axis. 29 February shares day 59 with 28 February,
+          so nothing after it shifts.
+        tests:
+          - not_null
+          - accepted_range: {min_value: 1, max_value: 365}
+      - name: month_day
+        description: MM-DD. The stable climatology join key.
+        tests: [not_null]
+      - name: month
+        tests:
+          - not_null
+          - accepted_range: {min_value: 1, max_value: 12}
+      - name: season_northern
+        description: Meteorological season for a northern city. Not "the" season.
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['winter', 'spring', 'summer', 'autumn']
+      - name: season_southern
+        description: The same months six away. December is summer here.
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['winter', 'spring', 'summer', 'autumn']
+      - name: is_leap_day
+        tests: [not_null]
+      - name: is_leap_year
+        tests: [not_null]
+
+  - name: dim_city_season
+    description: >
+      Which season a given month is, for a given city - the join dim_date
+      cannot make on its own.
+
+
+      Season depends on the city's hemisphere and on its season regime, so one
+      row of dim_date has a different answer for Sydney than for London.
+      Fifteen cities by twelve months is 180 rows, so this is a lookup rather
+      than a bridge over the whole spine.
+
+
+      Tropical cities are not forced into four seasons. Lagos, a tropical
+      monsoon climate with no thermal season worth the name, gets `wet` and
+      `dry`. Singapore, within 1.4 degrees of the equator with neither a
+      thermal cycle nor a dry season, gets `year_round` - which says there is
+      no season rather than inventing one. Calling a Lagos December "winter"
+      would describe nothing and would pull it into a northern-winter cohort
+      in every seasonal aggregate.
+    tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [city_id, month]
+    columns:
+      - name: city_id
+        tests: [not_null]
+      - name: month
+        tests:
+          - not_null
+          - accepted_range: {min_value: 1, max_value: 12}
+      - name: season
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['winter', 'spring', 'summer', 'autumn', 'wet', 'dry',
+                       'year_round']
+      - name: season_model
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['four_season', 'wet_dry', 'seasonless']

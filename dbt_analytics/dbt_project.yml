@@ -58,3 +58,10 @@ models:
 seeds:
   horizon:
     +schema: silver_staging
+
+vars:
+  # The date spine's bounds. The start is the backfill's own (§5.1); the end
+  # defaults to today plus a year of headroom, so a spine rebuilt less often
+  # than the data still covers it. Pin dim_date_end for a reproducible build.
+  dim_date_start: '1995-01-01'
+  dim_date_end: ''

@@ -896,6 +896,64 @@ the next `dbt build`. Changing a seed's column set requires `--full-refresh`,
 so the two go together: `dbt build --full-refresh`, not `dbt seed
 --full-refresh` alone.
 
+## Gold: `dim_date` and hemisphere-aware seasons
+
+The date spine runs from the backfill's start to a year past the archive edge —
+generated, not derived from the facts. A spine built from what has landed would
+have a hole wherever ingestion does, and a join against it would *hide* the
+hole rather than reveal it.
+
+### `dim_date` has no `season` column, deliberately
+
+A season is not a property of a date. **15 December is summer in Sydney and
+winter in London**, and the same spine row has to serve both. So `dim_date`
+carries `season_northern` and `season_southern` side by side, and
+`dim_city_season` (15 cities × 12 months = 180 rows) resolves the right one per
+city.
+
+| regime | cities | December |
+|---|---|---|
+| `four_season` north | 8 | winter |
+| `four_season` south | 5 | **summer** |
+| `wet_dry` | lagos | dry |
+| `seasonless` | singapore | year_round |
+
+**Tropical cities are not forced into four seasons.** Lagos — tropical monsoon,
+no thermal season worth the name — gets wet and dry. Singapore, within 1.4° of
+the equator with neither a thermal cycle nor a dry season, gets `year_round`,
+which says there is no season rather than inventing one. Calling a Lagos
+December "winter" would describe nothing *and* would pull it into a
+northern-winter cohort in every seasonal aggregate.
+
+Mutation-checked: making the southern branch identical to the northern (a
+global month lookup) fails immediately, and so does reaching for the
+four-season macro instead of the regime-aware `season_for()`.
+
+### The leap-year trap, and the key that avoids it
+
+`day_of_year` is 1–366, so **1 March is day 60 in a common year and 61 in a
+leap year**:
+
+```
+2024-02-28   doy 59   common 59   md 02-28
+2024-02-29   doy 60   common 59   md 02-29   ← leap day
+2024-03-01   doy 61   common 60   md 03-01
+2025-03-01   doy 60   common 60   md 03-01   ← same day, different doy
+```
+
+Grouping a thirty-year climatology by `day_of_year` therefore mixes 1 March
+with 29 February and shifts every day after February by one in three years out
+of four — a systematic error that reads as a seasonal signal.
+
+So `month_day` (`MM-DD`) is the climatology join key: stable in every year, 366
+distinct values, and 29 February simply has a quarter of the sample size —
+which is true and worth knowing rather than hidden. `day_of_year_common` is
+there for anything needing a contiguous numeric axis; 29 February shares day 59
+with 28 February so nothing after it shifts.
+
+A test asserts raw `day_of_year` takes **both** 60 and 61 for 1 March — the
+trap stated as a fact rather than described in a comment.
+
 ## Licence
 
 [MIT](LICENSE)
