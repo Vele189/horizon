@@ -1161,6 +1161,77 @@ Moscow has not finished backfilling, so the "largest σ" half of the check
 worse than one that says it is waiting. Phoenix leads so far at 3.221 °C,
 which is what a desert with a large seasonal swing should look like.
 
+## Gold: Z-score anomaly flags
+
+`(observed − μ) / σ` against the leakage-safe baseline, flagged on **`abs(z)`**
+past 2.5, with a `hot` / `cold` / `none` direction.
+
+### Both tails, or half the signal
+
+`z > 2.5` reads naturally and silently discards every cold extreme. Phoenix
+would lose **125 of its 145** flagged days. A separate test asserts the
+*direction* matches the sign, because an inverted branch flags exactly the
+right days and labels every one backwards — which every count-based test
+passes, and which puts Moscow's January in the heatwave column.
+
+| | days | rate |
+|---|---:|---:|
+| scored city-days | 59 301 | |
+| anomalies | 976 | **1.65%** |
+| hot | 524 | 0.88% |
+| cold | 452 | 0.76% |
+
+1.24% is the normal-distribution expectation; real residuals have fatter tails.
+The band the ticket asks for is 0.5–3%.
+
+### Unknown is not "ordinary"
+
+1 095 city-days have a null Z — the three cities holding a single reference
+year, where leave-one-year-out leaves nothing. Their flags are **null, not
+`none`**. Calling them ordinary would assert it on no evidence *and* pad the
+denominator of every anomaly rate with days that could never have been flagged.
+
+### Three outliers, each investigated
+
+| city | rate | hot / cold | why |
+|---|---:|---|---|
+| tokyo | 3.90% | 30 / 27 | baseline of **45** not 455 — only 4 years backfilled, so σ is noisy. sd(Z) = 1.14 where every complete city is 1.00 |
+| cairo | 2.01% | **208 / 25** | most right-skewed residuals in the set, **+0.59** |
+| phoenix | 1.25% | **20 / 125** | the only left-skewed city, **−0.39** — desert heat has a radiative ceiling, cold outbreaks are sharp |
+
+Each is asserted as an *explanation* rather than tolerated as an exception: the
+high-rate test requires that any city above 3% has a small baseline and
+over-disperses, and the skew test requires a skewed city to lean the direction
+its skew predicts.
+
+`sd(Z) ≈ 1.00` for every full-record city, which is the check that catches a σ
+computed over the wrong window or grouping — all of those still produce a
+plausible column of numbers.
+
+### A warming trend runs through every city
+
+`corr(year, Z)` is positive everywhere: **+0.05** (Delhi) to **+0.38** (Lagos),
+with Cairo's hot anomalies averaging year 2016.5 against 2007.0 for its cold
+ones.
+
+That is real signal, not artefact — the baseline spans the whole reference
+period, so a trending series produces hot anomalies late and cold early. But it
+means the flag currently conflates *"unusual for this day of year"* with
+*"warmer than the thirty-year mean because the climate has warmed"*. **ML-05
+will need to make that distinction deliberately**, so it is recorded here
+rather than discovered there.
+
+### Moscow
+
+The ticket's key check. Moscow has **not backfilled yet** — it is 8th in city
+order and the daily grain is quota-bound across days. I re-pointed the backfill
+driver to fetch Moscow first.
+
+Its test **skips with a reason rather than passing**. A check that silently
+passes on absent data is worse than one that says it is waiting, and this is
+the specific check the ticket names — a false green here would be the worst
+kind.
+
 ## Licence
 
 [MIT](LICENSE)

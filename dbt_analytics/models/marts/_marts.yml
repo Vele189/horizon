@@ -457,3 +457,84 @@ models:
           leaves no observations.
         tests:
           - accepted_range: {min_value: 0, max_value: 30}
+
+  - name: fact_weather_anomalies
+    description: >
+      Daily temperature anomalies as Z-scores against the leakage-safe
+      baseline, with a flag on both tails.
+
+
+      A separate model rather than columns on fact_weather_observations,
+      because the climatology is built from that fact and feeding its output
+      back would be a cycle.
+
+
+      **Both tails.** A cold anomaly at Z < -2.5 is as much an extreme event as
+      a heat anomaly. Writing `z > 2.5` reads naturally and silently discards
+      half the signal - Phoenix would lose 125 of its 145 flagged days, and a
+      warm-only project would report Moscow as one of the calmest cities in the
+      set.
+
+
+      **A null Z is not a quiet day.** Where the leave-one-year-out baseline
+      has nothing left - a city with a single reference year - sigma is null,
+      Z is null, and so are both flags. "Unknown" is the honest answer;
+      coercing to `none` would assert the day was ordinary on no evidence and
+      would put those days in the denominator of every anomaly rate.
+
+
+      **Measured rate: 1.65% of scored city-days**, against 1.24% for a normal
+      distribution and a plausible band of 0.5-3%. Hot 524, cold 452.
+
+
+      Three per-city outliers, each investigated rather than accepted:
+      Tokyo at 3.90% has a baseline of 45 observations rather than 455 because
+      only four years have backfilled, and a sigma from 45 points is noisy -
+      its sd(Z) is 1.14 where every complete city sits at 1.00. Cairo skews hot
+      (208/25) because its residual distribution is the most right-skewed in
+      the set at +0.59. Phoenix skews cold (20/125) because its is the only
+      left-skewed one at -0.39: desert heat has a radiative ceiling while cold
+      outbreaks are sharp.
+
+
+      **A warming trend runs through every city** - corr(year, Z) is positive
+      everywhere, from +0.05 in Delhi to +0.38 in Lagos. The baseline spans the
+      whole reference period, so a trending series produces hot anomalies late
+      and cold anomalies early. That is a real signal rather than an artefact,
+      but it means the flag currently conflates "unusual for this day of year"
+      with "warmer than the thirty-year mean because the climate has warmed" -
+      a distinction ML-05 will need to make deliberately.
+    tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [city_id, date_key]
+    columns:
+      - name: city_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_cities')
+              field: city_id
+      - name: date_key
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_day
+      - name: z_temperature_2m_mean
+        description: >
+          (observed - mu) / sigma against the leakage-safe baseline. Null where
+          no such baseline exists.
+        tests:
+          - accepted_range: {min_value: -12, max_value: 12}
+      - name: departure_c
+        description: >
+          The same departure in degrees. The Z-score answers "how unusual"; this
+          answers "how much", and a dashboard needs both - 2.6 sigma is 1.8 °C
+          in Singapore and 20 °C in Moscow.
+      - name: anomaly_direction
+        description: hot, cold, none - or null where the day could not be scored.
+        tests:
+          - accepted_values:
+              values: ['hot', 'cold', 'none']
+      - name: is_anomaly
+        description: abs(z) over the threshold. Null where z is null.
