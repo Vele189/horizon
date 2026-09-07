@@ -58,6 +58,131 @@ models:
         description: Bronze surrogate key, carried through so a silver row can be traced to the exact bronze row it came from.
         tests: [unique, not_null]
 
+      - name: temperature_2m_max
+        tests:
+          - accepted_range:
+              min_value: -90
+              max_value: 60
+      - name: temperature_2m_min
+        tests:
+          - accepted_range:
+              min_value: -90
+              max_value: 60
+      - name: temperature_2m_mean
+        tests:
+          - accepted_range:
+              min_value: -90
+              max_value: 60
+      - name: apparent_temperature_max
+        tests:
+          - accepted_range:
+              min_value: -90
+              max_value: 60
+      - name: apparent_temperature_min
+        tests:
+          - accepted_range:
+              min_value: -90
+              max_value: 60
+      - name: apparent_temperature_mean
+        tests:
+          - accepted_range:
+              min_value: -90
+              max_value: 60
+      - name: dew_point_2m_mean
+        tests:
+          - accepted_range:
+              min_value: -90
+              max_value: 60
+      - name: pressure_msl_mean
+        description: >
+          Reduced to mean sea level, so the record MSL range applies - 870 hPa
+          in Typhoon Tip to 1084.8 hPa at Agata, Siberia, rounded outwards.
+        tests:
+          - accepted_range:
+              min_value: 850
+              max_value: 1085
+      - name: surface_pressure_mean
+        description: >
+            Pressure at the grid cell's own elevation, NOT reduced to sea level -
+            so the 850 hPa MSL floor does not apply. Johannesburg at 1753 m
+            reads 822 hPa while its MSL pressure is 998; the floor here is set
+            below any inhabited elevation in config/cities.yml and still far
+            above what a kPa or inHg mix-up would produce.
+        tests:
+          - accepted_range:
+              min_value: 700
+              max_value: 1085
+      - name: wind_speed_10m_max
+        description: Stored km/h; bounded in m/s via the kmh_to_ms macro.
+        tests:
+          - accepted_range:
+              expression: "{{ kmh_to_ms('wind_speed_10m_max') }}"
+              min_value: 0
+              max_value: 120
+      - name: wind_speed_10m_mean
+        description: Stored km/h; bounded in m/s via the kmh_to_ms macro.
+        tests:
+          - accepted_range:
+              expression: "{{ kmh_to_ms('wind_speed_10m_mean') }}"
+              min_value: 0
+              max_value: 120
+      - name: wind_gusts_10m_max
+        description: Stored km/h; bounded in m/s via the kmh_to_ms macro.
+        tests:
+          - accepted_range:
+              expression: "{{ kmh_to_ms('wind_gusts_10m_max') }}"
+              min_value: 0
+              max_value: 120
+      - name: wind_direction_10m_dominant
+        tests:
+          - accepted_range:
+              min_value: 0
+              max_value: 360
+      - name: relative_humidity_2m_mean
+        tests:
+          - accepted_range:
+              min_value: 0
+              max_value: 100
+      - name: cloud_cover_mean
+        tests:
+          - accepted_range:
+              min_value: 0
+              max_value: 100
+      - name: precipitation_sum
+        tests:
+          - accepted_range:
+              min_value: 0
+      - name: rain_sum
+        tests:
+          - accepted_range:
+              min_value: 0
+      - name: snowfall_sum
+        description: Centimetres, unlike every other depth in the row. See snowfall_sum_mm.
+        tests:
+          - accepted_range:
+              min_value: 0
+      - name: snowfall_sum_mm
+        description: snowfall_sum in millimetres, so it can be compared with precipitation_sum and rain_sum without anyone having to remember the source's inconsistency. Derived by the cm_to_mm macro.
+        tests:
+          - accepted_range:
+              min_value: 0
+      - name: precipitation_hours
+        description: Hours of precipitation in the day; cannot exceed 24.
+        tests:
+          - accepted_range:
+              min_value: 0
+              max_value: 24
+      - name: shortwave_radiation_sum
+        tests:
+          - accepted_range:
+              min_value: 0
+      - name: weather_code
+        description: WMO 4677 present-weather code.
+        tests:
+          - accepted_range:
+              min_value: 0
+              max_value: 99
+
   - name: stg_observations_hourly
     description: >
       Bronze hourly observations with duplicates removed, on the same rule and
@@ -89,3 +214,68 @@ models:
         tests: [not_null]
       - name: id
         tests: [unique, not_null]
+
+      - name: temperature_2m
+        tests:
+          - accepted_range:
+              min_value: -90
+              max_value: 60
+      - name: apparent_temperature
+        tests:
+          - accepted_range:
+              min_value: -90
+              max_value: 60
+      - name: dew_point_2m
+        tests:
+          - accepted_range:
+              min_value: -90
+              max_value: 60
+      - name: pressure_msl
+        tests:
+          - accepted_range:
+              min_value: 850
+              max_value: 1085
+      - name: surface_pressure
+        description: At the grid cell's elevation, not sea level - see the daily model's note.
+        tests:
+          - accepted_range:
+              min_value: 700
+              max_value: 1085
+      - name: wind_speed_10m
+        description: Stored km/h; bounded in m/s via the kmh_to_ms macro.
+        tests:
+          - accepted_range:
+              expression: "{{ kmh_to_ms('wind_speed_10m') }}"
+              min_value: 0
+              max_value: 120
+      - name: wind_gusts_10m
+        description: Stored km/h; bounded in m/s via the kmh_to_ms macro.
+        tests:
+          - accepted_range:
+              expression: "{{ kmh_to_ms('wind_gusts_10m') }}"
+              min_value: 0
+              max_value: 120
+      - name: wind_direction_10m
+        tests:
+          - accepted_range:
+              min_value: 0
+              max_value: 360
+      - name: relative_humidity_2m
+        tests:
+          - accepted_range:
+              min_value: 0
+              max_value: 100
+      - name: cloud_cover
+        tests:
+          - accepted_range:
+              min_value: 0
+              max_value: 100
+      - name: precipitation
+        tests:
+          - accepted_range:
+              min_value: 0
+      - name: weather_code
+        tests:
+          - accepted_range:
+              min_value: 0
+              max_value: 99

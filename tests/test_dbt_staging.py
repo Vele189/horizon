@@ -180,3 +180,167 @@ def test_the_staging_layer_builds_and_all_its_tests_pass(engine) -> None:
     assert errored == 0, result.stdout[-3000:]
     assert warned == 0, result.stdout[-3000:]
     assert passed >= 12, f"expected both models and their tests, got {passed}"
+
+
+# ---------------------------------------------------------------------------
+# Unit assertions (DBT-03)
+# ---------------------------------------------------------------------------
+
+UNITS = DBT_DIR / "macros" / "units.sql"
+RANGE_TEST = DBT_DIR / "macros" / "accepted_range.sql"
+
+
+@pytest.fixture(scope="module")
+def units() -> str:
+    return UNITS.read_text(encoding="utf-8")
+
+
+def ranges_for(staging_yml, model_name: str) -> dict[str, dict]:
+    """column -> the accepted_range arguments declared for it."""
+    model = next(m for m in staging_yml["models"] if m["name"] == model_name)
+    found: dict[str, dict] = {}
+    for column in model.get("columns", []):
+        for test in column.get("tests", []) or []:
+            if isinstance(test, dict) and "accepted_range" in test:
+                found[column["name"]] = test["accepted_range"]
+    return found
+
+
+def test_conversions_live_in_macros_not_inline_sql(units: str) -> None:
+    """A factor typed into six schema entries is six chances to invert it."""
+    assert "{% macro cm_to_mm" in units
+    assert "{% macro kmh_to_ms" in units
+    assert "* 10.0" in units
+    assert "/ 3.6" in units
+
+
+def test_the_only_conversion_applied_is_the_one_the_source_forces() -> None:
+    """Silver asserts; it does not convert what ING-01 already verified."""
+    model = (STAGING / "stg_observations_daily.sql").read_text(encoding="utf-8")
+    assert "cm_to_mm('snowfall_sum')" in model
+    assert "snowfall_sum_mm" in model
+    # No other unit macro is applied to stored values.
+    assert "kmh_to_ms" not in model
+
+
+@pytest.mark.parametrize(
+    ("column", "low", "high"),
+    [
+        ("temperature_2m_max", -90, 60),
+        ("temperature_2m_min", -90, 60),
+        ("temperature_2m_mean", -90, 60),
+        ("dew_point_2m_mean", -90, 60),
+        ("pressure_msl_mean", 850, 1085),
+        ("relative_humidity_2m_mean", 0, 100),
+        ("cloud_cover_mean", 0, 100),
+        ("precipitation_hours", 0, 24),
+        ("wind_direction_10m_dominant", 0, 360),
+    ],
+)
+def test_daily_ranges_match_the_specification(
+    staging_yml, column: str, low: int, high: int
+) -> None:
+    declared = ranges_for(staging_yml, "stg_observations_daily")[column]
+    assert (declared["min_value"], declared["max_value"]) == (low, high)
+
+
+@pytest.mark.parametrize(
+    "column", ["precipitation_sum", "rain_sum", "snowfall_sum", "snowfall_sum_mm",
+               "shortwave_radiation_sum"]
+)
+def test_accumulations_are_non_negative(staging_yml, column: str) -> None:
+    assert ranges_for(staging_yml, "stg_observations_daily")[column]["min_value"] == 0
+
+
+def test_surface_pressure_is_not_held_to_the_sea_level_floor(staging_yml) -> None:
+    """Johannesburg sits at 1753 m and reads 822 hPa; its MSL pressure is 998.
+
+    The 850 hPa floor is a *mean sea level* bound. Applying it to
+    surface_pressure fails on altitude, on correct data.
+    """
+    daily = ranges_for(staging_yml, "stg_observations_daily")
+    assert daily["pressure_msl_mean"]["min_value"] == 850
+    assert daily["surface_pressure_mean"]["min_value"] < 850
+    assert daily["surface_pressure_mean"]["max_value"] == 1085
+
+    hourly = ranges_for(staging_yml, "stg_observations_hourly")
+    assert hourly["surface_pressure"]["min_value"] < hourly["pressure_msl"]["min_value"]
+
+
+@pytest.mark.parametrize(
+    ("model", "column"),
+    [
+        ("stg_observations_daily", "wind_speed_10m_max"),
+        ("stg_observations_daily", "wind_speed_10m_mean"),
+        ("stg_observations_daily", "wind_gusts_10m_max"),
+        ("stg_observations_hourly", "wind_speed_10m"),
+        ("stg_observations_hourly", "wind_gusts_10m"),
+    ],
+)
+def test_wind_is_bounded_in_metres_per_second(staging_yml, model, column) -> None:
+    """Stored km/h, bounded 0-120 m/s through the macro rather than restated."""
+    declared = ranges_for(staging_yml, model)[column]
+    assert (declared["min_value"], declared["max_value"]) == (0, 120)
+    # The macro call, not rendered arithmetic — which is the checklist's
+    # requirement that conversions are macros rather than inline SQL.
+    assert declared["expression"] == "{{ kmh_to_ms('" + column + "') }}"
+    assert "/ 3.6" not in declared["expression"]
+
+
+def test_a_naive_kmh_bound_would_pass_today_and_break_later(engine) -> None:
+    """Why the conversion is there, stated as a fact about the data.
+
+    The largest gust on record here is 119.9 km/h — 0.1 under a bound of 120
+    read as km/h. That bound looks correct until an ordinary winter storm, and
+    then fails on data that is fine. The conversion protects against a false
+    alarm, not a missed one, which is the opposite of the usual reason.
+    """
+    from sqlalchemy import text
+
+    with engine.connect() as connection:
+        peak = connection.execute(
+            text("select max(wind_gusts_10m) from silver_staging.stg_observations_hourly")
+        ).scalar()
+    if peak is None:
+        pytest.skip("no hourly wind data landed yet")
+    assert peak < 120, "a naive km/h bound has not yet been exceeded"
+    assert peak / 3.6 < 120, "and the m/s bound has far more headroom"
+
+
+def test_the_range_test_ignores_nulls(engine) -> None:
+    """Bronze preserves nulls; a test that failed on them would forbid that."""
+    body = RANGE_TEST.read_text(encoding="utf-8")
+    assert "is not null" in body
+
+
+def test_the_range_test_refuses_to_be_vacuous() -> None:
+    body = RANGE_TEST.read_text(encoding="utf-8")
+    assert "raise_compiler_error" in body
+    assert "min_value is none and max_value is none" in body
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "assert_daily_temperature_extremes_are_ordered",
+        "assert_rain_does_not_exceed_precipitation",
+        "assert_dew_point_does_not_exceed_temperature",
+    ],
+)
+def test_cross_field_physics_is_asserted(name: str) -> None:
+    """Bounds pass on swapped columns; these are what catch that."""
+    assert (DBT_DIR / "tests" / f"{name}.sql").is_file()
+
+
+def test_tolerances_are_compared_in_numeric_not_real() -> None:
+    """In float4, 23.1 - 23.0 is 0.10000038, and a 0.1 tolerance fails on it.
+
+    That is not hypothetical: this test's absence cost 14 false failures on
+    correct Singapore data.
+    """
+    for name in (
+        "assert_dew_point_does_not_exceed_temperature",
+        "assert_rain_does_not_exceed_precipitation",
+    ):
+        body = (DBT_DIR / "tests" / f"{name}.sql").read_text(encoding="utf-8")
+        assert "::numeric" in body, name

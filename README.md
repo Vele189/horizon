@@ -713,6 +713,72 @@ caught each:
 Each singular test is the sole thing standing between one real defect and a
 green build.
 
+## Silver: unit assertions
+
+ING-01 asks the API for metric units explicitly and checks them on every
+response, so silver's job here is to **assert, not convert**. Converting would
+undo work already verified upstream; asserting catches the day it stops being
+true.
+
+`dbt build` is green on 56 nodes — 2 models and 54 tests.
+
+| quantity | bound | why that bound |
+|---|---|---|
+| temperature, dew point | −90 … 60 °C | coldest and hottest ever recorded, rounded outwards |
+| sea-level pressure | 850 … 1085 hPa | 870 (Typhoon Tip) to 1084.8 (Agata, Siberia) |
+| **surface** pressure | 700 … 1085 hPa | *not* the MSL bound — see below |
+| wind speed, gusts | 0 … 120 m/s | asserted through `kmh_to_ms`, stored as km/h |
+| humidity, cloud cover | 0 … 100 % | |
+| precipitation, snowfall, radiation | ≥ 0 | |
+| precipitation hours | 0 … 24 | |
+
+### Two bounds the specification gets wrong for this data
+
+**Surface pressure is not sea-level pressure.** Johannesburg sits at 1753 m and
+reads down to **822 hPa** — below an 850 hPa floor — while its sea-level
+pressure is a perfectly ordinary 998. The 850–1085 range is a *mean sea level*
+range; applying it to `surface_pressure` fails on correct data at altitude. So
+`pressure_msl_*` gets 850 and `surface_pressure_*` gets 700, which still sits
+far above anything a kPa or inHg mix-up would produce.
+
+**Wind is stored in km/h, and the bound is quoted in m/s.** A 0–120 bound
+applied to km/h passes today — the largest gust on record here is **119.9
+km/h**, 0.1 under — and breaks on the next ordinary winter storm. The bound is
+the physical one (0–120 m/s) applied through `kmh_to_ms`, so the effective
+ceiling is 432 km/h.
+
+Verified honestly: removing that conversion **is not currently caught**, because
+119.9 < 120. The conversion protects against a false alarm on real data, not
+against a missed error — the opposite of the usual reason for a unit test, and
+worth saying rather than implying.
+
+### The one conversion that is genuinely required
+
+Open-Meteo reports `snowfall_sum` in **centimetres** while `precipitation_sum`
+and `rain_sum` in the same row are **millimetres**. Silver publishes
+`snowfall_sum_mm` via the `cm_to_mm` macro so no downstream model has to
+remember that one column in the row is a different scale. Both conversion
+factors live in [`macros/units.sql`](dbt_analytics/macros/units.sql) — a
+`/ 3.6` typed into six schema entries is six chances to type `* 3.6`.
+
+### Ranges pass on swapped columns
+
+`temperature_2m_min` and `temperature_2m_max` satisfy the same bound whichever
+way round they are, so three singular tests assert the physics: min ≤ max, rain
+≤ total precipitation, dew point ≤ air temperature.
+
+That last one needs a tolerance, and the tolerance needed fixing twice. ERA5
+reports to 0.1 °C, so a saturated hour where the two are genuinely equal can
+round the dew point one step above — 16 hourly rows, all Singapore, all by
+exactly one step. And **a tolerance compared in `real` is not the tolerance you
+wrote**: in float4, `23.1 − 23.0` is `0.10000038`, so `> temperature + 0.1` was
+true and the test failed on 14 correct rows. Casting both sides to `numeric`
+makes the difference exactly `0.1` and the comparison mean what it says.
+
+Verified by mutation, as with the dedup tests: tightening the temperature
+ceiling to 30 °C or the humidity ceiling to 50% is caught immediately, so
+`accepted_range` is evaluating rather than passing vacuously.
+
 ## Licence
 
 [MIT](LICENSE)
