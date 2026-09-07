@@ -406,6 +406,52 @@ to load, then waits 44 s. Day 3's "several hours of wall-clock time" is
 optimistic by a factor of roughly ten, and the fix is not engineering — it is
 running the thing across three days, which the manifest makes free.
 
+## Hourly grain, and what bronze actually costs
+
+Hourly observations cover the **trailing 24 months only** — the Storm Dynamics
+view is their only consumer. Thirty years at the same grain would be over four
+million rows for no analytical benefit, and would threaten Neon's allowance if
+bronze were ever promoted.
+
+```bash
+python ingestion/backfill.py --grain hourly --anchor 2026-09-02
+python ingestion/backfill.py --report --grain hourly --anchor 2026-09-02
+```
+
+The window is **anchored, not relative to now**. `--anchor` names the date it
+ends at and `INGEST_HOURLY_MONTHS` how far back it reaches. Left to the default
+the anchor is the archive edge, which moves — so "the trailing 24 months"
+describes a different window tomorrow, and a plan that cannot be reproduced
+cannot be verified. 45 units, 263 160 rows, 957 weighted calls: under a tenth
+of a day's free allowance, against the daily grain's 26 026.
+
+### Measured storage, and the column that dominates it
+
+| | Rows | Bytes/row | Projected full table |
+|---|---|---|---|
+| `observations_daily` | 173 505 | 1 020 | **177 MB** |
+| `observations_hourly` | 263 160 | 746 | **196 MB** |
+
+Two things that measurement turned up, both now reported by
+`--report` rather than left to be rediscovered:
+
+- **`pg_total_relation_size` counts dead tuples.** The first hourly reading was
+  31 MB against a true 12 MB — the table had been loaded and cleared several
+  times during development. The report names the dead share when it exceeds a
+  tenth and says to `VACUUM FULL`.
+- **`source_url` is 83% of the daily row payload and 81% of the hourly one** —
+  712 and 466 bytes, the same handful of distinct strings repeated once per
+  row. Of bronze's projected ~373 MB, roughly **300 MB is that one column**.
+  Without it bronze would be about 62 MB.
+
+Bronze never leaves the local container, so this threatens nothing today — but
+it is worth stating plainly, because the proposal budgets ~250–300 MB *across
+all layers* and bronze alone exceeds that. The column is also fully redundant:
+`request_url()` reconstructs it exactly from `(city_id, grain, start, end)`,
+which is what replay already relies on. Whether to keep the denormalised copy
+for one-glance replayability or derive it is a schema decision, recorded here
+rather than made unilaterally.
+
 ## Licence
 
 [MIT](LICENSE)
