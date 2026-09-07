@@ -191,8 +191,14 @@ Two consequences:
   hourly, at 55 / 31 weighted calls.
 - **A fixed inter-request delay is not enough.** One second between city-years
   would spend 3 300 calls a minute against a 600 budget. `REQUEST_DELAY_SECONDS`
-  is a *floor*; the planner derives the real delay from each unit's weight and
-  targets half the minutely allowance.
+  is a *floor*; the planner derives the real delay from each unit's weight.
+- **And the minutely allowance is not the binding one.** Half of 600 calls a
+  minute is 18 000 an hour, against an hourly allowance of 5 000. The first
+  real backfill run cleared the minutely bar on every request and still
+  collected `HTTP 429 Hourly API request limit exceeded` nineteen minutes in,
+  having spent 5 059 calls. Pacing now takes the larger of the two derived
+  delays, which is four times slower — **~44 s between one-year daily units**,
+  not 11.
 
 ### The backfill does not fit in one day of free quota
 
@@ -339,6 +345,66 @@ Each unit commits in its own transaction, and the manifest is recorded *after*
 that commit — so a manifest entry always means the rows are really in the
 warehouse. `batch_id` groups every row one run wrote, so a bad run is undone
 with a single `delete ... where batch_id = ...`.
+
+## Running the backfill
+
+[`ingestion/backfill.py`](ingestion/backfill.py) is the only module that drives
+the others.
+
+```bash
+python ingestion/backfill.py --grain daily --dry-run   # what it would do
+python ingestion/backfill.py --grain daily             # run it
+python ingestion/backfill.py --report                  # what landed
+```
+
+Per unit, in this order and no other:
+
+1. If the payload is already on disk, **no request is made** — the archive is
+   the fetch cache as well as the replay source, so a run killed between
+   fetching and loading costs nothing to resume.
+2. Otherwise fetch it, archiving before parsing.
+3. Load it into bronze in its own transaction.
+4. Record it in the manifest, *after* that transaction commits.
+
+Step 4 last is the whole resumability story. A manifest entry means the rows
+are in the warehouse; anything less would let a crash leave the next run
+skipping a window whose rows are missing, with nothing downstream reporting the
+hole.
+
+Ctrl-C once finishes the unit in flight and stops cleanly — the signal sets a
+flag checked between units rather than raising wherever the interpreter happens
+to be, which could be mid-`COPY` or in the one window between the warehouse
+commit and the manifest write. Twice restores the default handler.
+
+### Three rate limits, and only one is worth waiting out
+
+The 429 body names the allowance it spent, and the three want different
+responses:
+
+| Body says | Response | Why |
+|---|---|---|
+| `Minutely API request limit exceeded` | wait 60 s, retry | A minute passes inside a request's retry budget |
+| `Hourly API request limit exceeded` | fail immediately | An hour does not. Four 60 s retries take four minutes to arrive where they started |
+| `Daily API request limit exceeded` | fail immediately | Same, more so |
+
+Measured on the same failure: **1 second to stop, against 4 minutes before**.
+With a manifest, stopping and resuming is free, which is what makes failing
+fast the cheaper answer.
+
+### Measured throughput
+
+| | |
+|---|---|
+| Sustainable pace | ~44 s/unit (hourly allowance, 90% of 5 000 calls/h) |
+| Landing speed | ~28 000 rows/s (`COPY`) — never the bottleneck |
+| Hourly ceiling | ~81 one-year daily units, ~4 500 weighted calls |
+| Daily ceiling | ~180 units, ~9 900 calls |
+| **Full daily backfill** | **480 units, 26 026 calls → ~2.7 days of free quota** |
+
+The pacing dominates entirely: a one-year unit takes ~0.3 s to fetch and ~0.02 s
+to load, then waits 44 s. Day 3's "several hours of wall-clock time" is
+optimistic by a factor of roughly ten, and the fix is not engineering — it is
+running the thing across three days, which the manifest makes free.
 
 ## Licence
 
