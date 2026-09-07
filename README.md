@@ -4,6 +4,21 @@ An end-to-end analytics platform that ingests three decades of global weather ob
 
 > **Status:** in development. This README is a stub; the full write-up — architecture diagram, model metrics, live dashboard link, and five-minute setup — lands on Day 15. The complete proposal and delivery plan is in [`docs/proposal.md`](docs/proposal.md).
 
+## Live dashboard
+
+<!-- BI-07: replace the placeholder below with the deployed URL, and set the
+     same URL in the repository's About field. tests/check_deployment.py
+     verifies it and records the cold start. -->
+
+**Not yet deployed.** The app is built, verified against Neon, and cleared for
+publication — the deploy itself is a console action that has not been taken.
+
+```bash
+streamlit run dashboard/app.py                         # locally, against Neon
+python tests/check_deployment.py <url> --cold          # once it is published
+python tests/check_deployment.py <url> --screenshots docs/images
+```
+
 ## Configuration
 
 No credentials are committed to this repository, and none ever have been. All configuration is supplied through environment variables:
@@ -3546,6 +3561,77 @@ is the view a non-technical reader will screenshot. A test asserts it says
 forecasting uses instead.
 
 Cached render: **0.014 s**.
+
+## Publishing
+
+Community Cloud requires a public repository, which makes deployment the moment
+anything ever committed becomes visible to everyone. The check is therefore run
+against **history**, not against the working tree.
+
+### What was scanned, and what was found
+
+| Check | Result |
+|---|---|
+| Repository visibility | public (already, before this ticket) |
+| Blobs scanned, all refs | 327 |
+| Connection strings found in history | 15, all placeholders (`USER:PASSWORD`, `CHANGEME`, `u:p`) or test fixtures |
+| The live Neon password, searched for by value | **0 occurrences** |
+| `POSTGRES_PASSWORD`, searched for by value | **0 occurrences** |
+| AWS keys, GitHub tokens, private-key headers | none |
+| `.env`, `.streamlit/secrets.toml`, `*.pem`, `*.key` ever committed | never |
+
+The one value that did appear was the local `DATABASE_URL`'s host — `localhost`,
+16 times. Secrets were extracted from the live `.env` and matched against every
+blob **by value**; none of them was printed, then or now.
+
+Two of those checks are now standing tests rather than a one-off: no
+secret-bearing file may be tracked, and the committed `.env.example` must still
+hold empty placeholders. Making the repository public is a decision taken once;
+keeping it safe to have made is a decision taken on every commit.
+
+### The clean-clone rehearsal
+
+The failure that deployment actually produces is not a leaked secret, it is a
+file that exists on the development machine and is git-ignored. It works
+locally and is invisible to the clone Community Cloud builds from.
+
+So the repository is exported at `HEAD` into an empty directory with no `.env`
+and no secrets, and the app is exercised there:
+
+```
+views:                    all four
+palette steps:            9
+DBT-11 events read:       7          (config/cities.yml)
+SHAP drivers read:        8          (machine_learning/artifacts/metrics.json)
+absence reasons read:     10
+dashboard.app imports:    clean, with no database configured
+resolve_database_url():   refuses politely — "No serving database is configured."
+```
+
+A test now asserts the same thing from the other direction: every path the
+dashboard reads at runtime is resolved from `config.py` and checked against
+`git ls-files`, so a file that stops being committed fails here rather than on a
+public URL.
+
+### Two cold starts, and they are not the same number
+
+| | Sleeps after | Wakes in |
+|---|---|---|
+| Neon compute | 5 minutes idle | ~1.2 s |
+| Streamlit Community Cloud | ~a week without visitors | tens of seconds — a container rebuild |
+
+A visitor opening a long-idle portfolio link pays the second and then the
+first. `tests/check_deployment.py --cold` measures and labels that case; without
+the flag the timing is recorded as warm, because a warm number filed as a cold
+one is worse than no number.
+
+The script polls `/_stcore/health`, then requests each view's own URL. That
+proves the app is up and routing — **not** that a chart drew, because a
+Streamlit page is a shell that fills itself over a websocket and a 200 says
+nothing about what arrived afterwards. `--screenshots` closes that gap with
+headless Chrome, capturing each view so the four can be checked by eye, which
+is the only honest way to verify a render. The view list comes from the
+navigation, so a fifth view is checked without editing the checker.
 
 ## Licence
 

@@ -2541,3 +2541,126 @@ def test_the_warehouse_agrees_with_the_committed_evaluation_record(engine) -> No
     assert have_rows == claimed, (
         f"predictions and metrics.json disagree: {have_rows ^ claimed}"
     )
+
+
+# --------------------------------------------------------------------------
+# BI-07 — what the deployment needs, asserted before it is deployed.
+# --------------------------------------------------------------------------
+
+
+def _tracked_files() -> set[str]:
+    import subprocess
+
+    listed = subprocess.run(
+        ["git", "ls-files"], cwd=PROJECT_ROOT, capture_output=True, text=True
+    )
+    return set(listed.stdout.split())
+
+
+def test_every_file_the_dashboard_reads_at_runtime_is_committed() -> None:
+    """The classic deployment failure: works here, missing there.
+
+    Community Cloud clones the repository and runs it. A file that exists on
+    this machine but is git-ignored is invisible to that clone, and the failure
+    lands as a traceback on a public URL rather than here. The paths are
+    resolved from ``config.py`` rather than typed out, so moving one moves the
+    check with it.
+    """
+    from config import get_settings
+
+    settings = get_settings()
+    tracked = _tracked_files()
+
+    required = {
+        "the city registry, read for the map's validation events": settings.cities_config_path,
+        "the evaluation record, read for the risk view's SHAP drivers": (
+            settings.model_artifact_dir / "metrics.json"
+        ),
+        "the Streamlit theme": PROJECT_ROOT / ".streamlit" / "config.toml",
+    }
+
+    missing = [
+        f"{path.relative_to(PROJECT_ROOT)} ({why})"
+        for why, path in required.items()
+        if str(path.relative_to(PROJECT_ROOT)) not in tracked
+    ]
+    assert not missing, "read at runtime but not committed: " + "; ".join(missing)
+
+
+def test_no_secret_bearing_file_is_committed() -> None:
+    """The re-scan the deploy ticket exists to force, as a standing check.
+
+    Making the repository public is the moment anything in history becomes
+    visible to everyone. This is cheap enough to run on every commit.
+    """
+    tracked = _tracked_files()
+    forbidden = {".env", ".streamlit/secrets.toml", "secrets.yml", "secrets.yaml"}
+    assert not (forbidden & tracked), f"a secret file is tracked: {forbidden & tracked}"
+    assert not [p for p in tracked if p.endswith((".pem", ".key"))]
+    # The examples must be committed — they are the documentation for what is
+    # missing — and must never hold a real value.
+    assert ".env.example" in tracked
+    assert ".streamlit/secrets.toml.example" in tracked
+
+
+def test_the_committed_examples_still_hold_placeholders() -> None:
+    """A filled-in example is the easiest way for a credential to reach a public repo."""
+    example = (PROJECT_ROOT / ".env.example").read_text("utf-8")
+    for line in example.splitlines():
+        if line.startswith(("DATABASE_URL=", "SERVING_DATABASE_URL=", "POSTGRES_PASSWORD=")):
+            value = line.split("=", 1)[1].strip()
+            assert not value, f"{line.split('=')[0]} has a value in .env.example"
+
+
+def test_the_app_starts_with_no_environment_at_all() -> None:
+    """Community Cloud has no .env — only the secret it injects.
+
+    config.py must still build, and the dashboard must still refuse politely
+    rather than raise, when nothing is configured. This is the state a
+    freshly deployed app is in for the seconds before its secret is pasted in.
+    """
+    import dataclasses
+
+    from config import get_settings
+
+    from dashboard import database as module
+
+    bare = dataclasses.replace(
+        get_settings(), environment="local", database_url=None, serving_database_url=None
+    )
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(module, "get_settings", lambda: bare)
+        patch.setattr(module, "_secret", lambda key: None)
+        with pytest.raises(module.DashboardConfigError):
+            module.resolve_database_url()
+
+
+def test_the_deployment_checker_reads_the_navigation_rather_than_a_list() -> None:
+    """A fifth view must not need a second edit to be checked after deploy.
+
+    Loaded by path rather than imported as ``tests.check_deployment``: the
+    tests directory is deliberately not a package — making it one changes how
+    pytest imports every module in it and breaks the flat ``from ml_fixtures
+    import ...`` the rest of the suite uses.
+    """
+    import importlib.util
+
+    from dashboard import views
+
+    spec = importlib.util.spec_from_file_location(
+        "check_deployment", PROJECT_ROOT / "tests" / "check_deployment.py"
+    )
+    checker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(checker)
+
+    assert checker._view_paths() == [(m.VIEW.title, m.VIEW.url_path) for m in views.ORDER]
+    assert len(checker._view_paths()) == 4
+
+
+def test_the_entrypoint_streamlit_cloud_is_pointed_at_exists() -> None:
+    """The main file path in the deploy form, checked against the repository."""
+    tracked = _tracked_files()
+    assert "dashboard/app.py" in tracked
+    source = (PROJECT_ROOT / "dashboard" / "app.py").read_text("utf-8")
+    assert "st.set_page_config" in source, "the entrypoint sets no page config"
+    assert 'if __name__ == "__main__"' in source or "main()" in source
