@@ -1068,6 +1068,11 @@ is capped at 24 months: thirty years at this grain would be over four million
 rows and, at 198 bytes each, would not fit in the allowance at all. A test
 asserts that arithmetic rather than restating the claim.
 
+That was the projection. The measurement, taken from Neon's own storage
+accounting after the marts were actually promoted, is in
+[Promotion to Neon](#promotion-to-neon) below — it came in higher than this
+table, and the difference is the point.
+
 ## Gold: leakage-safe climatology
 
 Mean and standard deviation of daily temperature, per city per calendar day,
@@ -2579,6 +2584,263 @@ Each of those has a companion test that deliberately breaks the property and
 requires the check to catch it. A check that passes by finding nothing is
 otherwise indistinguishable from one that looks nowhere, and that distinction
 is most of what separates this from a project that merely reports good numbers.
+
+## Promotion to Neon
+
+The gold layer is finished locally and copied to the serving database in one
+step. [`serving/promote.py`](serving/promote.py) is that step.
+
+```bash
+python serving/promote.py --dry-run    # plan, drift and sizes; writes nothing
+python serving/promote.py --verify     # promote, and compare contents not just counts
+```
+
+### Only gold crosses, and that is enforced rather than intended
+
+The promotion reads one schema. `GOLD_SCHEMA = "gold_marts"` is a constant,
+every catalogue query is scoped to it, and there is no argument that widens it
+— `--table` can only narrow the set discovery already found, and a name outside
+gold is an error rather than a skip.
+
+"There is no code path that reads bronze" is a claim a behavioural test cannot
+make: it can only show that the paths it happened to take did not take one. So
+it is asserted over the parsed module instead. Every SQL string in the script is
+a literal, so a test walks the AST, drops the docstrings, drops the exclusion
+constant itself, and requires that no remaining executable string contains
+`bronze_raw` or `silver_staging`. A second test feeds that check a deliberately
+leaky module and requires it to fail, because a guard nobody has seen fail is a
+guard nobody should trust.
+
+The far side is checked too: after a real promotion, the target must hold no
+schema but `gold_marts` and `public`.
+
+### The DDL is read from the catalogue, not written by hand
+
+A `serving_schema.sql` beside the dbt models would be a second copy of seven
+models' shape, and the day it fell behind, the promotion would build yesterday's
+columns and fail inside a COPY with a message about column counts rather than
+about drift. So columns, types, not-nulls, defaults, primary keys, check
+constraints, indexes and comments are all introspected from `pg_catalog` and
+replayed. Adding a column to a dbt model and re-running is the whole change.
+
+This matters most for `fact_ml_predictions`, which encodes its entire contract
+in check constraints — the horizon starts the day *after* the forecast date,
+the label is the score against the stored threshold. A serving copy without them
+would accept a row the local table rejects, and that is the one difference
+between the two databases that would actually matter. A test renders the DDL and
+looks for those constraints by their predicate.
+
+### One transaction, which is what makes it idempotent
+
+Not one per table. A dashboard joining `fact_ml_predictions` to `dim_cities`
+halfway through a per-table promotion would read a new fact against an old
+dimension and show a number that never existed.
+
+One transaction costs a longer `ACCESS EXCLUSIVE` lock — the promotion is under
+a minute, the readers are a handful — and buys two things worth more. The swap
+is atomic. And a failure at table six leaves Neon in exactly the state it was in
+before table one, which *is* the idempotency: re-running after a failure is not
+a repair, it is the same run again.
+
+Within it, each table is `truncate` then `COPY`, not an upsert. The marts are a
+full rebuild of a fixed window every time, so an upsert would need a key per
+table and would still leave behind rows dbt had dropped.
+
+The re-run is tested rather than asserted: a second promotion over the first
+must leave the same row counts, the same content hashes, and the same number of
+indexes. "Re-runnable" that only meant "does not error" would still double every
+table.
+
+### Drift stops the run instead of reshaping the serving database
+
+If a mart has gained, lost or retyped a column since the last promotion, the run
+refuses and names the columns:
+
+```
+FAIL  gold_marts.fact_ml_predictions has drifted from the local mart:
+  risk_score: double precision locally, real on Neon
+  model_variant: absent on Neon, present locally as text
+Re-run with --recreate to rebuild it on Neon.
+```
+
+Column *order* is deliberately not drift — both ends of the COPY name their
+columns, so a target built by an older run still loads correctly. Reshaping a
+serving database is something to do on purpose, not as a side effect of a
+routine run, which is why `--recreate` exists and is not the default.
+
+### Extract locally, then load — and the numbers say why
+
+The obvious alternative is to pipe `COPY TO STDOUT` straight into `COPY FROM
+STDIN` so the two halves overlap. It is also a thread, a pipe, and a deadlock
+every time the target errors while the source is still writing. That complexity
+buys something only if extraction is a meaningful share of the run:
+
+| | seconds | share |
+|---|---:|---:|
+| extract, from Docker on the same machine | 0.8 | 2.3% |
+| load, to `aws-us-east-2` | 33.9 | 97.7% |
+
+It is not. The script prints that split for every table on every run, so the
+justification stays checkable instead of remaining an assumption. The buffer
+spools to disk past 32 MB, so the 50 MB hourly fact never sits in memory whole.
+
+### Row counts reconcile, and so do contents
+
+Counts are the weaker check — they pass a promotion that moved the right number
+of wrong rows. `--verify` adds an order-independent content hash: each row is
+rendered to text, hashed to 32 bits, and the hashes are summed. Summing rather
+than concatenating means neither side has to sort, which matters because the
+target would otherwise sort 263 000 rows over a serverless connection.
+
+What it compares is each row's *text rendering*, which is exactly what COPY
+transmitted, so agreement means the bytes that left the local warehouse are the
+bytes that landed. `extra_float_digits` and `TimeZone` are pinned on both sides
+rather than inherited, because the rendering of a float and of a `timestamptz`
+depends on them and the two servers are different major versions.
+
+All eight tables agreed, across PostgreSQL 16 → 18:
+
+| table | rows | content hash | |
+|---|---:|---:|---|
+| `dim_cities` | 15 | 31 691 380 855 | = |
+| `dim_city_season` | 180 | 390 620 658 913 | = |
+| `dim_date` | 11 938 | 25 723 265 187 047 | = |
+| `fact_climatology` | 61 122 | 131 514 730 876 007 | = |
+| `fact_ml_predictions` | 35 | 91 205 601 360 | = |
+| `fact_weather_anomalies` | 60 396 | 129 519 053 200 169 | = |
+| `fact_weather_hourly` | 263 160 | 564 838 007 375 867 | = |
+| `fact_weather_observations` | 60 396 | 129 217 766 169 473 | = |
+| **total** | **457 242** | | |
+
+A mismatch raises *before* the commit, so a promotion that does not reconcile is
+not a promotion that happened. A test tampers with one value on the target and
+requires the hash to change while the count does not — the check has to be able
+to fail, or it proves nothing.
+
+### Indexes, and three dimensions that have none
+
+Indexes are copied verbatim from `pg_get_indexdef`, dbt's hashed names included,
+so the two sides are comparable by name as well as by definition. Twelve exist
+locally; twelve exist on Neon. The test compares definitions rather than names,
+because a name that matched while the columns differed would pass a weaker test
+and leave the dashboard scanning.
+
+```
+  fact_weather_anomalies        3 index(es)
+  fact_ml_predictions           3 index(es)
+  fact_climatology              2 index(es)
+  fact_weather_hourly           2 index(es)
+  fact_weather_observations     2 index(es)
+  dim_cities                    0 index(es)  (none defined on the local mart)
+  dim_city_season               0 index(es)  (none defined on the local mart)
+  dim_date                      0 index(es)  (none defined on the local mart)
+```
+
+**The three dimensions carry no index, and the promotion does not invent one.**
+Their grain is asserted by dbt tests, which run against the local warehouse and
+not against Neon — so on the serving side those tables have nothing enforcing
+uniqueness of `city_id`, `date_key`, or `(city_id, month)`. At 15, 180 and
+11 938 rows the query planner does not need the index; the *constraint* is what
+is missing. The fix belongs in the dbt models, so that both databases get it
+from one place, and is left for a dbt ticket rather than bolted on here — a
+promotion that added objects the source does not have would no longer be a copy.
+
+For the same reason, the dbt models' column descriptions do not cross either:
+`persist_docs` is not enabled, so they live in dbt's catalogue rather than in
+Postgres comments. The five columns that *are* commented — on
+`fact_ml_predictions`, which is created by hand-written DDL — do cross, and a
+test checks it.
+
+### Storage, measured against what the server enforces
+
+Not against a remembered "0.5 GB". Neon enforces the cap itself as
+`neon.max_cluster_size` and reports consumption through `pg_cluster_size()` from
+its own extension; the script reads both, so the headroom it prints cannot
+disagree with the thing that will refuse the write.
+
+The first promotion, into an empty project:
+
+| | |
+|---|---:|
+| before | 30.2 MB |
+| after | **116.5 MB** |
+| added by the promotion | 86.2 MB |
+| cap (`neon.max_cluster_size`) | 512.0 MB |
+| **headroom** | **395.5 MB — 77.3% free** |
+
+The 30.2 MB floor is Postgres itself: four databases' catalogues before a single
+row of ours. It is 5.9% of the allowance and nothing can be done about it, which
+is worth knowing before planning around the other 94%.
+
+At 116.5 MB the marts use **22.7%** of the free plan. Three notes on how that
+number moves:
+
+- It is **higher than the 67.8 MB projected** from local heap sizes above. The
+  local figure counts eight tables; the Neon figure counts the whole project,
+  including that 30.2 MB floor and Neon's own storage accounting. Projecting
+  from `pg_total_relation_size` and calling it the bill would have been wrong by
+  a third.
+- It **does not grow linearly with re-promotion**. A second and third run left
+  it at 121.7 and 121.8 MB — Neon retains history for a window and ages it out,
+  so a re-promotion of unchanged marts can even end *smaller* than it started.
+  The script prints the change signed for that reason, and the number to hold
+  onto is "after", not "change".
+- The daily backfill is unfinished. On the projection above it adds ~26 MB,
+  which lands the whole thing near 150 MB — under 30% of the cap.
+
+### Compute, including the part that is billed after you disconnect
+
+Neon bills for the time the compute endpoint is *up*, and it stays up for five
+minutes after the last query before scaling to zero. A promotion therefore costs
+its own duration **plus a fixed five-minute tail**, and quoting only the active
+time would understate every run by the same amount — the kind of error that
+survives review.
+
+| | |
+|---|---:|
+| endpoint held active | 59.2 s |
+| scale-to-zero tail | 300 s |
+| **billed** | **0.0998 endpoint-hours** |
+
+(457 242 rows, 83.9 MB on the wire, `--verify` on.)
+
+The tail is 84% of it. That is the single most useful thing to know about the
+cost: **running the promotion twice costs nearly twice as much as running it
+once**, rather than the rounding difference the 59 seconds would suggest.
+
+The same arithmetic from the other end — `--table fact_ml_predictions`, 35 rows,
+an 8.6 second session — bills 0.0857 endpoint-hours. That is **86% of the cost
+of promoting all 457 242 rows**, for 0.008% of the rows. Promoting one table
+because only one table changed is very nearly free of savings; the thing worth
+batching is the *number of runs*, not the size of them.
+Compute-hours are endpoint-hours times the endpoint's size in CU; the free plan
+autoscales between 0.25 and 2 CU, putting one promotion between **0.025 and 0.20
+compute-hours** of the monthly 100. Even a daily promotion for a month stays
+under 6 of them. The [console](https://console.neon.tech/app/projects/aged-paper-67892047/monitoring)
+is authoritative for the billed figure; the script reports the inputs to it.
+
+Two consequences already built into the design: development never points at
+Neon, and `--verify` is a flag rather than the default — it added 9.1 s to a
+59.2 s run, which is 2.5% of the bill for the promotion but would be pure waste
+on a run nobody is checking.
+
+### Tested without spending the allowance
+
+The promotion tests run end to end — introspect, create, COPY, index, comment,
+reconcile, re-run, drift, dry-run — against a scratch database created on the
+*local* server, using the real gold marts with their real types. The whole gold
+layer is promoted twice over, plus the drift, recreate and dry-run paths — 36
+tests, 9.4 seconds, no allowance spent.
+
+What that cannot cover is Neon itself, and the Neon run is recorded above rather
+than asserted in a test, because a test that bills a quota is a test nobody runs.
+
+One thing it did surface: PostgreSQL 18 materialises `NOT NULL` as catalogued
+`pg_constraint` rows and PostgreSQL 16 does not, so Neon reports 19 constraints
+on `fact_ml_predictions` where local reports 7. The columns' `attnotnull` is
+identical on both sides. It is a rendering difference of the version skew
+already recorded above, not drift, and the drift check compares column types and
+nullability rather than constraint counts for exactly this reason.
 
 ## Licence
 
