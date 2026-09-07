@@ -42,6 +42,7 @@ from ingestion.client import (  # noqa: E402
     MAX_BACKOFF_SECONDS,
     MAX_RETRY_AFTER_SECONDS,
     RATE_LIMIT_FALLBACK_SECONDS,
+    _rate_limit_window,
     USER_AGENT,
     ArchiveRateLimited,
     ArchiveRequestError,
@@ -429,6 +430,58 @@ def test_429_is_reported_with_its_retry_after_when_it_never_clears(
 
 
 @pytest.mark.parametrize(
+    ("window", "body"),
+    [
+        ("minutely", "Minutely API request limit exceeded. Please try again in one minute."),
+        ("hourly", "Hourly API request limit exceeded. Please try again in the next hour."),
+        ("daily", "Daily API request limit exceeded."),
+        (None, "Too many requests"),
+    ],
+)
+def test_the_429_body_says_which_allowance_was_spent(window, body) -> None:
+    assert _rate_limit_window(body) == window
+
+
+def test_an_hourly_limit_is_not_retried(settings, slept) -> None:
+    """An hour will not pass inside a request's retry budget.
+
+    Observed on the first real backfill run: the hourly allowance went nineteen
+    minutes in, and the client then spent four sixty-second waits arriving
+    where it started. With a manifest, stopping and resuming costs nothing.
+    """
+    with pytest.raises(ArchiveRateLimited) as excinfo:
+        fetch(
+            [responds(429, text="Hourly API request limit exceeded. "
+                                "Please try again in the next hour.")],
+            settings,
+        )
+    assert excinfo.value.limit_window == "hourly"
+    assert not excinfo.value.waitable
+    assert slept == [], "an hourly limit must fail on the first attempt"
+
+
+def test_a_daily_limit_is_not_retried(settings, slept) -> None:
+    with pytest.raises(ArchiveRateLimited) as excinfo:
+        fetch([responds(429, text="Daily API request limit exceeded.")], settings)
+    assert excinfo.value.limit_window == "daily"
+    assert slept == []
+
+
+def test_a_minutely_limit_is_still_waited_out(settings, slept) -> None:
+    response, adapter = fetch(
+        [
+            responds(429, text="Minutely API request limit exceeded. "
+                               "Please try again in one minute."),
+            responds(json_body=daily_payload()),
+        ],
+        settings,
+    )
+    assert len(response) == DAYS
+    assert slept == [RATE_LIMIT_FALLBACK_SECONDS]
+    assert len(adapter.calls) == 2
+
+
+@pytest.mark.parametrize(
     ("header", "expected"),
     [
         (None, None),
@@ -706,6 +759,12 @@ def live_settings() -> Settings:
     return dataclasses.replace(get_settings(), max_retry_attempts=1)
 
 
+#: Reasons the API is unavailable that say nothing about this code. A spent
+#: quota is as much an "unreachable" as a dead socket — the backfill routinely
+#: exhausts the hourly allowance, and a test run afterwards must skip, not fail.
+UNAVAILABLE = (ArchiveTransportError, ArchiveRateLimited)
+
+
 @pytest.fixture(scope="module")
 def live_year(live_settings):
     try:
@@ -713,8 +772,8 @@ def live_year(live_settings):
             CITY, dt.date(2023, 1, 1), dt.date(2023, 12, 31), "daily",
             settings=live_settings,
         )
-    except ArchiveTransportError as exc:
-        pytest.skip(f"archive API unreachable: {exc}")
+    except UNAVAILABLE as exc:
+        pytest.skip(f"archive API unavailable: {exc}")
 
 
 def test_live_year_returns_every_day(live_year) -> None:
@@ -751,7 +810,7 @@ def test_live_leap_year_has_the_extra_day(live_settings) -> None:
             CITY, dt.date(2024, 2, 26), dt.date(2024, 3, 2), "daily",
             settings=live_settings,
         )
-    except ArchiveTransportError as exc:
-        pytest.skip(f"archive API unreachable: {exc}")
+    except UNAVAILABLE as exc:
+        pytest.skip(f"archive API unavailable: {exc}")
     assert len(response) == 6
     assert dt.date(2024, 2, 29) in {m.date() for m in response.times}

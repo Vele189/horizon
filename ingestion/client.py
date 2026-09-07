@@ -63,7 +63,7 @@ from requests.adapters import HTTPAdapter
 from tenacity import (
     RetryCallState,
     Retrying,
-    retry_if_exception_type,
+    retry_if_exception,
     stop_after_attempt,
     wait_exponential_jitter,
 )
@@ -88,6 +88,7 @@ __all__ = [
     "HOURLY_UNITS",
     "HOURLY_VARIABLES",
     "Grain",
+    "LONG_RATE_LIMIT_WINDOWS",
     "build_session",
     "fetch_observations",
     "parse_payload",
@@ -206,6 +207,17 @@ MAX_RETRY_AFTER_SECONDS: Final[float] = 300.0
 # gradually; the server has stated its window, so wait it out.
 RATE_LIMIT_FALLBACK_SECONDS: Final[float] = 60.0
 
+# The body also says *which* allowance was spent — minutely, hourly, or daily —
+# and that changes what to do about it. A minute is worth waiting out inside
+# the request. An hour is not: the backfill's manifest makes resuming free, so
+# four sixty-second retries only delay the inevitable stop by four minutes and
+# teach the caller nothing. Observed during the ING-05 backfill, which spent
+# the hourly allowance and then burned four attempts discovering it.
+_RATE_LIMIT_WINDOWS: Final[tuple[str, ...]] = ("minutely", "hourly", "daily")
+
+#: Windows too long to wait out inside a single request.
+LONG_RATE_LIMIT_WINDOWS: Final[frozenset[str]] = frozenset({"hourly", "daily"})
+
 # Ceiling on the exponential backoff between ordinary retries.
 MAX_BACKOFF_SECONDS: Final[float] = 60.0
 
@@ -253,15 +265,30 @@ class ArchiveRateLimited(ArchiveRetryableError):
     strategy falls back to :data:`RATE_LIMIT_FALLBACK_SECONDS` rather than to
     exponential backoff. Open-Meteo sends no header, so this is the usual path
     rather than the exotic one.
+
+    ``limit_window`` is which allowance the body says was spent — ``minutely``,
+    ``hourly``, ``daily``, or ``None`` when it does not say. Only a minutely
+    limit is worth waiting out inside the request.
     """
 
     def __init__(
-        self, message: str, *, url: str, retry_after: float | None = None
+        self,
+        message: str,
+        *,
+        url: str,
+        retry_after: float | None = None,
+        limit_window: str | None = None,
     ) -> None:
         super().__init__(message)
         self.status_code = 429
         self.url = url
         self.retry_after = retry_after
+        self.limit_window = limit_window
+
+    @property
+    def waitable(self) -> bool:
+        """Can this clear within a request's retry budget?"""
+        return self.limit_window not in LONG_RATE_LIMIT_WINDOWS
 
 
 class ArchiveRequestError(ArchiveError):
@@ -382,6 +409,15 @@ def build_session() -> requests.Session:
 # ---------------------------------------------------------------------------
 
 
+def _rate_limit_window(body: str) -> str | None:
+    """Which allowance a 429 body says was spent, if it says."""
+    lowered = body.lower()
+    for window in _RATE_LIMIT_WINDOWS:
+        if f"{window} api request limit" in lowered:
+            return window
+    return None
+
+
 def _parse_retry_after(value: str | None) -> float | None:
     """Parse a Retry-After header, in either of its two legal forms.
 
@@ -456,11 +492,24 @@ def _log_retry(retry_state: RetryCallState) -> None:
     )
 
 
+def _is_retryable(exc: BaseException) -> bool:
+    """Everything retryable except a rate limit that cannot clear in time.
+
+    An hourly or daily allowance will not come back inside a request's retry
+    budget. Failing immediately hands the caller a clear reason to stop and
+    resume later, which for a backfill with a manifest costs nothing; retrying
+    would spend four minutes arriving at the same place.
+    """
+    if isinstance(exc, ArchiveRateLimited):
+        return exc.waitable
+    return isinstance(exc, ArchiveRetryableError)
+
+
 def _retrying(settings: Settings) -> Retrying:
     return Retrying(
         stop=stop_after_attempt(settings.max_retry_attempts),
         wait=_wait_archive(float(settings.retry_backoff_seconds)),
-        retry=retry_if_exception_type(ArchiveRetryableError),
+        retry=retry_if_exception(_is_retryable),
         before_sleep=_log_retry,
         # Surface the real failure rather than tenacity's RetryError wrapper,
         # so a caller can tell a rate limit from a dead connection.
@@ -495,15 +544,18 @@ def _raise_for_status(response: requests.Response) -> None:
 
     if status == 429:
         retry_after = _parse_retry_after(response.headers.get("Retry-After"))
+        body = _body_excerpt(response)
+        window = _rate_limit_window(body)
         stated = (
             f"Retry-After {retry_after:.0f}s"
             if retry_after is not None
-            else "no Retry-After header"
+            else f"no Retry-After header, {window or 'unstated'} window"
         )
         raise ArchiveRateLimited(
-            f"HTTP 429 rate limited by {url} ({stated}): {_body_excerpt(response)}",
+            f"HTTP 429 rate limited by {url} ({stated}): {body}",
             url=url,
             retry_after=retry_after,
+            limit_window=window,
         )
 
     if status >= 500:

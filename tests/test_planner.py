@@ -26,6 +26,7 @@ from ingestion.planner import (  # noqa: E402
     BACKFILL_START,
     DAILY_QUOTA_CALLS,
     HOURLY_BACKFILL_MONTHS,
+    HOURLY_QUOTA_CALLS,
     MINUTELY_QUOTA_CALLS,
     Manifest,
     ManifestEntry,
@@ -478,6 +479,21 @@ def test_the_delay_paces_against_the_minutely_budget() -> None:
     assert delay_seconds_for(year, floor=1.0) > 1.0
     calls_per_minute = 60.0 / delay_seconds_for(year, floor=1.0) * year
     assert calls_per_minute <= MINUTELY_QUOTA_CALLS
+
+
+def test_the_delay_paces_against_the_hourly_budget_too() -> None:
+    """The limit the first real backfill run actually hit.
+
+    Half of 600 calls a minute is 18 000 an hour against an allowance of 5 000.
+    Pacing on the minutely bar alone cleared it on every request and still
+    collected "Hourly API request limit exceeded" nineteen minutes in.
+    """
+    year = api_call_weight(days=365, variables=21)
+    delay = delay_seconds_for(year, floor=1.0)
+    calls_per_hour = 3600.0 / delay * year
+    assert calls_per_hour <= HOURLY_QUOTA_CALLS
+    minutely_only = 60.0 * year / (MINUTELY_QUOTA_CALLS * 0.5)
+    assert delay > minutely_only, "the hourly limit is the binding one"
 
 
 def test_the_configured_delay_is_a_floor_not_a_ceiling() -> None:

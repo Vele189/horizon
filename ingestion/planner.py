@@ -72,6 +72,7 @@ from ingestion.client import (  # noqa: E402
 __all__ = [
     "BACKFILL_START",
     "DAILY_QUOTA_CALLS",
+    "HOURLY_QUOTA_CALLS",
     "HOURLY_BACKFILL_MONTHS",
     "Manifest",
     "ManifestEntry",
@@ -119,11 +120,12 @@ MINUTELY_QUOTA_CALLS: Final[float] = 600.0
 HOURLY_QUOTA_CALLS: Final[float] = 5_000.0
 DAILY_QUOTA_CALLS: Final[float] = 10_000.0
 
-#: Plan against a fraction of the minutely allowance. The budget is shared with
+#: Plan against a fraction of each allowance. The budget is shared with
 #: anything else on the same address, the weight formula is documented rather
-#: than guaranteed, and the cost of being wrong is a 429 that stalls the run
-#: for a minute — far more than the seconds this headroom costs.
+#: than guaranteed, and the cost of being wrong is a 429 — far more than the
+#: seconds this headroom costs.
 MINUTELY_SAFETY_FACTOR: Final[float] = 0.5
+HOURLY_SAFETY_FACTOR: Final[float] = 0.9
 
 #: Bytes per row, measured across daily and hourly responses on 2026-09-07
 #: (130 B/row daily at 21 variables, 85 B/row hourly at 12). Used only to
@@ -165,13 +167,28 @@ def api_call_weight(days: int, variables: int) -> float:
 def delay_seconds_for(weight: float, floor: float) -> float:
     """Seconds to wait after a request of this weight.
 
-    Paces the run against the minutely allowance rather than the request count:
-    a fixed one-second delay between one-year daily units would spend 3 300
-    calls a minute against a 600 budget. ``floor`` is the configured politeness
-    minimum, applied even when a unit is small enough to need no pacing.
+    Paces against weighted calls rather than request count — a fixed
+    one-second delay between one-year daily units would spend 3 300 calls a
+    minute against a 600 budget — and against **both** short allowances, not
+    just the minutely one.
+
+    Pacing on the minutely limit alone is what the first real backfill run got
+    wrong. Half of 600 calls a minute is 18 000 an hour, against an hourly
+    allowance of 5 000: the run cleared the minutely bar on every request and
+    still collected
+
+        HTTP 429 ... Hourly API request limit exceeded
+
+    nineteen minutes in, having spent 5 059 calls. The hourly limit is the
+    binding one at any pace worth using, and it works out four times slower —
+    roughly 44 seconds between one-year daily units rather than 11.
+
+    ``floor`` is the configured politeness minimum, applied even when a unit is
+    small enough to need no pacing at all.
     """
-    budget = MINUTELY_QUOTA_CALLS * MINUTELY_SAFETY_FACTOR
-    return max(floor, 60.0 * weight / budget)
+    per_minute = 60.0 * weight / (MINUTELY_QUOTA_CALLS * MINUTELY_SAFETY_FACTOR)
+    per_hour = 3600.0 * weight / (HOURLY_QUOTA_CALLS * HOURLY_SAFETY_FACTOR)
+    return max(floor, per_minute, per_hour)
 
 
 def archive_end_date(today: dt.date | None = None) -> dt.date:
