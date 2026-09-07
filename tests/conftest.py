@@ -20,6 +20,42 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import ConfigError, Settings, get_settings  # noqa: E402
 
 
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers",
+        "live: makes a real request to the Open-Meteo archive. Deselect with "
+        "-m 'not live' for a fully hermetic run.",
+    )
+
+
+@pytest.fixture(autouse=True)
+def _forbid_accidental_network(request, monkeypatch):
+    """Make a real HTTP call impossible outside tests marked ``live``.
+
+    The retry tests are the ones most worth trusting and the hardest to trust:
+    a 503-then-success path that quietly reached the real API would pass for
+    the wrong reason, and would pass differently on a bad day. Rather than
+    assert that no test calls out, this makes the call fail — so the guarantee
+    is enforced rather than reviewed.
+
+    Only :class:`requests.adapters.HTTPAdapter` is blocked. The scripted
+    transport is a separate ``BaseAdapter`` and is unaffected, and psycopg2
+    reaches the warehouse through a different library entirely.
+    """
+    if "live" in request.keywords:
+        return
+    import requests
+
+    def forbidden(self, request_, *args, **kwargs):
+        raise AssertionError(
+            f"{request.node.nodeid} attempted a real HTTP request to "
+            f"{request_.url.split('?')[0]}. Script the transport, or mark the "
+            "test @pytest.mark.live."
+        )
+
+    monkeypatch.setattr(requests.adapters.HTTPAdapter, "send", forbidden)
+
+
 @pytest.fixture
 def root(tmp_path: Path) -> Path:
     """An empty payload archive."""
@@ -102,14 +138,14 @@ def instant(monkeypatch):
 
 
 @pytest.fixture
-def no_network(monkeypatch):
-    """Make any outbound HTTP call an immediate, obvious failure."""
-    import requests
+def no_network():
+    """Declare that a test is *about* not touching the network.
 
-    def forbidden(*args, **kwargs):
-        raise AssertionError("this must not touch the network")
-
-    monkeypatch.setattr(requests.adapters.HTTPAdapter, "send", forbidden)
+    Redundant with the autouse guard above, and kept because a test named for
+    replaying from disk should say so at its signature rather than rely on a
+    fixture the reader has to go and find.
+    """
+    return None
 
 
 @pytest.fixture

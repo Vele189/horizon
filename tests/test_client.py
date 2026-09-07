@@ -260,11 +260,12 @@ def test_nulls_are_preserved_not_coerced(settings) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_server_error_is_retried_then_succeeds(settings, slept) -> None:
+def test_a_transient_503_retries_and_eventually_succeeds(settings, slept) -> None:
+    """The failure a multi-hour backfill will certainly meet."""
     response, adapter = fetch(
         [
             responds(502, text="<html>bad gateway</html>"),
-            responds(503, text="unavailable"),
+            responds(503, text="Service Unavailable"),
             responds(json_body=daily_payload()),
         ],
         settings,
@@ -298,12 +299,30 @@ def test_read_timeout_is_retried(settings, slept) -> None:
     assert len(adapter.calls) == 2
 
 
-def test_retries_are_capped_and_the_real_error_survives(settings, slept) -> None:
-    """After the cap the caller sees the transport failure, not RetryError."""
-    with pytest.raises(ArchiveTransportError) as excinfo:
-        fetch([requests.exceptions.ReadTimeout("boom")] * 3, settings)
-    assert "connect 7.0s, read 23.0s" in str(excinfo.value)
+def test_a_timeout_retries_then_raises_once_the_cap_is_reached(
+    settings, slept
+) -> None:
+    """Both halves in one test: it does retry, and it does eventually give up.
+
+    After the cap the caller sees the transport failure itself, not tenacity's
+    RetryError wrapper — so a backfill can tell a dead socket from a rate limit
+    and decide whether resuming is worth anything.
+    """
+    session, adapter = session_for(
+        [requests.exceptions.ReadTimeout("boom")] * settings.max_retry_attempts
+    )
+    try:
+        with pytest.raises(ArchiveTransportError) as excinfo:
+            fetch_observations(
+                CITY, START, END, session=session, settings=settings
+            )
+    finally:
+        session.close()
+
+    assert len(adapter.calls) == settings.max_retry_attempts
     assert len(slept) == settings.max_retry_attempts - 1
+    assert "connect 7.0s, read 23.0s" in str(excinfo.value)
+    assert "timed out" in str(excinfo.value)
 
 
 def test_the_cap_counts_attempts_not_retries(settings, slept) -> None:
@@ -753,6 +772,9 @@ def test_every_observation_column_is_requested(table, variables) -> None:
 # ---------------------------------------------------------------------------
 # One live request, diffed against the documentation
 # ---------------------------------------------------------------------------
+# Everything above this line is hermetic, and enforced to be: conftest blocks
+# HTTPAdapter for any test not marked live. Only the four below carry the
+# marker, so `pytest -m "not live"` skips exactly them.
 
 
 @pytest.fixture(scope="module")
@@ -768,7 +790,9 @@ UNAVAILABLE = (ArchiveTransportError, ArchiveRateLimited)
 
 
 @pytest.fixture(scope="module")
-def live_year(live_settings):
+def live_year(live_settings, request):
+    # Module-scoped, so it cannot take the function-scoped guard fixture; the
+    # marker on each consumer is what disarms it.
     try:
         return fetch_observations(
             CITY, dt.date(2023, 1, 1), dt.date(2023, 12, 31), "daily",
@@ -778,16 +802,19 @@ def live_year(live_settings):
         pytest.skip(f"archive API unavailable: {exc}")
 
 
+@pytest.mark.live
 def test_live_year_returns_every_day(live_year) -> None:
     assert len(live_year) == 365
     assert live_year.times[0].date() == dt.date(2023, 1, 1)
     assert live_year.times[-1].date() == dt.date(2023, 12, 31)
 
 
+@pytest.mark.live
 def test_live_units_are_the_documented_ones(live_year) -> None:
     assert dict(live_year.units) == dict(DAILY_UNITS)
 
 
+@pytest.mark.live
 def test_live_values_are_physically_plausible(live_year) -> None:
     """A unit swap that kept its label would show up here as absurd numbers."""
     highs = [v for v in live_year.values["temperature_2m_max"] if v is not None]
@@ -805,6 +832,7 @@ def test_live_values_are_physically_plausible(live_year) -> None:
     assert 0 <= min(humidity) and max(humidity) <= 100
 
 
+@pytest.mark.live
 def test_live_leap_year_has_the_extra_day(live_settings) -> None:
     """Day-of-year climatology joins are where leap days go wrong."""
     try:
