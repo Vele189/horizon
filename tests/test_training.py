@@ -262,7 +262,7 @@ def test_two_runs_in_separate_processes_produce_identical_metrics() -> None:
         from ml_fixtures import labelled_span
         from machine_learning.train import train_model
 
-        block, _ = train_model(frame=labelled_span())
+        block, _fits = train_model(frame=labelled_span())
         block.pop("xgboost_version")
         print(json.dumps(block, sort_keys=True))
         """
@@ -316,7 +316,7 @@ def test_the_saved_artefact_predicts_what_the_fit_predicted(
 def test_a_model_cannot_be_recorded_without_committed_baselines(
     synthetic, tmp_path
 ) -> None:
-    block, _ = train_model(frame=synthetic)
+    block, _fits = train_model(frame=synthetic)
     with pytest.raises(TrainingError, match="does not exist"):
         merge_into_metrics(block, frame=synthetic, path=tmp_path / "absent.json")
 
@@ -331,7 +331,7 @@ def test_a_model_cannot_be_recorded_against_a_moved_snapshot(
     stale["snapshot"]["rows"] += 1
     path = write_metrics(stale, tmp_path / "metrics.json")
 
-    block, _ = train_model(frame=synthetic)
+    block, _fits = train_model(frame=synthetic)
     with pytest.raises(TrainingError, match="Re-run baselines.py"):
         merge_into_metrics(block, frame=synthetic, path=path)
 
@@ -342,7 +342,7 @@ def test_a_matching_snapshot_is_recorded_beside_the_baselines(
     from machine_learning.baselines import build_metrics, write_metrics
 
     path = write_metrics(build_metrics(frame=synthetic), tmp_path / "metrics.json")
-    block, _ = train_model(frame=synthetic)
+    block, _fits = train_model(frame=synthetic)
     merged = merge_into_metrics(block, frame=synthetic, path=path)
 
     assert set(merged["baselines"]) == {"base_rate", "persistence", "climatology"}
@@ -371,13 +371,13 @@ def trained(engine):
     parts = split_frame(population)
     if any(part.empty for part in parts.values()):
         pytest.skip("not enough of the record backfilled to fill every split")
-    block, _ = train_model(frame=population)
-    return population, parts, block
+    block, fits = train_model(frame=population)
+    return population, parts, block, fits
 
 
 def test_the_model_beats_both_baselines_on_test(trained) -> None:
     """The point of the whole workstream, and the only number that settles it."""
-    _, _, block = trained
+    _, _, block, _fits = trained
     committed = json.loads(
         (REPO_ROOT / "machine_learning/artifacts/metrics.json").read_text()
     )
@@ -401,7 +401,7 @@ def test_the_specified_weighting_inflates_the_probabilities(trained) -> None:
     weighting the positive class by *k* is oversampling it *k*-fold, so it
     distorts them the same way — and here it costs ranking as well.
     """
-    _, _, block = trained
+    _, _, block, _fits = trained
     weighted = block["variants"]["weighted"]["test"]
     unweighted = block["variants"]["unweighted"]["test"]
     base = weighted["base_rate"]
@@ -419,7 +419,7 @@ def test_the_specified_weighting_inflates_the_probabilities(trained) -> None:
 
 def test_the_recorded_model_matches_a_fresh_run(trained) -> None:
     """Same rule as the baselines: compare, or skip and say why."""
-    population, _, block = trained
+    population, _, block, _fits = trained
     path = REPO_ROOT / "machine_learning/artifacts/metrics.json"
     committed = json.loads(path.read_text())
     if "model" not in committed:
@@ -447,8 +447,8 @@ def test_every_city_is_beaten_individually(trained) -> None:
     """A pooled win can be one city carrying five. This checks it is not."""
     from machine_learning.baselines import PersistenceBaseline
 
-    population, parts, _ = trained
-    fit = tune(parts["train"], parts["validation"], scale_pos_weight=1.0)
+    _population, parts, _block, fits = trained
+    fit = fits["unweighted"]
     reference = PersistenceBaseline().fit(parts["train"])
 
     losses = []

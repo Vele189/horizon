@@ -2033,6 +2033,132 @@ baselines inviting a comparison nobody made.
 `model.joblib` is gitignored; `metrics.json` is not. That is the right way
 round — a binary nobody can diff is not evidence, and the numbers are.
 
+## Evaluation
+
+`machine_learning/evaluate.py` scores everything on the test split against the
+baselines committed before the model existed. Test period 2022-01-01 to
+2026-09-01, 8 506 rows, 1 155 positive.
+
+| predictor | PR-AUC | lift | Brier | F1 | precision | recall | threshold | flagged |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| no-skill reference | 0.1358 | 1.00× | 0.1239 | 0.2391 | 0.136 | 1.000 | 0.055 | 8 506 |
+| climatology | 0.1514 | 1.12× | 0.1245 | 0.2116 | 0.178 | 0.262 | 0.065 | 1 699 |
+| persistence | 0.2293 | 1.69× | 0.1146 | 0.3807 | 0.383 | 0.378 | 0.200 | 1 141 |
+| model, weighted | 0.3303 | 2.43× | **0.2253** | 0.3790 | 0.394 | 0.365 | 0.564 | 1 072 |
+| **model, unweighted** | **0.3494** | **2.57×** | **0.1102** | **0.3863** | 0.374 | 0.400 | 0.102 | 1 237 |
+
+**Accuracy is excluded.** At a 13.58% base rate, always answering "no anomaly"
+scores **86.4%** and predicts nothing. A test checks the scikit-learn function
+for it is absent from every `.py` file in the repository, with a companion that
+plants it in a temp file so the scan is known to work.
+
+### The threshold is chosen on validation, and it is not 0.5
+
+F1 needs an operating point. The recommended model's mean prediction is 0.070,
+so at a threshold of 0.5 it flags **nothing** and scores F1 = 0.00 while
+ranking better than everything else in the table — a test demonstrates exactly
+that on synthetic data. The threshold that maximises F1 on **validation** is
+applied to test, per predictor, and printed beside the score.
+
+Note what F1 does to the comparison. On PR-AUC the model beats persistence by
+**52%**; on F1 it beats it by **1.5%** (0.3863 against 0.3807). That is not a
+contradiction — F1 collapses the whole curve to a single point, and the point
+happens to sit where persistence is at its strongest. It is also why the
+no-skill reference posts F1 = 0.2391 by flagging all 8 506 rows: **F1 needs its
+floor quoted as much as PR-AUC does.**
+
+### The curve the picture draws is the curve the number integrates
+
+![Precision–recall curves for both model variants and both baselines on the test split, drawn as step functions against a no-skill line at 0.136](docs/images/precision_recall.png)
+
+Drawn as **step functions**, and that is a correctness decision rather than a
+style one. Persistence emits two distinct probabilities, so it has two
+achievable operating points; joining them with a straight line draws a
+predictor that can be run at recall 0.6, which it cannot. The first version of
+this figure did exactly that, and the resulting diagonal sat *above* the model
+for half the range while its owner scored 0.2293 — the picture and the table
+disagreeing by roughly a factor of two.
+
+A step function is what average precision sums, and it is what a reader can
+actually buy. A test integrates the plotted points step-wise and requires the
+result to equal the reported PR-AUC.
+
+### Calibration, and the failure that is not hidden
+
+![Reliability curve and prediction histogram for both model variants on the test split](docs/images/calibration.png)
+
+The left panel is the ML-05 finding drawn. The weighted model — the variant the
+ticket specifies — sits in a cloud between 0.39 and 0.63 predicted against 0.04
+to 0.42 observed, nowhere near the diagonal. The right panel is the same thing
+from the dashboard's side: its predictions pile up around 0.45 while the true
+rate is the dashed line at 0.136.
+
+**So the specified model fails, and the report says so per metric rather than
+in aggregate:**
+
+| | PR-AUC | F1 | Brier |
+|---|---|---|---|
+| model, weighted | beats every baseline | **fails** | **fails** |
+| model, unweighted | beats every baseline | beats every baseline | beats every baseline |
+
+The weighted model loses on Brier to *doing nothing at all* — 0.2253 against
+the no-skill reference's 0.1239 — and loses on F1 to persistence. A single
+summary verdict would have rounded that into a pass, so there isn't one.
+
+The unweighted model is above the diagonal throughout: **under**-confident,
+predicting 0.070 where 0.136 happens. That is the non-stationary base rate this
+project recorded as a test three tickets ago — 5.51% in the training period
+against 13.58% in the test one — arriving on schedule rather than as a surprise.
+The ranking is sound and the level is not, so the Risk Horizon view needs a
+recalibration step before it prints a probability to a reader.
+
+### Per city, against each city's own base rate
+
+| city | test rows | base rate | persistence | model | lift |
+|---|---:|---:|---:|---:|---:|
+| singapore | 1 705 | 23.7% | 0.3013 | 0.4008 | 1.69× |
+| cairo | 1 699 | 17.8% | 0.2421 | 0.3609 | 2.03× |
+| lagos | 1 704 | 15.6% | 0.3362 | 0.4420 | 2.84× |
+| phoenix | 1 699 | 5.7% | 0.0651 | 0.2244 | 3.97× |
+| delhi | 1 699 | 5.2% | 0.1178 | 0.3055 | 5.90× |
+
+Each is scored against **its own** base rate, because the rates vary fourfold
+and a shared reference line would rank the cities by their climate rather than
+the predictor by its skill. The model beats persistence in all five, and the
+margin is widest exactly where persistence is weakest — Phoenix and Delhi, the
+two low-rate cities where "it happened last week" carries least information.
+
+### Moscow is named, not omitted
+
+The ticket contrasts Singapore with Moscow. Singapore is here and is the
+highest-rate city in the set. **Moscow has not been ingested** — the daily grain
+costs ~26 000 weighted API calls against a 10 000/day free-tier allowance — so
+it cannot be scored at all, and that is a different fact from a model that did
+badly on it.
+
+The report separates three states rather than leaving one gap:
+
+- **scored** (5): cairo, delhi, lagos, phoenix, singapore
+- **ingested but not scorable on the test split** (4): london, reykjavik,
+  sydney — one reference year each, so no climatology baseline and no label —
+  and tokyo, whose record ends in 1998
+- **not ingested** (6): auckland, buenos_aires, johannesburg, **moscow**,
+  portland, sao_paulo
+
+A test requires Moscow to appear in one of the three lists, so it cannot
+silently vanish from the table.
+
+### The figures cannot go stale
+
+SVG for the source of truth, PNG rasterised for this README — the same
+arrangement as the lineage diagram, for the same reasons. Both are written with
+their timestamp metadata suppressed and matplotlib's id salt pinned, so
+regenerating an unchanged figure produces an unchanged file and a diff means
+the picture actually moved. A test regenerates both and compares bytes.
+
+The precision–recall curve is thinned to 800 vertices for drawing only; the
+metric is computed from every one of the 8 506 points.
+
 ## Licence
 
 [MIT](LICENSE)

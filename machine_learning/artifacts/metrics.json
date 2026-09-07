@@ -168,7 +168,231 @@
       }
     }
   },
-  "generated_at": "2026-09-07T08:55:17+00:00",
+  "evaluation": {
+    "accuracy_note": "Accuracy is excluded: at this base rate, always answering \"no anomaly\" scores 86.4% and predicts nothing.",
+    "accuracy_reported": false,
+    "calibration_bins": 10,
+    "cities_ingested_but_not_scored": [
+      "london",
+      "reykjavik",
+      "sydney",
+      "tokyo"
+    ],
+    "cities_not_ingested": [
+      "auckland",
+      "buenos_aires",
+      "johannesburg",
+      "moscow",
+      "portland",
+      "sao_paulo"
+    ],
+    "cities_scored": [
+      "cairo",
+      "delhi",
+      "lagos",
+      "phoenix",
+      "singapore"
+    ],
+    "per_city": [
+      {
+        "base_rate": 0.177751618599176,
+        "base_rate_lift": 1.0,
+        "base_rate_pr_auc": 0.177751618599176,
+        "city_id": "cairo",
+        "climatology_lift": 1.0,
+        "climatology_pr_auc": 0.177751618599176,
+        "model_unweighted_lift": 2.030405605530958,
+        "model_unweighted_pr_auc": 0.36090788279596775,
+        "model_weighted_lift": 1.934436323564905,
+        "model_weighted_pr_auc": 0.34384918759070116,
+        "persistence_lift": 1.3618663175862797,
+        "persistence_pr_auc": 0.24207394226666068,
+        "rows": 1699
+      },
+      {
+        "base_rate": 0.05179517363154797,
+        "base_rate_lift": 1.0,
+        "base_rate_pr_auc": 0.05179517363154797,
+        "city_id": "delhi",
+        "climatology_lift": 1.0,
+        "climatology_pr_auc": 0.05179517363154797,
+        "model_unweighted_lift": 5.897505835079015,
+        "model_unweighted_pr_auc": 0.3054623387209848,
+        "model_weighted_lift": 6.159404103538805,
+        "model_weighted_pr_auc": 0.3190274050096615,
+        "persistence_lift": 2.274116911626597,
+        "persistence_pr_auc": 0.11778828029613922,
+        "rows": 1699
+      },
+      {
+        "base_rate": 0.15551643192488263,
+        "base_rate_lift": 1.0,
+        "base_rate_pr_auc": 0.15551643192488263,
+        "city_id": "lagos",
+        "climatology_lift": 1.0,
+        "climatology_pr_auc": 0.15551643192488263,
+        "model_unweighted_lift": 2.842426072222666,
+        "model_unweighted_pr_auc": 0.44204396076232777,
+        "model_weighted_lift": 2.7210790054929763,
+        "model_weighted_pr_auc": 0.42317249791997574,
+        "persistence_lift": 2.161761116676464,
+        "persistence_pr_auc": 0.33618937553947353,
+        "rows": 1704
+      },
+      {
+        "base_rate": 0.05650382577987051,
+        "base_rate_lift": 1.0,
+        "base_rate_pr_auc": 0.05650382577987051,
+        "city_id": "phoenix",
+        "climatology_lift": 1.0,
+        "climatology_pr_auc": 0.05650382577987051,
+        "model_unweighted_lift": 3.97125948195055,
+        "model_unweighted_pr_auc": 0.2243913538947927,
+        "model_weighted_lift": 3.6915569166002196,
+        "model_weighted_pr_auc": 0.20858708887205477,
+        "persistence_lift": 1.1515299479166667,
+        "persistence_pr_auc": 0.0650658475573867,
+        "rows": 1699
+      },
+      {
+        "base_rate": 0.23695014662756597,
+        "base_rate_lift": 1.0,
+        "base_rate_pr_auc": 0.23695014662756597,
+        "city_id": "singapore",
+        "climatology_lift": 1.0,
+        "climatology_pr_auc": 0.23695014662756597,
+        "model_unweighted_lift": 1.691657200921106,
+        "model_unweighted_pr_auc": 0.4008384218018339,
+        "model_weighted_lift": 1.5323074027185215,
+        "model_weighted_pr_auc": 0.36308046375265846,
+        "persistence_lift": 1.2716557922532907,
+        "persistence_pr_auc": 0.3013190264342108,
+        "rows": 1705
+      }
+    ],
+    "recorded_at": "2026-09-07T09:19:34+00:00",
+    "scored_on": "test",
+    "summary": [
+      {
+        "base_rate": 0.13578650364448624,
+        "brier": 0.12385992196381423,
+        "f1": 0.2391056826415485,
+        "flagged": 8506,
+        "lift": 1.0,
+        "mean_predicted": 0.055093301382324884,
+        "pr_auc": 0.13578650364448624,
+        "precision": 0.13578650364448624,
+        "predictor": "base_rate",
+        "recall": 1.0,
+        "threshold": 0.05509330138232488
+      },
+      {
+        "base_rate": 0.13578650364448624,
+        "brier": 0.1146156621653148,
+        "f1": 0.3806620209059233,
+        "flagged": 1141,
+        "lift": 1.6888273852986966,
+        "mean_predicted": 0.06719956563580386,
+        "pr_auc": 0.22931996590876963,
+        "precision": 0.38299737072743206,
+        "predictor": "persistence",
+        "recall": 0.37835497835497833,
+        "threshold": 0.1999195494770716
+      },
+      {
+        "base_rate": 0.13578650364448624,
+        "brier": 0.12453788639471097,
+        "f1": 0.21163279607568325,
+        "flagged": 1699,
+        "lift": 1.1150999306033376,
+        "mean_predicted": 0.05179986971923641,
+        "pr_auc": 0.15141552079083645,
+        "precision": 0.177751618599176,
+        "predictor": "climatology",
+        "recall": 0.26147186147186147,
+        "threshold": 0.06472677282621148
+      },
+      {
+        "base_rate": 0.13578650364448624,
+        "brier": 0.22529264338043653,
+        "f1": 0.37898518185900315,
+        "flagged": 1072,
+        "lift": 2.432765332745736,
+        "mean_predicted": 0.4777618944644928,
+        "pr_auc": 0.3303366987210587,
+        "precision": 0.39365671641791045,
+        "predictor": "model_weighted",
+        "recall": 0.36536796536796534,
+        "threshold": 0.5640283823013306
+      },
+      {
+        "base_rate": 0.13578650364448624,
+        "brier": 0.11019495378224092,
+        "f1": 0.3862876254180602,
+        "flagged": 1237,
+        "lift": 2.5729096427736793,
+        "mean_predicted": 0.07034637033939362,
+        "pr_auc": 0.349366404585422,
+        "precision": 0.3734842360549717,
+        "predictor": "model_unweighted",
+        "recall": 0.4,
+        "threshold": 0.10242609679698944
+      }
+    ],
+    "threshold_chosen_on": "validation",
+    "threshold_metric": "f1",
+    "verdict": {
+      "model_unweighted": {
+        "beats_every_baseline": {
+          "brier": true,
+          "f1": true,
+          "pr_auc": true
+        },
+        "detail": {
+          "brier": {
+            "base_rate": true,
+            "climatology": true,
+            "persistence": true
+          },
+          "f1": {
+            "base_rate": true,
+            "climatology": true,
+            "persistence": true
+          },
+          "pr_auc": {
+            "base_rate": true,
+            "climatology": true,
+            "persistence": true
+          }
+        }
+      },
+      "model_weighted": {
+        "beats_every_baseline": {
+          "brier": false,
+          "f1": false,
+          "pr_auc": true
+        },
+        "detail": {
+          "brier": {
+            "base_rate": false,
+            "climatology": false,
+            "persistence": false
+          },
+          "f1": {
+            "base_rate": true,
+            "climatology": true,
+            "persistence": false
+          },
+          "pr_auc": {
+            "base_rate": true,
+            "climatology": true,
+            "persistence": true
+          }
+        }
+      }
+    }
+  },
+  "generated_at": "2026-09-07T09:19:05+00:00",
   "label": {
     "horizon_days": 7,
     "window": "t+1 .. t+7 inclusive"
@@ -177,7 +401,7 @@
     "estimator": "xgboost.XGBClassifier",
     "fitted_on": "train",
     "recommended_variant": "unweighted",
-    "recorded_at": "2026-09-07T08:55:29+00:00",
+    "recorded_at": "2026-09-07T09:19:19+00:00",
     "resampling": "none",
     "scale_pos_weight_observed": 17.151026983487718,
     "specified_variant": "weighted",
@@ -606,7 +830,7 @@
     },
     "xgboost_version": "3.4.1"
   },
-  "schema_version": 3,
+  "schema_version": 4,
   "snapshot": {
     "cities": 6,
     "first_date": "1995-01-31",

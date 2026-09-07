@@ -98,7 +98,9 @@ log = logging.getLogger(__name__)
 #: 3 — ML-05 added a top-level ``model`` block, written by ``train.py`` beside
 #: the baselines it is compared against. A file may legitimately lack it: the
 #: baselines exist before the model does, which is the whole point of them.
-METRICS_SCHEMA_VERSION: Final[int] = 3
+#: 4 — ML-06 added ``evaluation``, written by ``evaluate.py``: the test-split
+#: table, the per-city breakdown, and the per-metric verdict.
+METRICS_SCHEMA_VERSION: Final[int] = 4
 
 #: Pseudo-counts tried for the climatology's shrinkage, chosen on **validation**
 #: Brier. A (city, week) cell holds around 130 training rows here, so a cell
@@ -522,22 +524,25 @@ def write_metrics(payload: Mapping[str, Any], path: Path | None = None) -> Path:
     destination = Path(path) if path is not None else metrics_path()
     destination.parent.mkdir(parents=True, exist_ok=True)
 
-    # A model block already in the file is kept only while it still describes
-    # the same data. If the snapshot has moved, the model's scores were
-    # measured against a target that no longer exists and leaving them beside
-    # the new baselines would invite exactly the comparison nobody made.
+    # The downstream blocks are kept only while they still describe the same
+    # data. If the snapshot has moved, the model was scored against a target
+    # that no longer exists, and leaving its numbers beside the new baselines
+    # would invite exactly the comparison nobody made.
     payload = dict(payload)
     if destination.exists():
         previous = json.loads(destination.read_text())
-        model = previous.get("model")
-        if model is not None:
+        carried = {
+            key: previous[key] for key in ("model", "evaluation") if key in previous
+        }
+        if carried:
             if previous.get("snapshot") == payload.get("snapshot"):
-                payload["model"] = model
+                payload.update(carried)
             else:
                 log.warning(
-                    "dropping the recorded model: it was trained against "
-                    "%s rows to %s and the baselines now describe %s rows to "
-                    "%s. Retrain with train.py --write.",
+                    "dropping %s: they describe %s rows to %s and the "
+                    "baselines now describe %s rows to %s. Re-run train.py "
+                    "--write and evaluate.py --write.",
+                    " and ".join(sorted(carried)),
                     previous["snapshot"]["rows"],
                     previous["snapshot"]["last_date"],
                     payload["snapshot"]["rows"],

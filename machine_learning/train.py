@@ -324,11 +324,14 @@ def train_model(
     engine: Engine | None = None,
     *,
     frame: pd.DataFrame | None = None,
-) -> tuple[dict[str, Any], Fit]:
+) -> tuple[dict[str, Any], dict[str, Fit]]:
     """Fit both variants, score them on every split, and describe them.
 
-    Returns the ``model`` block for ``metrics.json`` and the fitted weighted
-    model — the one the ticket specifies, and therefore the one saved.
+    Returns the ``model`` block for ``metrics.json`` and both fitted models by
+    variant name. Both, because ML-06 draws curves for each and the difference
+    between them is the finding: ``variants["weighted"]`` is the one the ticket
+    specifies and the one saved, ``variants["unweighted"]`` is the one its
+    stated goal asks for.
     """
     population = frame if frame is not None else evaluation_frame(engine)
     population = population.sort_values(
@@ -380,7 +383,7 @@ def train_model(
         other["pr_auc"] > specified["pr_auc"] and other["brier"] < specified["brier"]
     )
     block["recommended_variant"] = "unweighted" if better else "weighted"
-    return block, fits["weighted"]
+    return block, fits
 
 
 def merge_into_metrics(
@@ -455,7 +458,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     population = evaluation_frame()
-    block, specified = train_model(frame=population)
+    block, fits = train_model(frame=population)
+    specified = fits[block["specified_variant"]]
 
     print(f"train      {_split_window('train')}")
     print(f"seed {SEED}   threads {N_JOBS}   resampling {block['resampling']}")

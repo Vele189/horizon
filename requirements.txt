@@ -26,3 +26,8 @@ numpy==2.5.3
 scikit-learn==1.9.0
 xgboost==3.4.1
 joblib==1.6.0
+
+# Reporting figures only — the precision-recall and calibration curves in
+# docs/images. Kept in the runtime file rather than the dev one because
+# evaluate.py regenerates them and a test compares the bytes.
+matplotlib==3.11.1
