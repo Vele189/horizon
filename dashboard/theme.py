@@ -79,6 +79,22 @@ legend swatches carry a hairline border. Nothing relies on that step being
 legible against bare paper. In dark mode the same step measures 2.30:1 and the
 question does not arise.
 
+Counting is not signing
+-----------------------
+
+A count — how many days in a year ran past the threshold — is a magnitude, and
+it gets a **sequential** ramp instead: one hue, light to dark, on the same two
+pole hues. Zero to twenty has a bottom and a top and no meaningful middle, so
+painting it on two hues either side of a neutral would invent a direction the
+number does not have. Only a *difference* between two counts is signed, and
+only that goes back to the diverging scale.
+
+The two counting ramps are checked the way the arms are — one hue, monotone
+lightness, no adjacent pair closer than 0.06, the end nearest the surface still
+clearing 2:1 — and against each other, because a screenshot of the hot view and
+one of the cold view are the same picture otherwise. They separate by 8.7 under
+protanopia.
+
 There is no accent hue
 ----------------------
 
@@ -96,6 +112,7 @@ from typing import Final, Literal, Mapping, Sequence
 
 __all__ = [
     "ANOMALY_BREAKS",
+    "SEQUENTIAL",
     "ANOMALY_Z_THRESHOLD",
     "COLD_HUE_DEGREES",
     "DIVERGING",
@@ -112,6 +129,8 @@ __all__ = [
     "chrome",
     "diverging_scale",
     "map_chrome",
+    "sequential_key_html",
+    "sequential_scale",
     "marker_diameter",
     "resolve_mode",
     "size_key_html",
@@ -418,4 +437,61 @@ def size_key_html(mode: Mode = MAP_MODE, *, samples: Sequence[float] = (1.0, 2.5
     return (
         f'<div style="display:flex;gap:0.75rem;align-items:flex-end;'
         f'margin:0.25rem 0 0.5rem 0;">{circles}</div>'
+    )
+
+
+# ---------------------------------------------------------------------------
+# Sequential ramps — for counting, not for signing
+# ---------------------------------------------------------------------------
+#
+# A count of anomaly days is a **magnitude**. Zero to twenty has a bottom and a
+# top and no meaningful middle, which makes it the wrong shape for the
+# diverging ramp above: painting an unsigned count on two hues either side of a
+# neutral invents a direction the number does not have, and puts the least
+# interesting value — the middle of the range — in the most visually neutral
+# place.
+#
+# So counting gets one hue, light to dark, on the same two pole hues the
+# diverging scale uses. Hot days climb the warm ramp, cold days climb the cool
+# one, and only their *difference* — which really is signed — goes back to the
+# diverging scale.
+#
+# Five steps, generated on an even lightness ladder like the diverging arms and
+# checked the same way: one hue throughout, lightness monotone, no two adjacent
+# steps closer than 0.06, and the end nearest the surface still clearing 2:1
+# against it. The two ramps also have to be tellable apart from each other —
+# a screenshot of the hot view and one of the cold view are the same picture
+# otherwise — and they separate by 8.7 under protanopia.
+
+SEQUENTIAL: Final[Mapping[Mode, Mapping[str, tuple[str, ...]]]] = {
+    "light": {
+        "hot": ("#e59f9c", "#d67f7c", "#c75e5d", "#b63a3f", "#a30020"),
+        "cold": ("#9ab7d9", "#799fca", "#5886ba", "#376eaa", "#0b569a"),
+    },
+    "dark": {
+        "hot": ("#783c3b", "#9e4c4b", "#c55d5c", "#ef6e6d", "#ff9591"),
+        "cold": ("#385270", "#486b94", "#5785b9", "#67a0e0", "#80bcff"),
+    },
+}
+
+
+def sequential_scale(direction: str, mode: Mode) -> tuple[str, ...]:
+    """The five counting steps for one direction, lowest count first."""
+    return SEQUENTIAL[mode][direction]
+
+
+def sequential_key_html(direction: str, mode: Mode, bounds: Sequence[str]) -> str:
+    """A key for a counting ramp, labelled with the bucket each step holds."""
+    tokens = chrome(mode)
+    steps = SEQUENTIAL[mode][direction]
+    cells = "".join(
+        f'<div style="flex:1;text-align:center;">'
+        f'<div style="height:14px;background:{colour};'
+        f'border:1px solid {tokens["axis"]};"></div>'
+        f'<div style="font-size:0.7rem;color:{tokens["ink_muted"]};'
+        f'margin-top:0.2rem;">{label}</div></div>'
+        for colour, label in zip(steps, bounds)
+    )
+    return (
+        f'<div style="display:flex;gap:2px;margin:0.25rem 0 0.5rem 0;">{cells}</div>'
     )

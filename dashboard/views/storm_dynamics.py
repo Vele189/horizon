@@ -18,16 +18,16 @@ VIEW = PendingView(
     # open colour question. The proposal specifies "coloured by city" over
     # fifteen cities; no palette carries fifteen categorical hues that stay
     # distinguishable under colour-vision deficiency, and inventing hues to
-    # fill the gap is what makes a scatter unreadable. BI-03 resolves it by
+    # fill the gap is what makes a scatter unreadable. BI-05 resolves it by
     # encoding something other than identity — small multiples per city, or a
     # density surface with one city highlighted on selection — rather than by
     # stretching the palette. Recorded here so the decision is made on purpose.
     encoding=(
         "This view does not use the anomaly scale. Its colour question — "
         "fifteen cities is more categories than any colour-blind-safe "
-        "categorical palette carries — is settled in BI-03."
+        "categorical palette carries — is settled in BI-05."
     ),
-    ticket="BI-03",
+    ticket="BI-05",
     source_table=f"{GOLD_SCHEMA}.fact_weather_hourly",
     probe_sql=f"""
         select

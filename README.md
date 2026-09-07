@@ -3086,9 +3086,9 @@ arrive.
 | Page | Reads | Chart lands in |
 |---|---|---|
 | Global Anomaly Map | `fact_weather_anomalies` | **built — BI-03** |
-| Climate Matrix | `fact_weather_anomalies` | BI-03 |
-| Storm Dynamics | `fact_weather_hourly` | BI-03 |
-| Risk Horizon | `fact_ml_predictions` | BI-04 |
+| Climate Matrix | `fact_weather_anomalies` | **built — BI-04** |
+| Storm Dynamics | `fact_weather_hourly` | BI-05 |
+| Risk Horizon | `fact_ml_predictions` | BI-06 |
 
 One open question is recorded on the page it belongs to rather than deferred
 silently. Storm Dynamics is specified as a scatter "coloured by city" over
@@ -3234,6 +3234,100 @@ and the shipped encoding end to end and asserts that day comes out flagged,
 pole-coloured, and at the top of the size scale. It makes no claim about the
 climatology, which is DBT-11's job; it makes the claim BI-03 is responsible
 for, which is that a large number in the mart becomes a large mark on the map.
+
+## The Climate Matrix
+
+Which cities are seeing more extremes over time? One cell per city-year,
+shaded by how many days that year ran more than 2.5σ from that city's own
+seasonal normal. Years across, cities down, fifteen rows and thirty-two
+columns whatever the warehouse holds.
+
+### Counting is not signing
+
+This view does **not** use the blue-grey-red scale for its default reading, and
+that is the decision it turns on.
+
+An anomaly-day count is a *magnitude*. Zero to twenty has a bottom and a top
+and no meaningful middle, which is the wrong shape for a diverging ramp:
+painting it on two hues either side of a neutral invents a direction the number
+does not have, and parks the least interesting value — the middle of the range
+— in the most visually neutral place. The BI-02 stub declared this view
+"diverging" before there was anything to paint; building it corrected that.
+
+So counting gets a **sequential** ramp, one hue, light to dark. Hot days climb
+the warm ramp, cold days climb the cool one, both on the same two pole hues the
+diverging scale uses. Only the **net** view — hot minus cold — is genuinely
+signed, and that is the one that goes back to the diverging scale, where it
+belongs.
+
+The two counting ramps are generated and checked the way the diverging arms
+were: one hue throughout, lightness monotone, no adjacent pair closer than
+0.06, and the end nearest the surface still clearing 2:1 against it. All four —
+two directions, two page themes — pass the ordinal checks outright, with no
+admitted shortfall. They are also checked against *each other*: a screenshot of
+the hot view and one of the cold view are the same picture unless the colours
+separate, and they separate by **8.7** under protanopia.
+
+### Zero is a value; absent is not
+
+A city-year with no extremes is the palest step of the ramp. A city-year the
+backfill has not reached is a hole in the grid. On most heatmaps these are the
+same pale square, and they are opposite statements — one says nothing happened,
+the other says nobody looked.
+
+The grid is built by crossing `dim_cities` with the ingested year span and
+left-joining the counts on, so it is complete by construction. Aggregating the
+fact alone would return only the city-years that have rows, and the heatmap
+would silently change shape as the backfill advanced. Today 164 of 480 cells
+are scored; the other 316 are holes, and each one says *not ingested* on hover.
+
+The 2 px separator between cells is the surface showing through — which is also
+what an un-ingested cell is, so absence reads as a wider gap rather than as a
+colour the reader has to decode.
+
+### Sorted by trend, because alphabetical hides the answer
+
+Alphabetical order puts Auckland above Buenos Aires and buries the thing the
+chart is for. The default ranks cities by the least-squares slope of their
+anomaly-day count against year, reported **per decade** — per year reads as a
+column of zeroes to three decimal places and invites the reader to conclude
+nothing is happening.
+
+| | hot days / decade |
+|---|---:|
+| Cairo | +4.60 |
+| Lagos | +3.68 |
+| Singapore | +3.66 |
+| Phoenix | +0.95 |
+| Delhi | −0.12 |
+
+A trend needs at least **ten** scored years or it is not reported at all. Tokyo
+has four in the marts; a line through four points is not a weaker version of a
+line through thirty-two, it is a different quantity, and ranking them together
+would seat a city at the top of the chart on the strength of a coincidence.
+Tokyo therefore sorts below the cities that have a trend, and the nine cities
+with nothing ingested sort below that — in every sort mode, because nine empty
+rows interleaved with six full ones is an unreadable chart whatever the reader
+asked to sort by.
+
+### Under three seconds, and where the time actually goes
+
+| | |
+|---|---:|
+| First render — uncached, including Neon resuming | 5.76 s |
+| **Cached render** | **0.031 s** |
+| Switching hot → cold → net | 0.033 s |
+
+The budget is a cache-hit budget and it is met by a factor of ninety. What
+makes that true is that the aggregation happens in SQL: the fact is 60 396 rows
+and the answer is 480, and sending the difference over the wire to group it in
+pandas would pay for the same arithmetic twice, once in bandwidth and once
+against the read budget. The whole grid is 30 KB. A test asserts the query
+returns exactly fifteen cities times the ingested span, so a regression that
+started shipping city-days would fail rather than merely get slower.
+
+The toggles cost nothing because they re-read the same cached frame — one query
+serves all three views, and the metric is chosen after the data arrives.
 
 ## Licence
 

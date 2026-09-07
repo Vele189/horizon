@@ -45,6 +45,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 pytest.importorskip("streamlit")
 pytest.importorskip("pandas")
 
+import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from sqlalchemy.exc import (  # noqa: E402
     DBAPIError,
@@ -331,7 +332,7 @@ def test_the_documented_measurements_cannot_go_stale() -> None:
         r"^(\S[^\n]*?)\s{2,}(\d+\.\d+)\s+(\d+\.\d+)\s*$",
         theme.__doc__ or "",
         flags=re.MULTILINE,
-    )
+    )  # the table is column-aligned, so this one keeps its line structure
     documented = {row[0].strip(): (float(row[1]), float(row[2])) for row in table}
 
     def measure(mode: theme.Mode) -> dict[str, float]:
@@ -379,7 +380,7 @@ def test_the_documented_shortfall_is_the_real_one() -> None:
     is the opposite and much more serious. Either way the prose has to move
     with the palette.
     """
-    quoted = re.findall(r"(\d\.\d\d):1", theme.__doc__ or "")
+    quoted = re.findall(r"(\d\.\d\d):1", _theme_prose())
     assert len(quoted) == 2, "expected the light shortfall and its dark counterpart"
 
     def worst_inner(mode: theme.Mode) -> float:
@@ -949,15 +950,15 @@ def test_the_pending_views_declare_their_encoding() -> None:
     Storm Dynamics is the exception and says so in its own words rather than
     silently omitting a legend.
     """
-    from dashboard.views import _scaffold, climate_matrix, risk_horizon, storm_dynamics
+    from dashboard.views import _scaffold, risk_horizon, storm_dynamics
 
-    pending = (climate_matrix, risk_horizon, storm_dynamics)
+    pending = (risk_horizon, storm_dynamics)
     for module in pending:
         assert isinstance(module.VIEW, _scaffold.PendingView)
 
     diverging = [m for m in pending if m.VIEW.encoding == "diverging"]
-    assert [m.VIEW.title for m in diverging] == ["Climate Matrix", "Risk Horizon"]
-    assert "BI-03" in storm_dynamics.VIEW.encoding
+    assert [m.VIEW.title for m in diverging] == ["Risk Horizon"]
+    assert "BI-" in storm_dynamics.VIEW.encoding
 
 
 def test_the_shell_holds_no_sql_and_no_colour() -> None:
@@ -993,6 +994,15 @@ def _stub_frame(sql: str) -> pd.DataFrame:
             [{"city_id": "delhi", "first_day": dt.date(1995, 1, 1),
               "last_day": dt.date(2026, 9, 2), "observed_days": 11568, "scored_days": 11568}]
         )
+    if "cross join years" in sql:
+        rows = []
+        for year in range(1995, 2027):
+            rows.append({"city_id": "cairo", "name": "Cairo", "year": year,
+                         "hot_days": max(0, (year - 1995) // 3), "cold_days": 1,
+                         "scored_days": 365})
+            rows.append({"city_id": "moscow", "name": "Moscow", "year": year,
+                         "hot_days": 0, "cold_days": 0, "scored_days": 0})
+        return pd.DataFrame(rows)
     if "dim_cities" in sql and "longitude" in sql:
         return pd.DataFrame(
             [
@@ -1066,8 +1076,11 @@ def test_every_view_renders_and_none_of_them_raises(offline) -> None:
         app = AppTest.from_string(script, default_timeout=30).run()
         assert not app.exception, f"{module.VIEW.title} raised: {app.exception}"
         assert [element.value for element in app.title] == [module.VIEW.title]
-        # A stub shows one metric per probe field; the built map shows its own.
-        assert app.metric, f"{module.VIEW.title} rendered nothing measurable"
+        # The caption is the acceptance criteria's, and it has to reach the
+        # page rather than merely exist on the dataclass. Asserted here rather
+        # than as a proxy like "some metric rendered", which a chart view has
+        # no reason to satisfy.
+        assert module.VIEW.caption in [element.value for element in app.caption]
 
 
 def test_the_shell_renders_its_default_view(offline) -> None:
@@ -1695,3 +1708,270 @@ def test_the_map_plots_every_registered_city_at_its_registered_coordinates(engin
         latitude, longitude = registry[row["city_id"]]
         assert row["latitude"] == pytest.approx(latitude, abs=1e-4)
         assert row["longitude"] == pytest.approx(longitude, abs=1e-4)
+
+
+# --------------------------------------------------------------------------
+# BI-04 — the Climate Matrix. Counting is not signing.
+# --------------------------------------------------------------------------
+
+SEQUENTIAL_DIRECTIONS = ("hot", "cold")
+
+
+@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize("direction", SEQUENTIAL_DIRECTIONS)
+def test_a_counting_ramp_is_one_hue_light_to_dark(mode, direction) -> None:
+    """A magnitude gets a sequential ramp, checked the way the arms were.
+
+    One hue throughout, lightness monotone, and no two adjacent steps closer
+    than the 0.06 below which a step stops being a step.
+    """
+    steps = theme.sequential_scale(direction, mode)
+    hues = [hue(step) for step in steps]
+    values = [lightness(step) for step in steps]
+    gaps = [abs(values[i + 1] - values[i]) for i in range(len(values) - 1)]
+
+    assert max(hues) - min(hues) < 10, "the ramp drifts in hue"
+    assert values == sorted(values, reverse=(mode == "light")), "not monotone"
+    assert min(gaps) >= 0.06
+
+
+@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize("direction", SEQUENTIAL_DIRECTIONS)
+def test_the_end_nearest_the_surface_still_reads_as_a_cell(mode, direction) -> None:
+    """The pale end of a heatmap ramp must clear its own background.
+
+    Unlike the diverging midpoint — which is meant to recede — the low end of a
+    counting ramp is a real value that a reader has to be able to see.
+    """
+    steps = theme.sequential_scale(direction, mode)
+    nearest = steps[0] if mode == "light" else steps[0]
+    assert contrast(nearest, theme.SURFACE[mode]) >= 2.0
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_the_hot_and_cold_ramps_are_tellable_apart(mode) -> None:
+    """A screenshot of the hot view and one of the cold view are otherwise the
+    same picture. The toggle only separates them if the colours do."""
+    hot = theme.sequential_scale("hot", mode)
+    cold = theme.sequential_scale("cold", mode)
+    worst = min(
+        separation(a, b, deficiency)
+        for a, b in zip(hot, cold)
+        for deficiency in GATING_DEFICIENCIES
+    )
+    assert worst >= SEPARATION_TARGET, f"the two ramps collapse to {worst:.1f}"
+
+
+def _theme_prose() -> str:
+    """theme.py's docstring as one line.
+
+    Searched with the wrapping flattened: a claim that moves across a line
+    break when the paragraph is re-wrapped is the same claim, and a test that
+    stopped finding it would report a missing figure rather than a changed one.
+    """
+    return " ".join((theme.__doc__ or "").split())
+
+
+def test_the_documented_ramp_separation_cannot_go_stale() -> None:
+    """theme.py quotes the number; recompute it."""
+    quoted = re.search(r"separate by (\d+\.\d+) under protanopia", _theme_prose())
+    assert quoted, "theme.py no longer states the figure"
+    measured = min(
+        separation(a, b, "protan")
+        for mode in MODES
+        for a, b in zip(theme.sequential_scale("hot", mode), theme.sequential_scale("cold", mode))
+    )
+    assert round(measured, 1) == float(quoted.group(1))
+
+
+def test_a_count_never_reaches_for_the_diverging_ramp() -> None:
+    """The encoding decision this view turns on.
+
+    Zero-to-twenty has a bottom and a top and no meaningful middle. Painting it
+    on two hues either side of a neutral would invent a direction the number
+    does not have and park the least interesting value in the most neutral
+    place. Only the net view is signed, and only it uses the diverging scale.
+    """
+    from dashboard.views import climate_matrix as matrix
+
+    frame = _matrix_frame()
+    for metric, expected in (
+        ("hot", theme.sequential_scale("hot", "light")),
+        ("cold", theme.sequential_scale("cold", "light")),
+        ("net", theme.diverging_scale("light")),
+    ):
+        order = matrix.order_cities(frame, metric, "Name")
+        figure = matrix._figure(matrix.matrix(frame, metric, order), metric, "light")
+        painted = {colour for _, colour in figure.data[0].colorscale}
+        assert painted == set(expected), f"{metric} is painted on the wrong ramp"
+
+
+def _matrix_frame() -> pd.DataFrame:
+    """Three cities: one with a long record, one short, one never ingested."""
+    rows = []
+    for year in range(1995, 2027):
+        rows.append({"city_id": "cairo", "name": "Cairo", "year": year,
+                     "hot_days": max(0, (year - 1995) // 3), "cold_days": 1,
+                     "scored_days": 365})
+        rows.append({"city_id": "tokyo", "name": "Tokyo", "year": year,
+                     "hot_days": 5, "cold_days": 2,
+                     "scored_days": 365 if year < 1999 else 0})
+        rows.append({"city_id": "moscow", "name": "Moscow", "year": year,
+                     "hot_days": 0, "cold_days": 0, "scored_days": 0})
+    frame = pd.DataFrame(rows)
+    frame["net_days"] = frame["hot_days"] - frame["cold_days"]
+    frame["scored"] = frame["scored_days"] > 0
+    return frame
+
+
+def test_bucket_boundaries_are_the_ones_the_key_prints() -> None:
+    """A key that says 3–5 and a bucket that holds 3–6 is a chart that lies."""
+    from dashboard.views.climate_matrix import COUNT_LABELS, count_bucket
+
+    assert [count_bucket(n) for n in (0, 1, 2, 3, 5, 6, 10, 11, 40)] == [
+        0, 1, 1, 2, 2, 3, 3, 4, 4
+    ]
+    assert len(COUNT_LABELS) == len(theme.sequential_scale("hot", "light"))
+
+
+def test_the_net_buckets_mirror_the_counting_ones() -> None:
+    """A reader moving between views should not also learn new boundaries."""
+    from dashboard.views.climate_matrix import NET_LABELS, net_bucket
+
+    assert net_bucket(0) == theme.NEUTRAL_INDEX
+    assert len(NET_LABELS) == len(theme.diverging_scale("light"))
+    for value in (1, 2, 3, 5, 6, 10, 11, 30):
+        assert net_bucket(value) + net_bucket(-value) == 2 * theme.NEUTRAL_INDEX
+        assert net_bucket(value) > theme.NEUTRAL_INDEX
+
+
+def test_zero_extremes_is_a_colour_and_absent_is_a_hole() -> None:
+    """The distinction most heatmaps lose.
+
+    A year with no extremes and a year nobody has ingested are the same shade
+    of pale on most grids, and they are opposite statements.
+    """
+    from dashboard.views import climate_matrix as matrix
+
+    frame = _matrix_frame()
+    grid = matrix.matrix(frame, "hot", matrix.order_cities(frame, "hot", "Name"))
+
+    quiet = grid[(grid["city_id"] == "cairo") & (grid["year"] == 1995)].iloc[0]
+    absent = grid[(grid["city_id"] == "moscow") & (grid["year"] == 1995)].iloc[0]
+
+    assert quiet["hot_days"] == 0
+    assert quiet["bucket"] == pytest.approx(0.5), "a quiet year lost its colour"
+    assert pd.isna(absent["bucket"]), "an un-ingested year was painted"
+    assert "not ingested" in absent["cell_text"]
+    assert "0</b> hot days" in quiet["cell_text"]
+
+
+def test_the_grid_is_complete_whatever_the_fact_holds() -> None:
+    """Every city crossed with every year, from the dimension outward.
+
+    Aggregating the fact alone returns only the city-years that have rows, and
+    the heatmap would silently change shape as the backfill advanced.
+    """
+    from dashboard.views.climate_matrix import _MATRIX_SQL
+
+    sql = " ".join(_MATRIX_SQL.lower().split())
+    assert "cross join years" in sql
+    assert "from gold_marts.dim_cities c" in sql
+    assert "left join gold_marts.fact_weather_anomalies" in sql
+    # Grouped in the database. The fact is 60k rows and the answer is 480;
+    # grouping locally would pay for the same arithmetic twice, once in
+    # bandwidth and once against the read budget.
+    assert "group by" in sql and "filter (" in sql
+
+
+def test_a_trend_needs_enough_years_to_be_one() -> None:
+    """Four points and thirty-two points are different quantities.
+
+    Ranking them together would seat a city at the top of the chart on the
+    strength of a coincidence.
+    """
+    from dashboard.views import climate_matrix as matrix
+
+    trend = matrix.trends(_matrix_frame(), "hot")
+
+    assert trend["Cairo"] > 0, "a rising record did not read as rising"
+    assert np.isnan(trend["Tokyo"]), "four scored years produced a trend"
+    assert np.isnan(trend["Moscow"]), "a city with no data produced a trend"
+
+
+def test_the_trend_is_reported_per_decade() -> None:
+    """Per year reads as a column of zeroes and invites the wrong conclusion."""
+    from dashboard.views import climate_matrix as matrix
+
+    frame = _matrix_frame()
+    rising = frame[(frame["name"] == "Cairo")]
+    slope_per_year = np.polyfit(
+        rising["year"].to_numpy(float), rising["hot_days"].to_numpy(float), 1
+    )[0]
+    assert matrix.trends(frame, "hot")["Cairo"] == pytest.approx(slope_per_year * 10)
+
+
+@pytest.mark.parametrize("sort", ["Trend", "Total", "Name"])
+def test_cities_with_nothing_to_say_sort_to_the_bottom(sort) -> None:
+    """Nine empty rows interleaved with six full ones is an unreadable chart."""
+    from dashboard.views import climate_matrix as matrix
+
+    frame = _matrix_frame()
+    # Plotly counts its y axis upward, so reading order is the reverse.
+    reading_order = matrix.order_cities(frame, "hot", sort)[::-1]
+    assert reading_order[-1] == "Moscow", f"{sort} interleaved an empty city"
+
+
+def test_the_default_order_is_the_trend_not_the_alphabet() -> None:
+    """"Sortable by trend so the pattern is legible rather than alphabetical"."""
+    from dashboard.views import climate_matrix as matrix
+
+    frame = _matrix_frame()
+    by_trend = matrix.order_cities(frame, "hot", "Trend")[::-1]
+    by_name = matrix.order_cities(frame, "hot", "Name")[::-1]
+
+    assert by_trend[0] == "Cairo", "the steepest riser is not on top"
+    assert by_name == ["Cairo", "Tokyo", "Moscow"]
+
+
+def test_the_matrix_reads_from_the_cache_not_the_warehouse() -> None:
+    """The three-second budget is a cache-hit budget, and this is what makes it one."""
+    import inspect
+
+    from dashboard.views import climate_matrix as matrix
+
+    source = inspect.getsource(matrix.load)
+    assert "run_query" in source, "the matrix bypasses the cached query layer"
+
+
+def test_the_matrix_query_returns_a_bounded_grid(engine) -> None:
+    """Fifteen cities by the ingested span, and nothing larger.
+
+    A heatmap that grew a row per city-day would still render and would still
+    be under three seconds on a cache hit — and would be sending sixty
+    thousand rows over the wire to fill four hundred cells.
+    """
+    from dashboard.views.climate_matrix import _MATRIX_SQL
+
+    with engine.connect() as connection:
+        frame = pd.read_sql_query(sa_text(_MATRIX_SQL), connection)
+
+    cities, years = frame["city_id"].nunique(), frame["year"].nunique()
+    assert cities == 15
+    assert len(frame) == cities * years
+    assert years >= 30, f"only {years} years — the 30-year range is not rendered"
+    assert set(frame.columns) >= {"hot_days", "cold_days", "scored_days"}
+
+
+def test_every_registered_city_has_a_row_even_with_nothing_ingested(engine) -> None:
+    from cities import load_cities
+
+    from dashboard.views.climate_matrix import _MATRIX_SQL
+
+    with engine.connect() as connection:
+        frame = pd.read_sql_query(sa_text(_MATRIX_SQL), connection)
+
+    assert set(frame["city_id"]) == {city.id for city in load_cities()}
+    never = frame.groupby("city_id")["scored_days"].sum()
+    assert (never == 0).any(), "the fixture for the absent case has gone stale"
+    assert (never > 0).any()

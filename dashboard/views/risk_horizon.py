@@ -15,7 +15,7 @@ VIEW = PendingView(
         "observed one, against the threshold chosen on validation."
     ),
     encoding="diverging",
-    ticket="BI-04",
+    ticket="BI-06",
     source_table=f"{GOLD_SCHEMA}.fact_ml_predictions",
     probe_sql=f"""
         select
