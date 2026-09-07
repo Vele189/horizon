@@ -768,6 +768,17 @@ def _print_report(
         "— bronze stays local, this is the yardstick only"
     )
 
+    # The table is rarely full when someone asks how big it will be.
+    per_city = max((c.expected_days for c in coverage), default=0)
+    expected_total = per_city * len(load_cities())
+    if size.rows and expected_total > size.rows:
+        projected = size.project(expected_total)
+        print(
+            f"  projected at {expected_total:,} rows "
+            f"({len(load_cities())} cities complete): {_bytes(projected)}, "
+            f"{projected / NEON_STORAGE_BUDGET_BYTES:.0%} of that allowance"
+        )
+
     return 1 if (missing or off or gapped or unpopulated) else 0
 
 
