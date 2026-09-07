@@ -1,5 +1,7 @@
 # Climate Volatility & Risk Engine
 
+[![CI](https://github.com/Vele189/horizon/actions/workflows/ci.yml/badge.svg)](https://github.com/Vele189/horizon/actions/workflows/ci.yml)
+
 An end-to-end analytics platform that ingests three decades of global weather observations, models them into a governed dimensional warehouse, and forecasts extreme temperature anomalies across fifteen major cities.
 
 > **Status:** in development. This README is a stub; the full write-up — architecture diagram, model metrics, live dashboard link, and five-minute setup — lands on Day 15. The complete proposal and delivery plan is in [`docs/proposal.md`](docs/proposal.md).
@@ -3632,6 +3634,167 @@ nothing about what arrived afterwards. `--screenshots` closes that gap with
 headless Chrome, capturing each view so the four can be checked by eye, which
 is the only honest way to verify a render. The view list comes from the
 navigation, so a fifth view is checked without editing the checker.
+
+## Running it
+
+Three commands, and nothing else in this repository is required reading.
+
+```bash
+make setup    # venv, dependencies, Postgres, bronze schema, dbt profile, seed
+make run      # the pipeline, end to end
+make test     # pytest, then dbt test
+```
+
+Every target is idempotent. `make setup` twice is `make setup` once, and a
+half-finished setup is repaired by running it again rather than by working out
+which step failed. `make run MODE=backfill` switches from the nightly
+incremental to the full thirty-year run; `make dashboard` starts the Streamlit
+app; `make clean` removes the venv and caches and deliberately leaves the
+database volume alone, because a backfill measured in hours should not be
+destroyed by a tidy-up command.
+
+`make setup` refuses rather than guesses if `.env` is missing: it copies the
+example, tells you which values to fill in, and exits non-zero. Docker Compose
+has no default for `POSTGRES_PASSWORD` for the same reason.
+
+## The pipeline
+
+[`run_pipeline.py`](run_pipeline.py) runs four stages in order — ingest, dbt
+build, predict, promote — and **stops at the first failure**.
+
+```bash
+python run_pipeline.py                      # daily incremental
+python run_pipeline.py --mode backfill      # the full run, including hourly
+python run_pipeline.py --only dbt predict   # two stages, still in order
+python run_pipeline.py --skip promote       # everything but Neon
+python run_pipeline.py --dry-run            # the plan, and nothing else
+```
+
+### Halting is the feature
+
+A pipeline that continues past a broken transform publishes yesterday's
+predictions as though they were today's — and does it *quietly*, because every
+stage after the broken one still succeeds. Promotion is the dangerous one: it
+would copy a stale mart to Neon and report success, because the copy worked.
+
+So a non-zero exit from any stage halts the run and the runner exits non-zero
+itself. There is no `--keep-going`, and a test asserts there is no flag that
+means it, checked against the declared arguments rather than the source text —
+the docstring says the flag does not exist, and a substring search would find
+that sentence and call it the flag.
+
+The tests do not merely check that a failure is reported; they check that
+nothing after it ran, which is the part a reader would otherwise have to infer
+from a log.
+
+`--only` cannot reorder the pipeline. `--only dbt ingest` and `--only ingest
+dbt` are the same run, because letting a flag decide the order would make it
+possible to build gold from bronze that had not been fetched yet, and to do it
+by typo.
+
+### Stages are subprocesses, and that buys better numbers
+
+dbt has to be a subprocess regardless, and running the other three the same way
+means the pipeline executes exactly what a person executes by hand — one code
+path, not two that drift. It also stops each stage's own `logging.basicConfig`
+from fighting the runner's.
+
+The cost is that a stage cannot hand its row counts back, and the replacement
+is better than the thing it replaces: **the runner counts the rows itself, from
+the warehouse, either side of every stage.** An independent measurement beats a
+self-report, and it catches the failure a self-report cannot — a stage that
+writes nothing and exits zero. Its own summary would say "0 rows" and be
+believed; a delta of nothing is a fact about the database.
+
+### Two modes
+
+| | Ingest | For |
+|---|---|---|
+| `daily` | a 7-day window, daily grain only | the nightly update |
+| `backfill` | the planner's full range, plus the rolling hourly window | the first run, and repairs |
+
+Seven days rather than one, because the archive revises recent observations and
+a window that asked only for yesterday would never pick up a correction to the
+day before. The hourly window is excluded from the daily mode on purpose: it is
+a rolling two years the backfill maintains, and re-walking it nightly would
+spend the API budget rediscovering what is already on disk.
+
+## Structured logging
+
+Two streams, from one call. Stdout gets a readable line for whoever is
+watching; `logs/pipeline-<run-id>.jsonl` gets one JSON object per event, with
+the stage, the counts, the duration and the exit code — which is the form you
+want when the question is "what did the run do at 02:00 last Tuesday" rather
+than "what is it doing now".
+
+`logs/` is git-ignored: a run's output records one execution, it is not a fact
+about the repository. One sample is committed to
+[`docs/pipeline-run.jsonl`](docs/pipeline-run.jsonl) deliberately, as an
+artefact rather than as an accident.
+
+### A real run, end to end
+
+That artefact is this run, unedited apart from paths shown relative to the
+project root — which is the form the runner now emits, after the first run
+proved that absolute paths publish the operator's home directory for no
+diagnostic gain.
+
+| Stage | Seconds | Rows in | Rows out | Δ |
+|---|---:|---:|---:|---:|
+| ingest | 21.05 | 344,776 | 344,806 | **+30** |
+| dbt | 12.47 | 462,739 | 464,365 | **+1,626** |
+| predict | 1.34 | 464,350 | 464,350 | 0 |
+| promote | 87.05 | 462,724 | 464,350 | **+1,626** |
+| **run** | **139.28** | | | |
+
+Read across the boundary and the numbers reconcile: dbt built 1,626 new rows
+locally and promotion moved exactly 1,626 to Neon. Predict's zero is correct
+and not a failure — it upserts one row per city per forecast date, so
+re-scoring the same horizon replaces rows rather than adding them, which is
+precisely why the runner logs the delta *and* the per-table breakdown rather
+than a single number.
+
+The first attempt at this run failed, and usefully. dbt exited 1 because
+`dbt_env.py` execs its command and a bare `dbt` resolved against `PATH` to a
+stale binary in an unrelated tool's cache. The pipeline stopped there, predict
+and promote did not run, and the runner exited non-zero — which is the
+behaviour this file exists for, demonstrated by accident on its first real
+outing. dbt is now named by its full path beside the running interpreter.
+
+## Continuous integration
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs `ruff` and the test
+suite on every push and pull request, on every branch — the work happens on
+long-lived workstream branches, and a workflow watching only the default branch
+would stay silent for exactly as long as it was needed.
+
+**No secret is required, and adding one would buy nothing.** CI sets two
+syntactically valid URLs that point nowhere, because a handful of tests assert
+on the *shape* of a connection string — `config.py`'s parsing, `dbt_env.py`'s
+variable derivation — and refuse to run at all when the variable is unset.
+Nothing connects. Every test that needs a live warehouse skips itself with a
+reason. A real credential in CI would still not have a populated warehouse
+behind it.
+
+Measured in a sandbox built the way CI builds one — the tracked files, a fresh
+git repository, no `.env`:
+
+```
+702 passed, 321 skipped in 54.98s
+```
+
+Getting there fixed three things rather than lowering a bar. The dashboard's
+`offline` fixture did not stub URL resolution, so three tests passed on a
+machine with a warehouse configured and failed without one — the exact
+inversion of what a hermetic test is for. `test_promotion`'s scratch-database
+fixture connected outside its own guard, erroring where every other
+warehouse-dependent fixture in the file skips. And the lineage-image test
+failed for want of a dbt manifest while the fixtures beside it skipped for the
+same reason. A test that fails for want of a fixture cries wolf.
+
+CI also re-checks the claim the repository makes about itself — that no
+secret-bearing file is tracked — on every push, rather than only at the moment
+of publication. It is cheap, and the cost of it being wrong is unbounded.
 
 ## Licence
 

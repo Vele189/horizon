@@ -220,7 +220,15 @@ def test_the_lineage_image_exists_and_is_current(manifest) -> None:
 
 
 def test_the_lineage_image_regenerates_identically() -> None:
-    """The check that catches a diagram edited by hand or left stale."""
+    """The check that catches a diagram edited by hand or left stale.
+
+    Skips without the dbt artefacts, like the fixtures above it. Rendering the
+    lineage needs a manifest, a manifest needs `dbt docs generate`, and that
+    needs a warehouse — so on a machine without one this test was the only
+    thing in the module that failed instead of skipping.
+    """
+    if not MANIFEST.exists():
+        pytest.skip("run `dbt docs generate` first")
     svg = IMAGES / "lineage.svg"
     before = svg.read_text(encoding="utf-8")
     result = subprocess.run(

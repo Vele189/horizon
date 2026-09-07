@@ -1,0 +1,82 @@
+name: CI
+
+# Push and pull request, on every branch. The work happens on long-lived
+# workstream branches, so a workflow that only watched the default branch would
+# stay silent for exactly as long as it was needed.
+on:
+  push:
+  pull_request:
+
+# A new push to the same branch makes the previous run's answer irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: ruff and pytest
+    runs-on: ubuntu-latest
+
+    env:
+      # Not secrets. Two syntactically valid URLs that point nowhere, because
+      # a handful of tests assert on the *shape* of a connection string —
+      # config.py's parsing, dbt_env.py's variable derivation — and refuse to
+      # run at all when the variable is unset.
+      #
+      # Nothing here connects. Every test that needs a live warehouse skips
+      # itself with a reason (321 of them do), which is why this workflow needs
+      # no secret and why adding one would buy nothing: a real credential in CI
+      # would still not have a populated warehouse behind it.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      SERVING_DATABASE_URL: postgresql://ci:ci@ci.invalid:5432/ci?sslmode=require
+      ENVIRONMENT: local
+      LOG_LEVEL: WARNING
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # A shallow checkout would break the tests that ask git what is tracked
+      # and what is ignored — the secret-hygiene checks, most importantly.
+      # actions/checkout gives a full working tree by default; this is the
+      # assertion that it still does.
+      - name: Confirm the checkout is a usable git repository
+        run: |
+          git rev-parse --is-inside-work-tree
+          test "$(git ls-files | wc -l)" -gt 100
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-pipeline.txt
+            requirements-dev.txt
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      # cities.yml is the registry and the seed is derived from it. Generated
+      # rather than committed, so it has to be generated before the tests that
+      # compare the two can run.
+      - name: Generate the city seed
+        run: python dbt_analytics/export_cities.py
+
+      - name: Test
+        run: pytest -q -m "not live" --durations=10
+
+      # The claim the repository makes about itself, checked on every push
+      # rather than at the moment it was published. This is cheap and the cost
+      # of it being wrong is unbounded.
+      - name: No credential in the working tree
+        run: |
+          test -z "$(git ls-files | grep -E '^\.env$|^\.streamlit/secrets\.toml$|\.pem$|\.key$')" \
+            || { echo "a secret-bearing file is tracked"; exit 1; }

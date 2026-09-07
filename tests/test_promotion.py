@@ -391,7 +391,14 @@ def scratch_target(local_url: str):
     parts = split_database_url(local_url)
     name = f"horizon_promote_{uuid.uuid4().hex[:8]}"
 
-    admin = psycopg2.connect(local_url)
+    try:
+        admin = psycopg2.connect(local_url)
+    except Exception as exc:  # noqa: BLE001 - any driver failure means skip
+        # Guarded like `local_conn` above. Without this the fixture *errors*
+        # where every other warehouse-dependent fixture in this file skips,
+        # which turns "no database here" into a red suite on a machine that
+        # never claimed to have one — CI, most obviously.
+        pytest.skip(f"local warehouse unreachable: {exc}")
     admin.autocommit = True
     try:
         with admin.cursor() as cur:

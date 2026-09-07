@@ -960,6 +960,9 @@ def test_the_shell_holds_no_sql_and_no_colour() -> None:
 APP = str(PROJECT_ROOT / "dashboard" / "app.py")
 
 
+_FAKE_URL = "postgresql://stub:stub@stub.invalid:5432/stub?sslmode=require"
+
+
 def _stub_frame(sql: str) -> pd.DataFrame:
     """A plausible answer for whichever query was asked, without a database."""
     if "min(date_key)" in sql and "last_scored_day" in sql:
@@ -1049,8 +1052,16 @@ def offline(monkeypatch):
         for bound in (_scaffold, *views.ORDER):
             if hasattr(bound, "run_query"):
                 monkeypatch.setattr(bound, "run_query", answer)
-        if source is not None:
-            monkeypatch.setattr(module, "resolve_database_url", source)
+        # Resolution is stubbed too, and by default rather than on request.
+        # Without this the shell reads the developer's own .env and renders the
+        # "no database" panel wherever there isn't one — so these tests passed
+        # on a machine with a warehouse configured and failed in CI, which is
+        # the exact inversion of what a hermetic test is for.
+        monkeypatch.setattr(
+            module,
+            "resolve_database_url",
+            source or (lambda: module.Source(_FAKE_URL, "a stub")),
+        )
 
     return install
 
