@@ -3076,19 +3076,20 @@ no page needs. Three pins are exempt from the last one and say why in the file:
 `psycopg2-binary`, which SQLAlchemy loads by name rather than by import, and
 `numpy` and `python-dotenv`, which arrive underneath pandas and `config.py`.
 
-### What the four pages hold today
+### The four pages
 
-Each is a real page with its question, its caption, the colour key it will use,
-and a live probe of the mart it will read — so opening any of them exercises the
-connection layer end to end rather than leaving it unproven until the charts
-arrive.
+All four are built. They were stubs when BI-02 landed — each rendering its
+question, its key and a live probe of its mart, so the connection layer was
+exercised from every page rather than left unproven until the charts arrived.
+The scaffold that did that was deleted in BI-06; a scaffold kept after the
+building is finished is just something else to maintain.
 
 | Page | Reads | Chart lands in |
 |---|---|---|
 | Global Anomaly Map | `fact_weather_anomalies` | **built — BI-03** |
 | Climate Matrix | `fact_weather_anomalies` | **built — BI-04** |
 | Storm Dynamics | `fact_weather_hourly` | **built — BI-05** |
-| Risk Horizon | `fact_ml_predictions` | BI-06 |
+| Risk Horizon | `fact_ml_predictions` | **built — BI-06** |
 
 One open question is recorded on the page it belongs to rather than deferred
 silently. Storm Dynamics is specified as a scatter "coloured by city" over
@@ -3429,6 +3430,122 @@ the rise behind a departing low is windy too, which is half the physical story.
 The hour count in the footnote is `count(*)` from the group, not the day count
 multiplied by 24 — the two agree today at 262 800, and only one of them would
 still be true on a day the archive is short.
+
+## The Risk Horizon grid
+
+Which cities are flagged for the coming week? Fifteen rows, seven days, and the
+one view where the model becomes visible to someone who will never open
+`train.py`. That makes what the picture *claims* matter more here than
+anywhere else.
+
+### One score per week, drawn as a band
+
+The model's target is "does an anomaly occur at any point in the next seven
+days". So `fact_ml_predictions` holds one row per city per forecast date with
+`horizon_days = 7`, and **there is no per-day probability underneath it.**
+
+The ticket asks for days as columns, and it gets them — but spreading the
+week's number across seven cells and letting them read as seven estimates would
+be a chart claiming a resolution the model does not have. So each city is drawn
+as a **single continuous band** across the seven days its score covers:
+`xgap = 0` within a row, `ygap = 3` between rows. The calendar tells the reader
+which days; the absence of any internal boundary tells them the score does not
+vary within them. The caption and every tooltip say it in words as well, but
+the grid lines say it first, and no caption undoes what they say.
+
+A test asserts every cell in a row carries the same value, and a second asserts
+the gap is zero — because "we explained it in the caption" is not a defence
+against a picture that shows something else.
+
+### The threshold is a step boundary, and it is `>=`
+
+The risk breaks are multiples of the model's own decision threshold — 0.25×,
+0.5×, 1×, 2× — rather than fixed probabilities. The threshold is chosen on
+validation and moves when the model is retrained; breaks pinned to 0.05 and
+0.10 would quietly stop lining up with it, and the one boundary that matters
+would drift off the legend.
+
+Because the boundary sits at 1× the threshold, "painted in one of the top two
+steps" and "the model said yes" are the same statement. That equivalence is
+asserted across a thousand scores — and it uses **`>=`**, because the
+warehouse's own check constraint is
+`prediction_label = (risk_score >= decision_threshold)`. The anomaly flag two
+views away is a strict `>`. The two conventions differ, each view follows its
+own table, and a test pins each at the exact value where they would come apart.
+
+### The fourth ramp, and the collision it could not avoid
+
+By this view the hue circle is full. Under protanopia and deuteranopia the
+usable hue space collapses toward a blue-yellow axis, and the anomaly red, the
+anomaly blue and the emphasis green already sit on it.
+
+The risk ramp is violet, and it measures **0.6** from the cold counting ramp
+under protanopia — for a red-blind reader, violet minus its red *is* blue. That
+is stated rather than designed away, because the alternative was worse and the
+numbers say so:
+
+| | vs the cold ramp (different page, CVD) | vs the muted ink (**same page**) |
+|---|---:|---:|
+| Violet | 0.6 | 7.8 |
+| Achromatic | 9.1 | **3.7** |
+
+The muted ink marks the ten cities the model does not score, and it is in the
+same picture. A reader who cannot separate "no prediction" from "low risk" in
+one image is worse off than one who could confuse two ramps that never share a
+page and each carry their own labelled legend. The residual same-page risk is
+then removed entirely: unscored cities are drawn with **no fill at all**, so
+the ramp only ever has to separate from the surface.
+
+Both the admitted collision and the rejected alternative are recomputed by
+tests. An argument from measurements that no longer hold is just an assertion.
+
+### Ten of fifteen cities have no prediction, and the model says why
+
+Not inferred from missing rows. "No row in the predictions table" is one
+observation with three different causes, and only the model knows which — so
+the reasons are read from the committed `metrics.json`, which records the
+cities it scored, the cities ingested but not scorable, and the cities never
+ingested:
+
+| | Cities | Waiting on |
+|---|---|---|
+| Scored | Cairo, Delhi, Lagos, Phoenix, Singapore | — |
+| Ingested, too little history | London, Reykjavík, Sydney, Tokyo | more backfill |
+| Never ingested | Auckland, Buenos Aires, Johannesburg, Moscow, Portland, São Paulo | ingestion |
+
+A test asserts the cities with rows in the warehouse are exactly the cities
+`metrics.json` claims were scored. They are two records of the same fact
+written by different steps on different days, and if they disagree, the reasons
+on screen are about a different run than the numbers beside them.
+
+### The drivers, without shipping a model
+
+The top SHAP features come from the same committed evaluation record —
+`z_temperature_2m_mean` at 0.386 mean |SHAP|, then `anomaly_days_trailing30` at
+0.210, then `elevation_m`. They are **global to the model, not per cell**, and
+the panel says so.
+
+Per-cell attribution would need the estimator and the feature matrix at request
+time, and the dashboard has neither by design: it ships no warehouse and no
+XGBoost. Reading a committed JSON file instead of importing `machine_learning`
+is what keeps that true, and a test walks every module under `dashboard/` and
+fails on an import of `xgboost`, `sklearn`, `joblib`, `shap` or
+`machine_learning`.
+
+### The sentence that matters most
+
+> **This is a demonstration model, not an operational forecast.** It is a
+> gradient-boosted tree fitted to thirty years of reanalysis and scored against
+> a fixed test split — not numerical weather prediction, which is what actual
+> forecasting uses and what this could not compete with. Do not plan anything
+> around these numbers.
+
+It renders as a warning above the grid rather than as a footnote, because this
+is the view a non-technical reader will screenshot. A test asserts it says
+"demonstration model", "not an operational forecast", and names what real
+forecasting uses instead.
+
+Cached render: **0.014 s**.
 
 ## Licence
 

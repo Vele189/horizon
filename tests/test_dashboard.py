@@ -944,15 +944,6 @@ def _sql_literals(path: Path) -> Iterator[str]:
                 yield rendered
 
 
-def test_the_pending_view_declares_its_encoding() -> None:
-    """What is left of the scaffold, and it still explains its key."""
-    from dashboard.views import _scaffold, risk_horizon
-
-    assert isinstance(risk_horizon.VIEW, _scaffold.PendingView)
-    assert risk_horizon.VIEW.encoding == "diverging"
-    assert risk_horizon.VIEW.ticket.startswith("BI-")
-
-
 def test_the_shell_holds_no_sql_and_no_colour() -> None:
     """app.py arranges. Anything else in it is something a view will need later."""
     tree = ast.parse((DASHBOARD_DIR / "app.py").read_text(encoding="utf-8"))
@@ -971,8 +962,6 @@ APP = str(PROJECT_ROOT / "dashboard" / "app.py")
 
 def _stub_frame(sql: str) -> pd.DataFrame:
     """A plausible answer for whichever query was asked, without a database."""
-    from dashboard.views import views_probe_fields
-
     if "min(date_key)" in sql and "last_scored_day" in sql:
         return pd.DataFrame(
             [{
@@ -1025,8 +1014,18 @@ def _stub_frame(sql: str) -> pd.DataFrame:
                  "baseline_observations": None, "observed": False},
             ]
         )
-    # A stub view's coverage probe: one row with every field it asks for.
-    return pd.DataFrame([{field: 1 for field in views_probe_fields()}])
+    if "fact_ml_predictions" in sql:
+        return pd.DataFrame([{
+            "city_id": "singapore", "name": "Singapore", "country": "Singapore",
+            "forecast_date": dt.date(2026, 9, 2),
+            "horizon_start": dt.date(2026, 9, 3), "horizon_end": dt.date(2026, 9, 9),
+            "horizon_days": 7, "risk_score": 0.247, "prediction_label": True,
+            "decision_threshold": 0.1024,
+            "model_version": "model-unweighted-v1-2ad772ff7b18",
+            "model_variant": "unweighted", "feature_count": 27,
+            "scored_at": pd.Timestamp("2026-09-07T09:59:25Z"),
+        }])
+    raise AssertionError(f"a view asked something the offline stub cannot answer: {sql[:80]}")
 
 
 @pytest.fixture
@@ -2206,4 +2205,339 @@ def test_the_reported_relationship_is_the_one_the_data_has(engine) -> None:
     assert per_city.iloc[0] - per_city.iloc[-1] > 0.2, (
         "the spread across cities has collapsed — the second caption claims a "
         "variation the data no longer shows"
+    )
+
+
+# --------------------------------------------------------------------------
+# BI-06 — Risk Horizon. Where the model becomes a picture.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_the_risk_ramp_is_a_ramp(mode) -> None:
+    """A probability is a magnitude, so it gets the same checks as a count."""
+    steps = theme.risk_scale(mode)
+    hues = [hue(step) for step in steps]
+    values = [lightness(step) for step in steps]
+    gaps = [abs(values[i + 1] - values[i]) for i in range(len(values) - 1)]
+
+    assert max(hues) - min(hues) < 10
+    assert values == sorted(values, reverse=(mode == "light"))
+    assert min(gaps) >= 0.06
+    assert contrast(steps[0], theme.SURFACE[mode]) >= 2.0
+    assert contrast(steps[-1], theme.SURFACE[mode]) >= 3.0
+
+
+def test_the_step_boundary_is_the_models_own_comparison() -> None:
+    """``prediction_label = (risk_score >= decision_threshold)`` — greater or *equal*.
+
+    The anomaly flag two views away is a strict ``>`` and this one is not. The
+    two conventions differ, each follows its own table, and getting it wrong
+    here would paint a city as flagged on the exact value where the warehouse
+    says it is not — or the reverse.
+    """
+    threshold = 0.1024
+    outermost = {3, 4}
+    for thousandths in range(0, 1001):
+        score = thousandths / 1000
+        painted_as_flagged = theme.risk_step(score, threshold) in outermost
+        model_says_yes = score >= threshold
+        assert painted_as_flagged is model_says_yes, f"disagreement at {score}"
+
+    assert theme.risk_step(threshold, threshold) == 3
+    assert theme.risk_step(threshold - 1e-9, threshold) == 2
+
+
+def test_the_risk_breaks_follow_the_threshold_rather_than_fixed_probabilities() -> None:
+    """The threshold is chosen on validation and moves when the model is retrained.
+
+    Breaks pinned to absolute probabilities would quietly stop lining up with
+    it, and the one boundary that matters would drift off the legend.
+    """
+    assert 1.0 in theme.RISK_BREAKS
+    for threshold in (0.02, 0.1024, 0.4):
+        assert theme.risk_step(threshold, threshold) == theme.RISK_BREAKS.index(1.0) + 1
+        assert theme.risk_step(threshold * 0.99, threshold) < 3
+
+    with pytest.raises(ValueError):
+        theme.risk_step(0.5, 0.0)
+
+
+def test_the_ramp_collision_is_the_one_theme_py_admits() -> None:
+    """Violet against blue under protanopia, and why it was chosen anyway.
+
+    theme.py argues the alternative is worse and gives three numbers. All three
+    are recomputed, because an argument from measurements that no longer hold
+    is just an assertion.
+    """
+    prose = _theme_prose()
+    quoted = re.search(
+        r"measured as \*\*(\d+\.\d+)\*\* from the cold counting ramp", prose
+    )
+    assert quoted, "theme.py no longer states the collision"
+
+    worst = min(
+        separation(a, b, deficiency)
+        for mode in MODES
+        for a, b in zip(theme.risk_scale(mode), theme.sequential_scale("cold", mode))
+        for deficiency in GATING_DEFICIENCIES
+    )
+    assert round(worst, 1) == float(quoted.group(1))
+    assert worst < SEPARATION_TARGET, "the admitted collision is gone; fix the prose"
+
+
+def test_the_rejected_alternative_is_still_the_worse_one() -> None:
+    """An achromatic ramp clears the cold ramp and collides with the muted ink.
+
+    That trade was the whole argument: a reader who cannot separate "no
+    prediction" from "low risk" *in one picture* is worse off than one who
+    could confuse two ramps that never share a page.
+    """
+    achromatic = {
+        "light": ("#d2d0cb", "#b3b1ab", "#94928c", "#75736e", "#575551"),
+        "dark": ("#3a3a37", "#565450", "#73716b", "#918f88", "#b0aea6"),
+    }
+    for mode in MODES:
+        context = theme.chrome(mode)["ink_muted"]
+        grey_vs_context = min(
+            separation(step, context, d) for step in achromatic[mode] for d in (None, *_MACHADO)
+        )
+        violet_vs_context = min(
+            separation(step, context, d)
+            for step in theme.risk_scale(mode)
+            for d in (None, *_MACHADO)
+        )
+        assert grey_vs_context < violet_vs_context, (
+            "the achromatic ramp is no longer the worse same-page choice"
+        )
+
+
+# --------------------------------------------------------------------------
+# BI-06 — the grid, and the claim it is allowed to make.
+# --------------------------------------------------------------------------
+
+
+def _risk_frame(scored=("Singapore", "Lagos"), absent=("Moscow",)) -> pd.DataFrame:
+    rows = []
+    for index, name in enumerate(scored):
+        rows.append({
+            "city_id": name.lower(), "name": name, "country": "X",
+            "forecast_date": dt.date(2026, 9, 2),
+            "horizon_start": dt.date(2026, 9, 3), "horizon_end": dt.date(2026, 9, 9),
+            "horizon_days": 7, "risk_score": 0.25 - 0.15 * index,
+            "prediction_label": True, "decision_threshold": 0.1024,
+            "model_version": "model-unweighted-v1-2ad772ff7b18",
+            "model_variant": "unweighted", "feature_count": 27,
+            "scored_at": pd.Timestamp("2026-09-07T09:59:25Z"),
+        })
+    for name in absent:
+        rows.append({
+            "city_id": name.lower(), "name": name, "country": "Y",
+            "forecast_date": None, "horizon_start": None, "horizon_end": None,
+            "horizon_days": None, "risk_score": None, "prediction_label": None,
+            "decision_threshold": None, "model_version": None,
+            "model_variant": None, "feature_count": None, "scored_at": None,
+        })
+    return pd.DataFrame(rows)
+
+
+def test_a_week_is_drawn_as_a_band_not_as_seven_estimates() -> None:
+    """The honesty this view turns on.
+
+    The model's target is "an anomaly at any point in the next seven days", so
+    there is one probability per city per week and no per-day resolution
+    underneath it. Every cell in a row therefore carries the same value —
+    varying them would be a chart claiming precision the model does not have.
+    """
+    from dashboard.views import risk_horizon as risk
+
+    frame = _risk_frame()
+    days = risk.horizon_days(frame)
+    assert len(days) == 7
+
+    _, steps, _ = risk.grid(frame, days)
+    for row in steps:
+        assert len(row) == 7
+        assert len(set(row)) == 1, "a row varies across the week the model scored as one"
+
+
+def test_no_internal_boundary_splits_the_week() -> None:
+    """A row is one continuous bar; only rows are separated.
+
+    A gap between the seven cells would draw seven statements where the model
+    made one, and no caption undoes what the grid lines say.
+    """
+    from dashboard.views import risk_horizon as risk
+
+    frame = _risk_frame()
+    figure = risk._figure(frame, risk.horizon_days(frame), "light")
+    heatmap = figure.data[0]
+
+    assert heatmap.xgap == 0, "the week has been split into seven cells"
+    assert heatmap.ygap > 0, "the cities have run together"
+
+
+def test_every_registered_city_keeps_its_row() -> None:
+    """The model scores five of fifteen; showing five would present them as the world."""
+    from dashboard.views.risk_horizon import _LATEST_SQL
+
+    sql = " ".join(_LATEST_SQL.lower().split())
+    assert "from gold_marts.dim_cities c" in sql
+    assert "left join gold_marts.fact_ml_predictions p" in sql
+    assert "max(forecast_date)" in sql
+
+
+def test_an_unscored_city_is_empty_rather_than_grey() -> None:
+    """Absence carries no fill at all, which is what lets the ramp be violet.
+
+    A grey fill for "no prediction" would sit 3.7 from the muted ink and land
+    in the same picture as the ramp — the same-page collision theme.py rejected
+    the achromatic ramp to avoid.
+    """
+    from dashboard.views import risk_horizon as risk
+
+    frame = _risk_frame()
+    _, steps, _ = risk.grid(frame, risk.horizon_days(frame))
+    assert steps[-1] == [None] * 7
+
+
+def test_the_reason_a_city_is_missing_comes_from_the_model_not_a_guess() -> None:
+    """Three states, taken from the evaluation record rather than inferred.
+
+    "No row in the predictions table" is one observation with three different
+    causes, and only the model knows which.
+    """
+    from dashboard.views import risk_horizon as risk
+
+    reasons = risk.absence_reasons()
+    assert reasons, "the committed evaluation record has no absence account"
+    assert set(reasons.values()) <= {
+        "not ingested",
+        "ingested, but not enough history to score",
+    }
+    assert reasons.get("moscow") == "not ingested"
+    assert reasons.get("london") == "ingested, but not enough history to score"
+
+
+def test_the_tooltip_says_the_score_covers_the_whole_window() -> None:
+    from dashboard.views import risk_horizon as risk
+
+    frame = _risk_frame()
+    days = risk.horizon_days(frame)
+    _, _, texts = risk.grid(frame, days)
+
+    scored = texts[0][3]
+    assert "risk score" in scored
+    assert "threshold" in scored
+    assert "one score for 7 days" in scored
+    assert "03 Sep – 09 Sep" in scored
+
+
+def test_the_vintage_is_on_the_page() -> None:
+    """"so the reader knows the vintage" — the model, and when it ran."""
+    from dashboard.views import risk_horizon as risk
+
+    stamp = risk.vintage(_risk_frame())
+    assert stamp["model_version"].startswith("model-")
+    assert stamp["model_variant"] in {"weighted", "unweighted"}
+    assert stamp["scored_at"] is not None
+    assert stamp["feature_count"] == 27
+    assert 0 < stamp["threshold"] < 1
+
+
+def test_the_drivers_are_read_as_data_not_imported_as_a_model() -> None:
+    """SHAP from the committed record, so the deployment ships no XGBoost.
+
+    A per-cell attribution would need the estimator and the feature matrix at
+    request time, and the dashboard has neither by design.
+    """
+    from dashboard.views import risk_horizon as risk
+
+    drivers = risk.top_drivers()
+    assert not drivers.empty
+    assert list(drivers.columns)[:1] == ["feature"]
+    assert drivers["mean_abs"].is_monotonic_decreasing
+    assert drivers.iloc[0]["feature"] == "z_temperature_2m_mean"
+
+
+def test_the_dashboard_imports_no_machine_learning_runtime() -> None:
+    """The constraint that keeps the deployment small, asserted over the source.
+
+    Importing `machine_learning` anywhere under `dashboard/` would pull XGBoost
+    and scikit-learn into an app whose only job is reading finished rows.
+    """
+    forbidden = {"xgboost", "sklearn", "scikit_learn", "joblib", "shap", "machine_learning"}
+    offenders = []
+    for path in _python_modules(DASHBOARD_DIR):
+        for name in _imports_of(path):
+            if name in forbidden:
+                offenders.append(f"{path.relative_to(PROJECT_ROOT)}: {name}")
+    assert not offenders, "ML runtime reached the dashboard: " + ", ".join(offenders)
+
+
+def test_the_caption_refuses_to_be_mistaken_for_a_forecast() -> None:
+    """The checklist asks for it, and it is the most important sentence here.
+
+    This is the view a non-technical reader will screenshot.
+    """
+    from dashboard.views.risk_horizon import DISCLAIMER
+
+    lowered = DISCLAIMER.lower()
+    assert "demonstration model" in lowered
+    assert "not an operational forecast" in lowered
+    assert "numerical weather prediction" in lowered
+
+
+def test_the_risk_grid_is_fifteen_by_seven_against_the_warehouse(engine) -> None:
+    """The checklist's shape, on the real table."""
+    from cities import load_cities
+
+    from dashboard.views import risk_horizon as risk
+    from dashboard.views.risk_horizon import _LATEST_SQL
+
+    with engine.connect() as connection:
+        frame = pd.read_sql_query(sa_text(_LATEST_SQL), connection)
+
+    assert set(frame["city_id"]) == {city.id for city in load_cities()}
+
+    days = risk.horizon_days(frame)
+    if not days:
+        pytest.skip("no predictions in the warehouse yet")
+
+    names, steps, texts = risk.grid(frame, days)
+    assert len(names) == 15
+    assert len(days) == 7
+    assert all(len(row) == 7 for row in steps)
+
+    scored = frame[frame["risk_score"].notna()]
+    assert not scored.empty
+    # Painted-as-flagged and the stored label must be the same rows.
+    for _, row in scored.iterrows():
+        painted = theme.risk_step(
+            float(row["risk_score"]), float(row["decision_threshold"])
+        ) in {3, 4}
+        assert painted is bool(row["prediction_label"]), row["city_id"]
+
+
+def test_the_warehouse_agrees_with_the_committed_evaluation_record(engine) -> None:
+    """The cities the model says it scored are the cities that have rows.
+
+    Two records of the same fact, written by different steps on different days.
+    If they disagree, the absence reasons on screen are about a different run
+    than the numbers beside them.
+    """
+    from dashboard.views import risk_horizon as risk
+    from dashboard.views.risk_horizon import _LATEST_SQL
+
+    report = risk.model_report()
+    claimed = set(report.get("evaluation", {}).get("cities_scored", []))
+    if not claimed:
+        pytest.skip("no evaluation record committed")
+
+    with engine.connect() as connection:
+        frame = pd.read_sql_query(sa_text(_LATEST_SQL), connection)
+
+    have_rows = set(frame.loc[frame["risk_score"].notna(), "city_id"])
+    assert have_rows == claimed, (
+        f"predictions and metrics.json disagree: {have_rows ^ claimed}"
     )

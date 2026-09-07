@@ -95,6 +95,31 @@ clearing 2:1 — and against each other, because a screenshot of the hot view an
 one of the cold view are the same picture otherwise. They separate by 8.7 under
 protanopia.
 
+A fourth ramp, and the collision it could not avoid
+---------------------------------------------------
+
+Risk Horizon needed a fifth colour job: a probability, unsigned, that is
+neither hot nor cold — the model's target is an anomaly in *either* tail, so
+painting it on the warm ramp would claim a direction the number does not carry.
+
+By this point the hue circle is full. Under protanopia and deuteranopia the
+usable hue space collapses toward a blue-yellow axis, and the anomaly red, the
+anomaly blue and the emphasis green already occupy it. The risk ramp is violet
+(hue 320°) and it is measured as **0.6** from the cold counting ramp under
+protanopia — for a red-blind reader, violet minus its red *is* blue.
+
+That collision is stated rather than designed away, because the alternative was
+worse and the numbers say so. An achromatic ramp clears the cold ramp at 9.1
+but sits **3.7** from the muted ink — and the muted ink is on the *same page*,
+marking the ten cities the model does not score. A reader who cannot separate
+"no prediction" from "low risk" in a single picture is worse off than one who
+could confuse two ramps that never appear together and each carry their own
+labelled legend.
+
+The residual same-page risk is then removed entirely: unscored cities are drawn
+with no fill at all rather than in grey, so the ramp only ever has to separate
+from the surface.
+
 One accent, for emphasis rather than identity
 ---------------------------------------------
 
@@ -136,6 +161,7 @@ from typing import Final, Literal, Mapping, Sequence
 __all__ = [
     "ANOMALY_BREAKS",
     "EMPHASIS",
+    "RISK",
     "SEQUENTIAL",
     "ANOMALY_Z_THRESHOLD",
     "COLD_HUE_DEGREES",
@@ -153,6 +179,7 @@ __all__ = [
     "chrome",
     "diverging_scale",
     "emphasis",
+    "risk_scale",
     "map_chrome",
     "sequential_key_html",
     "sequential_scale",
@@ -531,3 +558,58 @@ EMPHASIS: Final[Mapping[Mode, str]] = {"light": "#145700", "dark": "#6bd852"}
 def emphasis(mode: Mode) -> str:
     """The single colour meaning "the city you picked"."""
     return EMPHASIS[mode]
+
+
+# The risk ramp. Violet, five steps, same ladder as the counting ramps.
+RISK: Final[Mapping[Mode, tuple[str, ...]]] = {
+    "light": ("#cea2d8", "#bc83c9", "#a963b9", "#9642a8", "#821698"),
+    "dark": ("#663f6f", "#865092", "#a762b7", "#ca74de", "#ea8cff"),
+}
+
+# Where one risk step becomes the next, as multiples of the model's own
+# decision threshold rather than as absolute probabilities. The threshold is
+# chosen on validation and can move when the model is retrained; breaks pinned
+# to 0.05 and 0.10 would quietly stop lining up with it, and the step boundary
+# that matters — the one where the model starts saying yes — would drift off
+# the legend.
+RISK_BREAKS: Final[tuple[float, ...]] = (0.25, 0.5, 1.0, 2.0)
+
+
+def risk_scale(mode: Mode) -> tuple[str, ...]:
+    """The five risk steps, lowest first."""
+    return RISK[mode]
+
+
+def risk_step(score: float, threshold: float) -> int:
+    """Which of the five steps a risk score falls in.
+
+    Greater-than-or-equal at each break, because the warehouse's own check
+    constraint is ``prediction_label = (risk_score >= decision_threshold)``.
+    The anomaly flag two views away uses a strict ``>``; the two conventions
+    differ and this one follows its own table, so that "painted in one of the
+    top two steps" and "the model said yes" are the same statement.
+    """
+    if threshold <= 0:
+        raise ValueError("a decision threshold of zero has no scale")
+    return sum(1 for multiple in RISK_BREAKS if score >= multiple * threshold)
+
+
+def risk_key_html(mode: Mode, threshold: float) -> str:
+    """The risk key, labelled in probabilities and marked at the threshold."""
+    tokens = chrome(mode)
+    steps = RISK[mode]
+    bounds = ["0"] + [f"{multiple * threshold:.3f}" for multiple in RISK_BREAKS]
+    cells = "".join(
+        f'<div style="flex:1;text-align:center;">'
+        f'<div style="height:14px;background:{colour};'
+        f'border:1px solid {tokens["axis"]};"></div>'
+        f'<div style="font-size:0.7rem;color:{tokens["ink_muted"]};'
+        f'margin-top:0.2rem;">≥ {label}</div></div>'
+        for colour, label in zip(steps, bounds)
+    )
+    return (
+        f'<div style="display:flex;gap:2px;margin:0.25rem 0 0.35rem 0;">{cells}</div>'
+        f'<div style="font-size:0.75rem;color:{tokens["ink_muted"]};">'
+        f"The model says yes at {threshold:.4f} — the third break, so the top "
+        f"two steps are exactly the flagged cities.</div>"
+    )
