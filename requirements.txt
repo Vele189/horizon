@@ -13,3 +13,7 @@ SQLAlchemy==2.0.52
 # Transformation
 dbt-core==1.12.3
 dbt-postgres==1.11.0
+
+# Machine learning. numpy arrives with pandas anyway; features.py imports it
+# directly, so it is pinned here rather than relied on as a transitive.
+numpy==2.5.3

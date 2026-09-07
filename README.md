@@ -1336,6 +1336,157 @@ may depend on a later layer, and the intermediate layer may read only staging.
 That is the argument for this ticket in one example. The DAG was correct,
 tested, and unreadable, and only drawing it made the difference visible.
 
+## Feature matrix
+
+`machine_learning/features.py` turns the gold layer into **27 model inputs**,
+one row per city-day. 60 396 rows across the 9 cities backfilled so far —
+exactly the row count of `fact_weather_observations`, because nothing is
+dropped.
+
+### The as-of rule, and where the label has to start
+
+A row dated *t* uses observations on days **≤ t**, day *t* included. The daily
+aggregate is complete at the end of the day, and discarding it would throw
+away the most informative value available.
+
+That puts an obligation on ML-02: **the label runs t+1 .. t+7, never
+t .. t+6.** `anomaly_days_trailing30` counts today's flag, so a label window
+that also starts today hands the model its own answer. The convention is
+written into the module docstring and asserted by the test that keeps
+`is_anomaly` out of `feature_columns()`.
+
+### Proving a window cannot see forward
+
+Reading the formulas is not proof. The central test rewrites every day *after*
+a cut point — temperature +40 °C, pressure −60 hPa, every anomaly flag
+inverted — rebuilds, and asserts every row at or before the cut is
+bit-identical. Any window that reaches forward by a day moves those rows,
+whatever it is called and however it is written. Four cut points, so a 30-day
+peek is not invisible at a cut near the start.
+
+A test that cannot fail proves nothing, so one of them builds a centred window
+on the same data and asserts the check catches it. Which is also the honest
+measure of what leakage looks like from the outside:
+
+| 7-day mean temperature | corr with T+3 |
+|---|---:|
+| trailing, t−6 .. t | 0.9419 |
+| centred, t−3 .. t+3 | **0.9714** |
+
+Not a red flag. A modest, entirely plausible improvement — which is exactly
+why this is caught structurally rather than noticed in a metric.
+
+### Windows are calendar windows, not row windows
+
+`rolling(7)` counts *rows*. Over a series with a hole that is eight calendar
+days, reported as seven — a fabricated number from data that merely had a gap,
+and the same trap `fact_weather_hourly` avoids with a `RANGE` frame. Each city
+is reindexed onto a contiguous daily calendar before anything is shifted, so a
+row offset *is* a day offset and a window spanning a hole is null.
+
+All nine cities are contiguous today, so the reindex changes nothing. It costs
+one pass and stays right if that stops being true.
+
+### The trailing Z excludes the day it scores
+
+`temperature_2m_mean_z_trailing30` standardises today against the **30 days
+before it**, not the 30 days ending on it. With *t* inside its own window it
+pulls the mean 1/30 of the way towards itself and inflates σ by its own
+deviation — the same self-labelling `fact_climatology` excludes a whole year to
+avoid, one window smaller. It is not a rounding difference:
+
+| baseline | mean \|Z\| | sd | days \|Z\| > 2.5 | > 3.0 |
+|---|---:|---:|---:|---:|
+| t−30 .. t−1 — used | 1.051 | 1.304 | **2 882** | **1 131** |
+| t−29 .. t — self-included | 0.981 | 1.190 | 1 439 | 365 |
+
+Self-inclusion **halves the extremes**, and every one it removes is a day the
+classifier most needs to see.
+
+`sd(Z) = 1.30` rather than 1.00 is by design and not a defect: a 30-day local
+baseline does not remove the seasonal cycle, so a day in a fast-warming month
+sits well above the month behind it. That is what this feature is *for* —
+"unusual against recent conditions". `z_temperature_2m_mean`, carried
+alongside, is the seasonally corrected companion.
+
+### Pressure tendency is a daily proxy, and says so
+
+The 24h and 72h tendencies are day-mean-to-day-mean changes in sea-level
+pressure, not the instantaneous tendency `fact_weather_hourly` carries. Against
+that sharper measure at 12Z, over the 3 650 city-days where both exist:
+
+- correlation **0.958**
+- sd 1.71 hPa daily against 1.98 hPa hourly — the daily mean smooths the peak
+
+The hourly fact covers **6.0%** of the matrix: 24 months against thirty years.
+A feature that is null for 94% of rows is not a feature.
+
+### Nulls are flagged, not dropped
+
+Every rolling statistic requires its full window (`min_periods == window`). A
+30-day mean over 11 days is a different statistic, and letting it into the same
+column makes a feature's meaning depend on how far into the series its row
+sits.
+
+- **270 warm-up rows** — 9 cities × 30 days, 0.45% of the matrix — present and
+  flagged `is_warmup`. Removing them is `drop_warmup()`, which the caller has
+  to say out loud; a feature module that quietly shortens the record hands the
+  trainer a row count that does not match the warehouse's.
+- **1 005 rows outside the warm-up** carry a null feature. All of them are
+  `z_temperature_2m_mean`, and all of them are London, Reykjavík and Sydney —
+  the three cities holding a single reference year, where leave-one-year-out
+  leaves nothing to score against. A test asserts that count against the
+  warehouse and fails on *any* other unexplained null.
+
+`is_warmup` and `has_missing_feature` are separate columns because they answer
+different questions. A hole in a series produces nulls far outside the warm-up;
+a fully-scored row inside it is still unusable.
+
+### Unknown is not a quiet month
+
+`anomaly_days_trailing30` counts flagged days; `anomaly_days_scored30` counts
+how many of the 30 carried a flag at all. Folding a null flag into "not an
+anomaly" would report a quiet month that was never measured — and 1 008 rows
+have `scored30 = 0`, so a single coerced column would have shown three cities
+with a perfect anomaly-free record they never earned.
+
+The denominator is deliberately **not** a model input. It is a fact about how
+far the backfill has got, and a classifier allowed to learn from it learns
+which cities are half-ingested.
+
+### It finds a real event
+
+21.6% of rows have at least one anomaly day behind them. The highest count in
+the set is Delhi's **23 of 30**, in the window ending 2002-08-02 — every one
+hot, mean Z **+3.23**. That is the July 2002 monsoon failure, and it is the
+kind of month the forward-window label exists to predict.
+
+### Day-of-year, and the leap-year phase shift
+
+The cyclical encoding runs off a 365-day axis with 29 February folded onto 28,
+because raw `day_of_year` numbers every day after February one higher in a leap
+year — a one-day phase shift in the sin/cos pair, in three years out of four,
+which a model reads as a real difference between leap and common years.
+
+That is `dim_date.day_of_year_common` recomputed in Python, so `build_features`
+stays a pure function of the rows it is handed and can be tested on forty
+synthetic days without a database. Two derivations are only safe while
+something asserts they agree, so a test checks it against every date in
+`dim_date` — the same arrangement `dim_cities.hemisphere` has.
+
+### What is deliberately still leaky
+
+`z_temperature_2m_mean` and `is_anomaly` come from `fact_weather_anomalies`,
+whose baseline excludes the observation's own year but not the years *after*
+it. A 2003 row is scored against a climatology that has seen 2020.
+
+It is a per-(city, day-of-year) constant rather than a path from the future to
+any particular day, and the alternative — an expanding climatology using only
+prior years — would give the early record a baseline of two or three years and
+a σ far too noisy to score against. The trade is deliberate, and it is recorded
+here rather than found later; `temperature_2m_mean_z_trailing30` is the
+strictly-backward companion for exactly this reason.
+
 ## Licence
 
 [MIT](LICENSE)

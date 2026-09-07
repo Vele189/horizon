@@ -1,0 +1,649 @@
+"""Builds the model-ready feature matrix from the gold layer.
+
+Every column here is a statement about what was knowable at the end of day
+*t*. A feature that reaches forward by a single day is leakage, and leakage of
+this kind does not announce itself: it raises PR-AUC, survives review, and is
+only ever found by someone asking why the model is so good. The evaluation
+cannot catch it either — a chronological split protects against training on
+the future, not against a *feature* that already contains it.
+
+So the guarantee is structural rather than reviewed:
+
+* **The as-of convention.** A row dated *t* uses observations on days ``<= t``
+  and nothing else. Day *t* itself is included — the daily aggregate is
+  complete at the end of the day, and discarding it would throw away the most
+  informative value available. **The label must therefore start at t+1**:
+  ML-02 builds "anomaly on any day in t+1 .. t+7", never "t .. t+6", or
+  :data:`anomaly_days_trailing30` hands it the answer.
+* **Windows are calendar windows, not row windows.** Each city is reindexed
+  onto a contiguous daily calendar before anything is shifted, so ``shift(3)``
+  is three *days* and not three *rows*. This is the same trap
+  ``fact_weather_hourly`` avoids with a ``RANGE`` frame: on a series with a
+  hole, ``lag(3)`` silently reaches four days back and reports the result as a
+  three-day change. Silver has no gaps today; the reindex costs nothing and
+  stays right if one appears.
+* **Partial windows are null, not "close enough".** Every rolling statistic
+  requires its full window (``min_periods == window``). A 30-day mean over 11
+  days is a different statistic, and mixing the two into one column produces a
+  feature whose meaning changes with row position.
+* **Nothing is dropped silently.** :func:`build_features` returns one row per
+  observed city-day, warm-up rows included and flagged. Discarding them is
+  :func:`drop_warmup`, which the caller has to say out loud.
+
+Two things the strictness does *not* cover, recorded here rather than
+discovered later:
+
+1. ``z_temperature_2m_mean`` and ``is_anomaly`` come from
+   ``fact_weather_anomalies``, whose baseline is a ±7-day day-of-year window
+   over every reference year *except the observation's own*. That removes the
+   leakage that matters — a day contributing to the baseline that labels it —
+   but the surviving years include years after *t*. A 2003 row is scored
+   against a climatology that has seen 2020. It is a per-(city, day-of-year)
+   constant rather than a path from the future to any particular day, and the
+   alternative — an expanding climatology that uses only prior years — would
+   give the early record a baseline of two or three years and a σ too noisy to
+   score against. The trade is deliberate; :data:`temperature_2m_mean_z_trailing30`
+   is the strictly-backward companion.
+2. Pressure tendency is computed from **daily mean** sea-level pressure, so
+   ``pressure_tendency_24h`` is a day-mean-to-day-mean change and not the
+   instantaneous 24-hour tendency ``fact_weather_hourly`` carries. The hourly
+   fact holds the sharper measure and only 24 months of it; the training window
+   is thirty years. A feature that is null for 93% of rows is not a feature.
+
+Usage::
+
+    from machine_learning.features import feature_columns, load_features
+
+    frame = load_features()                       # every city, whole record
+    matrix = frame[list(feature_columns())]
+
+Run ``python machine_learning/features.py`` for a summary of the built matrix,
+``--out features.csv`` to write it, or ``--city delhi --start 2020-01-01`` for
+a slice — the slice is padded backwards by the warm-up so a windowed request
+is not silently degraded.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import logging
+import sys
+from pathlib import Path
+from typing import Final, Sequence
+
+import numpy as np
+import pandas as pd
+from sqlalchemy import Engine, text
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from ingestion.loader import engine_from_settings  # noqa: E402
+
+__all__ = [
+    "ANOMALY_COUNT_WINDOW",
+    "GOLD_SCHEMA",
+    "LAGS",
+    "PASSTHROUGH_COLUMNS",
+    "PRESSURE",
+    "REQUIRED_COLUMNS",
+    "ROLLING_WINDOWS",
+    "TEMPERATURE",
+    "TENDENCY_DAYS",
+    "TRAILING_Z_WINDOW",
+    "WARMUP_DAYS",
+    "FeatureError",
+    "build_features",
+    "day_of_year_common",
+    "drop_warmup",
+    "feature_columns",
+    "gold_frame",
+    "load_features",
+    "missing_report",
+]
+
+log = logging.getLogger(__name__)
+
+GOLD_SCHEMA: Final[str] = "gold_marts"
+
+#: The two series everything is lagged and rolled over. Daily mean temperature
+#: is the variable the label is defined on; mean sea-level pressure is the
+#: storm-development signal. *Sea-level*, not surface: surface pressure carries
+#: the grid cell's elevation, so a lag over it would be comparing Johannesburg
+#: at 822 hPa against London at 1013 the moment anything pooled across cities.
+#: Min and max temperature are deliberately not lagged — they are highly
+#: collinear with the mean and would triple the matrix for very little.
+TEMPERATURE: Final[str] = "temperature_2m_mean"
+PRESSURE: Final[str] = "pressure_msl_mean"
+
+LAGS: Final[tuple[int, ...]] = (1, 3, 7, 14)
+ROLLING_WINDOWS: Final[tuple[int, ...]] = (7, 30)
+
+#: Pressure tendency spans, in days. 24h and 72h at the daily grain are the
+#: one-day and three-day changes.
+TENDENCY_DAYS: Final[tuple[int, ...]] = (1, 3)
+
+#: The trailing standardisation window, in days, and it **excludes day t**.
+#:
+#: Scoring an observation against a baseline it contributed to is the same
+#: mistake ``fact_climatology`` exists to avoid, one window smaller: with day
+#: *t* inside a 30-day mean it pulls that mean 1/30 of the way towards itself
+#: and inflates σ by its own deviation, so the Z of an extreme day comes out
+#: systematically too small. The window is t−30 .. t−1 — the recent past that
+#: *t* is unusual with respect to.
+TRAILING_Z_WINDOW: Final[int] = 30
+
+#: The anomaly-count window, in days, and it **includes day t** — today's flag
+#: is known at the end of today, and the label starts at t+1.
+ANOMALY_COUNT_WINDOW: Final[int] = 30
+
+#: Days of prior record a row needs before every feature is defined. The
+#: binding constraint is the trailing Z-score, which looks back 30 days without
+#: counting *t*; the 30-day rollings need 29, and the longest lag needs 14.
+WARMUP_DAYS: Final[int] = max(
+    max(LAGS),
+    max(ROLLING_WINDOWS) - 1,
+    ANOMALY_COUNT_WINDOW - 1,
+    TRAILING_Z_WINDOW,
+    max(TENDENCY_DAYS),
+)
+
+#: What :func:`build_features` needs to be handed. Everything else it derives.
+REQUIRED_COLUMNS: Final[tuple[str, ...]] = (
+    "city_id",
+    "date_key",
+    TEMPERATURE,
+    PRESSURE,
+    "z_temperature_2m_mean",
+    "is_anomaly",
+    "latitude",
+    "elevation_m",
+)
+
+#: Columns carried through the matrix that are **not** model inputs.
+#:
+#: ``is_anomaly`` is the label source, and feeding a classifier the flag whose
+#: forward window it is predicting is the shortest path to a meaningless score.
+#: ``anomaly_days_scored30`` is the denominator of the anomaly count — a
+#: coverage fact about the warehouse, not about the weather, and a model
+#: allowed to learn from it learns which cities are half-backfilled.
+#: ``is_warmup``, ``history_days`` and ``has_missing_feature`` are the null
+#: bookkeeping. Select inputs with :func:`feature_columns`, never by dropping
+#: the keys.
+PASSTHROUGH_COLUMNS: Final[tuple[str, ...]] = (
+    "city_id",
+    "date_key",
+    "is_anomaly",
+    "anomaly_days_scored30",
+    "history_days",
+    "is_warmup",
+    "has_missing_feature",
+)
+
+
+class FeatureError(RuntimeError):
+    """Raised when the input frame cannot produce an honest feature matrix.
+
+    Duplicated city-days and missing columns are both silent corruptions: the
+    first makes a "7-day" window span five days, the second makes a feature
+    quietly absent from the matrix a trainer then reports metrics for.
+    """
+
+
+def feature_columns() -> tuple[str, ...]:
+    """The model input columns, in a stable order.
+
+    Built from the same constants the features are, so the list and the matrix
+    cannot drift apart — a test asserts the built frame carries exactly these
+    plus :data:`PASSTHROUGH_COLUMNS`.
+    """
+    columns: list[str] = []
+    for series in (TEMPERATURE, PRESSURE):
+        columns.append(series)
+        columns.extend(f"{series}_lag{lag}" for lag in LAGS)
+        for window in ROLLING_WINDOWS:
+            columns.append(f"{series}_roll{window}_mean")
+            columns.append(f"{series}_roll{window}_var")
+    columns.append(f"{TEMPERATURE}_z_trailing{TRAILING_Z_WINDOW}")
+    columns.extend(f"pressure_tendency_{days * 24}h" for days in TENDENCY_DAYS)
+    columns.append("z_temperature_2m_mean")
+    columns.append(f"anomaly_days_trailing{ANOMALY_COUNT_WINDOW}")
+    columns.extend(("day_of_year_sin", "day_of_year_cos", "latitude", "elevation_m"))
+    return tuple(columns)
+
+
+def day_of_year_common(dates: pd.Series) -> pd.Series:
+    """Day of year on a 365-day axis, with 29 February folded onto 28.
+
+    The second derivation of ``dim_date.day_of_year_common``, and asserted
+    equal to it against every date in the warehouse — the same arrangement
+    ``dim_cities.hemisphere`` has, for the same reason: the alternative is a
+    join that exists only to fetch an integer that the date already determines.
+
+    Raw ``day_of_year`` cannot serve as a cyclical axis. It is 1..366, so in a
+    leap year every day after February is numbered one higher than the same
+    calendar day in a common year — a one-day phase shift in the sin/cos pair,
+    in three years out of four, which reads to a model as a genuine seasonal
+    difference between leap and common years.
+    """
+    day_of_year = dates.dt.dayofyear
+    is_leap = dates.dt.is_leap_year
+    return day_of_year.where(~(is_leap & (day_of_year > 59)), day_of_year - 1)
+
+
+def gold_frame(
+    engine: Engine | None = None,
+    *,
+    cities: Sequence[str] | None = None,
+    start: dt.date | str | None = None,
+    end: dt.date | str | None = None,
+) -> pd.DataFrame:
+    """Read one row per city-day from the gold layer.
+
+    Both joins are LEFT joins. An inner join would enforce referential
+    integrity by *dropping* rows it could not match, which is the wrong
+    failure — a city-day missing its anomaly row would look exactly like a
+    city-day that was never observed, and the feature matrix would be short
+    without saying so. A null Z arrives as a null Z.
+
+    Args:
+        engine: Warehouse connection. Defaults to ``DATABASE_URL``.
+        cities: Restrict to these ``city_id`` values. Default: all of them.
+        start: Earliest ``date_key`` to read, inclusive. Note this is the raw
+            bound — :func:`load_features` is the one that pads it by the
+            warm-up.
+        end: Latest ``date_key`` to read, inclusive.
+
+    Returns:
+        A frame sorted by ``(city_id, date_key)`` with
+        :data:`REQUIRED_COLUMNS`, ``date_key`` as ``datetime64``.
+    """
+    owned = engine is None
+    engine = engine if engine is not None else engine_from_settings()
+    where: list[str] = []
+    params: dict[str, object] = {}
+    if cities is not None:
+        where.append("observations.city_id = any(:cities)")
+        params["cities"] = list(cities)
+    if start is not None:
+        where.append("observations.date_key >= :start")
+        params["start"] = pd.Timestamp(start).date()
+    if end is not None:
+        where.append("observations.date_key <= :end")
+        params["end"] = pd.Timestamp(end).date()
+    predicate = f"where {' and '.join(where)}" if where else ""
+
+    sql = f"""
+        select
+            observations.city_id,
+            observations.date_key,
+            observations.{TEMPERATURE},
+            observations.{PRESSURE},
+            anomalies.z_temperature_2m_mean,
+            anomalies.is_anomaly,
+            cities.latitude,
+            cities.elevation_m
+        from {GOLD_SCHEMA}.fact_weather_observations as observations
+        left join {GOLD_SCHEMA}.fact_weather_anomalies as anomalies
+               on anomalies.city_id = observations.city_id
+              and anomalies.date_key = observations.date_key
+        left join {GOLD_SCHEMA}.dim_cities as cities
+               on cities.city_id = observations.city_id
+        {predicate}
+        order by observations.city_id, observations.date_key
+    """
+    try:
+        with engine.connect() as connection:
+            frame = pd.read_sql_query(text(sql), connection, params=params)
+    finally:
+        if owned:
+            engine.dispose()
+
+    frame["date_key"] = pd.to_datetime(frame["date_key"])
+    return frame
+
+
+def build_features(observations: pd.DataFrame) -> pd.DataFrame:
+    """Turn gold rows into the feature matrix. Pure, and never touches a database.
+
+    The database stays out so the leakage guarantee is testable: the same
+    function that builds thirty years for nine cities builds two hundred
+    synthetic days, and ``tests/test_features.py`` proves on those that
+    rewriting the future changes no row in the past.
+
+    Args:
+        observations: One row per city-day, carrying :data:`REQUIRED_COLUMNS`.
+            Order does not matter; duplicates are an error.
+
+    Returns:
+        One row per **observed** city-day — the same count as the input — with
+        :func:`feature_columns` and :data:`PASSTHROUGH_COLUMNS`, sorted by
+        ``(city_id, date_key)`` with a fresh index. Rows inside a city's
+        warm-up are present and flagged, not removed.
+
+    Raises:
+        FeatureError: A required column is missing, or a city-day repeats.
+    """
+    missing = [name for name in REQUIRED_COLUMNS if name not in observations.columns]
+    if missing:
+        raise FeatureError(
+            f"gold frame is missing {missing}. Expected {list(REQUIRED_COLUMNS)}; "
+            f"got {list(observations.columns)}."
+        )
+
+    frame = observations.loc[:, list(REQUIRED_COLUMNS)].copy()
+    frame["date_key"] = pd.to_datetime(frame["date_key"])
+    # Nullable boolean, always. Left alone, this column arrives as `bool` from
+    # a fully-scored city and as `object` from one with nulls, so the matrix's
+    # dtypes would depend on which cities had backfilled — and a frame built
+    # for one city would not concatenate cleanly with a frame built for the
+    # next. `boolean` also keeps "unscored" distinguishable from False, which
+    # is the distinction the anomaly counts are built on.
+    frame["is_anomaly"] = frame["is_anomaly"].astype("boolean")
+    duplicated = frame.duplicated(subset=["city_id", "date_key"])
+    if duplicated.any():
+        offenders = frame.loc[duplicated, ["city_id", "date_key"]].head(5)
+        raise FeatureError(
+            f"{int(duplicated.sum())} duplicated city-days, e.g. "
+            f"{offenders.to_dict('records')}. The grain is one row per city "
+            "per day; a repeat makes every window span fewer days than it "
+            "claims."
+        )
+    frame = frame.sort_values(["city_id", "date_key"], kind="stable")
+    frame["is_observed"] = True
+
+    calendar = _on_daily_calendar(frame)
+    grouped = calendar.groupby("city_id", sort=False)
+
+    # Accumulated and assigned in one go rather than written back column by
+    # column, so nothing is ever derived from a frame a previous feature has
+    # already altered.
+    columns: dict[str, pd.Series] = {}
+
+    for series in (TEMPERATURE, PRESSURE):
+        for lag in LAGS:
+            columns[f"{series}_lag{lag}"] = grouped[series].shift(lag)
+        for window in ROLLING_WINDOWS:
+            columns[f"{series}_roll{window}_mean"] = _rolling(
+                grouped[series], window, "mean"
+            )
+            # Sample variance (ddof=1): the window is a sample of the local
+            # climate, not the whole of it, and at n=7 the two differ by 17%.
+            columns[f"{series}_roll{window}_var"] = _rolling(
+                grouped[series], window, "var"
+            )
+
+    # Trailing standardisation over the days *before* t. Shifting the series
+    # one day before rolling is what excludes t; see TRAILING_Z_WINDOW.
+    prior = grouped[TEMPERATURE].shift(1).groupby(calendar["city_id"], sort=False)
+    prior_mean = _rolling(prior, TRAILING_Z_WINDOW, "mean")
+    # A zero σ divides to ±inf and reads as an infinitely extreme day. Over 30
+    # days of float temperature it should not happen, and a feature that is
+    # silently infinite when it does is worse than one that is null.
+    prior_std = _rolling(prior, TRAILING_Z_WINDOW, "std").where(lambda std: std > 0)
+    columns[f"{TEMPERATURE}_z_trailing{TRAILING_Z_WINDOW}"] = (
+        calendar[TEMPERATURE] - prior_mean
+    ) / prior_std
+
+    for days in TENDENCY_DAYS:
+        columns[f"pressure_tendency_{days * 24}h"] = (
+            calendar[PRESSURE] - grouped[PRESSURE].shift(days)
+        )
+
+    columns.update(_anomaly_counts(calendar))
+
+    # Static and calendar features. No window, so nothing to look forward into.
+    angle = 2 * np.pi * day_of_year_common(calendar["date_key"]) / 365.0
+    columns["day_of_year_sin"] = np.sin(angle)
+    columns["day_of_year_cos"] = np.cos(angle)
+
+    features = calendar.assign(**columns)
+    features = features.loc[features["is_observed"]].copy()
+    _add_null_bookkeeping(features)
+
+    ordered = list(PASSTHROUGH_COLUMNS) + list(feature_columns())
+    return features.loc[:, ordered].reset_index(drop=True)
+
+
+def _on_daily_calendar(frame: pd.DataFrame) -> pd.DataFrame:
+    """Reindex each city onto every day between its first and last observation.
+
+    This is what makes a row offset a day offset. Inserted days carry nulls and
+    ``is_observed = False``: they occupy their position in every window, so a
+    window spanning a hole is null rather than quietly reaching further back,
+    and they are dropped before the matrix is returned because a day with no
+    observation has no features and no label either.
+    """
+    pieces: list[pd.DataFrame] = []
+    for city_id, group in frame.groupby("city_id", sort=True):
+        indexed = group.set_index("date_key").drop(columns=["city_id"])
+        span = pd.date_range(indexed.index.min(), indexed.index.max(), freq="D")
+        reindexed = indexed.reindex(span)
+        reindexed.index.name = "date_key"
+        reindexed["city_id"] = city_id
+        reindexed["is_observed"] = reindexed["is_observed"].eq(True)
+        # Static per city, so the reindexed days inherit rather than blank —
+        # a city's latitude did not stop existing on a day it was not observed,
+        # and leaving them null would only make the diagnostics noisier.
+        for column in ("latitude", "elevation_m"):
+            reindexed[column] = reindexed[column].ffill().bfill()
+        pieces.append(reindexed.reset_index())
+    return pd.concat(pieces, ignore_index=True)
+
+
+def _rolling(grouped, window: int, statistic: str) -> pd.Series:
+    """A grouped rolling statistic over a full window, aligned to the input.
+
+    ``min_periods=window`` is the whole point: pandas defaults it to the window
+    size for ``rolling(int)``, but stating it makes the intent explicit and
+    survives someone reaching for ``min_periods=1`` to "fix" the nulls at the
+    start of each series. Those nulls are the honest answer.
+    """
+    return grouped.transform(
+        lambda series: getattr(series.rolling(window, min_periods=window), statistic)()
+    )
+
+
+def _anomaly_counts(calendar: pd.DataFrame) -> dict[str, pd.Series]:
+    """Count flagged days in the trailing window, and how many were scorable.
+
+    A null ``is_anomaly`` is not a quiet day — it is a day with no baseline to
+    score against, and 1 095 of them exist for the three cities holding a
+    single reference year. Counting a null as "not an anomaly" would assert the
+    day was ordinary on no evidence, and would put it in the denominator of
+    every rate computed downstream.
+
+    Two columns rather than one coerced one. ``anomaly_days_trailing30`` counts
+    the days flagged ``true``, so where the window holds unscored days it is a
+    *lower bound*; ``anomaly_days_scored30`` is how many of the 30 carried a
+    flag at all. Equal to 30, the count is exact; below it, the caller can see
+    the count is partial rather than read a quiet month off a coverage gap.
+
+    Both require all 30 calendar days to be present in the record — a window
+    spanning a hole is null, the same rule the rollings follow.
+    """
+    observed = calendar["is_observed"].to_numpy(dtype=bool)
+    flag = calendar["is_anomaly"]
+    known = flag.notna().to_numpy(dtype=bool)
+    hit = known & flag.fillna(False).to_numpy(dtype=bool)
+
+    window = ANOMALY_COUNT_WINDOW
+    counts: dict[str, pd.Series] = {}
+    for name, values in (
+        (f"anomaly_days_trailing{window}", hit),
+        (f"anomaly_days_scored{window}", known),
+    ):
+        # NaN on unobserved days, so min_periods=window rejects any window
+        # that spans one instead of treating the hole as a quiet day.
+        series = pd.Series(
+            np.where(observed, values.astype(float), np.nan), index=calendar.index
+        )
+        counts[name] = _rolling(
+            series.groupby(calendar["city_id"], sort=False), window, "sum"
+        )
+    return counts
+
+
+def _add_null_bookkeeping(features: pd.DataFrame) -> None:
+    """Say which rows are incomplete, and why, in place.
+
+    Two different questions, so two columns. ``is_warmup`` is positional: the
+    row is inside the first :data:`WARMUP_DAYS` days of its city's record, so
+    some window has not filled yet and the nulls are expected and permanent.
+    ``has_missing_feature`` is empirical: *some* model input is null on this
+    row, for whatever reason — a warm-up, a hole in the series, or a city with
+    no climatology baseline. Neither implies the other. A city with a gap has
+    null features far outside its warm-up, and a fully-scored row inside the
+    warm-up is still unusable.
+
+    ``history_days`` counts calendar days since the city's first record rather
+    than rows, so a series with a hole in it is not credited with days it does
+    not have. It is a **lower bound**: measured from the earliest row this
+    build was handed, which for a slice is the start of the slice's padded
+    window and not the start of the record. ``is_warmup`` is exact anyway —
+    :func:`load_features` pads by :data:`WARMUP_DAYS`, so a row with enough
+    real history always has enough history in the frame.
+    """
+    first_seen = features.groupby("city_id")["date_key"].transform("min")
+    features["history_days"] = (features["date_key"] - first_seen).dt.days
+    features["is_warmup"] = features["history_days"] < WARMUP_DAYS
+    features["has_missing_feature"] = (
+        features.loc[:, list(feature_columns())].isna().any(axis=1)
+    )
+
+
+def drop_warmup(features: pd.DataFrame) -> pd.DataFrame:
+    """Remove the rows inside each city's warm-up. An explicit act, deliberately.
+
+    :func:`build_features` never drops them. A feature module that quietly
+    shortens the record hands the trainer a matrix whose row count does not
+    match the warehouse's, and the difference is discovered — if it is
+    discovered — as an unexplained gap in a metric.
+
+    Note this does **not** guarantee a null-free matrix: a hole in a city's
+    series produces null windows well outside the warm-up, and a city with no
+    climatology baseline has a null Z on every row of its record. Filter on
+    ``has_missing_feature`` for that, and see :func:`missing_report` for what
+    it would cost.
+    """
+    return features.loc[~features["is_warmup"]].reset_index(drop=True)
+
+
+def missing_report(features: pd.DataFrame) -> pd.DataFrame:
+    """Null counts per feature, split into warm-up and everything else.
+
+    The split is the point. Nulls inside the warm-up are arithmetic — a 30-day
+    window on day 3 — and need no explanation. Nulls outside it are a fact
+    about the data, and every one should have a name: a hole in the series, or
+    a city whose leave-one-year-out baseline left nothing behind.
+    """
+    warmup = features["is_warmup"]
+    rows = []
+    for column in feature_columns():
+        null = features[column].isna()
+        rows.append(
+            {
+                "feature": column,
+                "null_warmup": int((null & warmup).sum()),
+                "null_after_warmup": int((null & ~warmup).sum()),
+                "null_total": int(null.sum()),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def load_features(
+    engine: Engine | None = None,
+    *,
+    cities: Sequence[str] | None = None,
+    start: dt.date | str | None = None,
+    end: dt.date | str | None = None,
+) -> pd.DataFrame:
+    """Read gold and build the matrix, padding ``start`` by the warm-up.
+
+    The padding is the reason this is not two calls at the call site. Asking
+    for 2020 onwards and building features from exactly those rows gives the
+    first 30 days of 2020 the warm-up nulls of a series that begins in 2020 —
+    except the series does not begin in 2020, the *request* does. The extra
+    :data:`WARMUP_DAYS` of history are read, used, and trimmed off, so a slice
+    and a full build agree on every row they share.
+
+    Args:
+        engine: Warehouse connection. Defaults to ``DATABASE_URL``.
+        cities: Restrict to these ``city_id`` values.
+        start: Earliest ``date_key`` in the **result**, inclusive.
+        end: Latest ``date_key`` in the result, inclusive.
+
+    Note:
+        Every feature and ``is_warmup`` match a full build exactly.
+        ``history_days`` does not: it counts from the padded window rather than
+        from the start of the record, so on a slice it is a lower bound.
+    """
+    padded = start
+    if start is not None:
+        padded = pd.Timestamp(start) - pd.Timedelta(days=WARMUP_DAYS)
+    frame = gold_frame(engine, cities=cities, start=padded, end=end)
+    features = build_features(frame)
+    if start is not None:
+        keep = features["date_key"] >= pd.Timestamp(start)
+        features = features.loc[keep].reset_index(drop=True)
+    return features
+
+
+def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Build the ML feature matrix from the gold layer."
+    )
+    parser.add_argument(
+        "--city",
+        action="append",
+        dest="cities",
+        help="Restrict to a city_id. Repeatable.",
+    )
+    parser.add_argument("--start", help="Earliest date in the result (YYYY-MM-DD).")
+    parser.add_argument("--end", help="Latest date in the result (YYYY-MM-DD).")
+    parser.add_argument(
+        "--drop-warmup",
+        action="store_true",
+        help="Drop rows inside each city's warm-up before writing.",
+    )
+    parser.add_argument("--out", help="Write the matrix to this CSV path.")
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = _parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+    features = load_features(cities=args.cities, start=args.start, end=args.end)
+    if args.drop_warmup:
+        features = drop_warmup(features)
+
+    inputs = feature_columns()
+    print(f"rows           {len(features):,}")
+    print(f"cities         {features['city_id'].nunique()}")
+    if len(features):
+        print(
+            f"dates          {features['date_key'].min().date()} .. "
+            f"{features['date_key'].max().date()}"
+        )
+    print(f"features       {len(inputs)}")
+    print(f"warm-up rows   {int(features['is_warmup'].sum()):,}")
+    print(f"rows with a null feature   {int(features['has_missing_feature'].sum()):,}")
+
+    report = missing_report(features)
+    incomplete = report.loc[report["null_total"] > 0]
+    if len(incomplete):
+        print("\nnulls by feature")
+        print(incomplete.to_string(index=False))
+
+    if args.out:
+        destination = Path(args.out)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        features.to_csv(destination, index=False)
+        print(f"\nwrote {destination}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
