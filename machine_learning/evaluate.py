@@ -49,7 +49,7 @@ import numpy as np
 import pandas as pd
 from sklearn.calibration import calibration_curve
 from sklearn.metrics import precision_recall_curve
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -64,6 +64,7 @@ from machine_learning.evaluation import (  # noqa: E402
     score,
     split_frame,
 )
+from machine_learning.features import city_roster  # noqa: E402
 from machine_learning.labels import LABEL, positives  # noqa: E402
 from machine_learning.train import train_model  # noqa: E402
 
@@ -555,42 +556,6 @@ def render_figures(
     written += _save(figure, "calibration", directory)
     plt.close(figure)
     return written
-
-
-def city_roster(engine: Engine | None = None) -> tuple[list[str], list[str]]:
-    """The registry, and which of it has actually been ingested.
-
-    Two lists rather than one, because a city can be missing from the per-city
-    table for two unrelated reasons and the difference is the whole point of
-    reporting the absence. ``dim_cities`` is built from ``config/cities.yml``
-    and says what the set *is*; the fact table says what has been observed of
-    it, which is exactly the gap the reconciliation report exists to surface.
-    """
-    from ingestion.loader import engine_from_settings
-
-    owned = engine is None
-    engine = engine if engine is not None else engine_from_settings()
-    try:
-        with engine.connect() as connection:
-            roster = [
-                row[0]
-                for row in connection.execute(
-                    text("select city_id from gold_marts.dim_cities order by city_id")
-                )
-            ]
-            ingested = [
-                row[0]
-                for row in connection.execute(
-                    text(
-                        "select distinct city_id from "
-                        "gold_marts.fact_weather_observations order by city_id"
-                    )
-                )
-            ]
-    finally:
-        if owned:
-            engine.dispose()
-    return roster, ingested
 
 
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:

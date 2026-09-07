@@ -2396,6 +2396,120 @@ test requires every tracked artefact to carry a version in its name, since an
 unversioned `model.joblib` would be overwritten in place and its history would
 be a sequence of indistinguishable binaries.
 
+## Scoring the horizon
+
+`machine_learning/predict.py` scores the current window into
+`gold_marts.fact_ml_predictions`, the table the Risk Horizon view reads. The
+grain and the freshness semantics are as much the deliverable as the numbers,
+so both are enforced rather than documented.
+
+```
+$ python machine_learning/predict.py
+model    model-unweighted-v1-2ad772ff7b18.joblib
+variant  unweighted   threshold 0.1024   features 27
+
+35 rows, 5 cities, 2026-08-27 .. 2026-09-02
+
+  city_id   forecast_date  horizon_start  horizon_end  risk_score  label
+singapore      2026-09-02     2026-09-03   2026-09-09      0.2472   True
+    lagos      2026-09-02     2026-09-03   2026-09-09      0.1315   True
+    cairo      2026-09-02     2026-09-03   2026-09-09      0.0538  False
+  phoenix      2026-09-02     2026-09-03   2026-09-09      0.0370  False
+    delhi      2026-09-02     2026-09-03   2026-09-09      0.0283  False
+```
+
+### One row per city per forecast date, and `model_version` is not in the key
+
+A prediction here is the **current best answer** for a city-day. The Risk
+Horizon view asks "what is the risk for this city right now" and must get
+exactly one row; keyed by model it would get one per model ever run and would
+have to choose in the presentation layer, which is where that choice is least
+visible. Re-scoring replaces.
+
+If a history of predictions is ever wanted it belongs in a separate
+append-only table with its own grain — not in the one a dashboard reads.
+
+### Three different times, because they answer three different questions
+
+| column | means |
+|---|---|
+| `forecast_date` | the last day of **observed** data the score was computed from |
+| `horizon_start` | the first day it covers — always `forecast_date + 1` |
+| `horizon_end` | the last day it covers, `forecast_date + 7` |
+| `scored_at` | when the row was written, which is not when it was *about* |
+
+`horizon_start` is the day after, because **day *t* is a feature**. A window
+including it would be scoring the model on something it was handed —
+`anomaly_days_trailing30` counts today's flag. Collapsing any of these into a
+single `date` is precisely the ambiguity this table exists to avoid, and a
+dashboard needs the first three to label an axis and the fourth to say how
+stale the answer is.
+
+### The semantics are check constraints, not conventions
+
+```sql
+check (horizon_start = forecast_date + 1)
+check (horizon_end   = forecast_date + horizon_days)
+check (prediction_label = (risk_score >= decision_threshold))
+check (risk_score between 0.0 and 1.0)
+```
+
+A row whose horizon starts on its own forecast date is not a differently-shaped
+row, it is a bug — and one that would otherwise be discovered from a chart with
+the wrong dates on its axis. A test writes four deliberately malformed rows and
+requires the database to reject each one, so the constraints are known to be
+live rather than merely declared.
+
+### The threshold is the evaluated one, stored beside the label
+
+`prediction_label` is `risk_score >= decision_threshold`, and the threshold is
+read from `metrics.json` — the operating point ML-06 chose on validation, at
+0.1024. **Not 0.5**, where this model labels nothing at all.
+
+The threshold is stored on every row rather than applied and forgotten, because
+a boolean with no operating point behind it cannot be audited, and because
+changing it later must not silently reinterpret rows written under the old one.
+`predict.py` refuses to run if no evaluation is recorded, rather than defaulting.
+
+### Nothing here computes a feature
+
+The matrix comes from `features.py`; the model's own recorded feature list
+decides the columns and their order. The two are checked against each other
+**before a single row is written**: if `features.py` has gained, lost or
+renamed a column since the model was trained, scoring refuses. A matrix with a
+renamed column still has the right shape, and the model will return a
+probability for every row of it.
+
+A test scans `predict.py` for `.rolling(`, `.shift(`, `np.sin` and the rest,
+and fails if any appear — a window computed here would be a second
+implementation free to drift from the one the model was trained on.
+
+### Five of fifteen cities, each absence named
+
+The ticket asks for output verified across all 15 cities. Five can be scored
+today, and the other ten each carry a reason rather than a missing row:
+
+| | cities | why |
+|---|---|---|
+| **scored** | cairo, delhi, lagos, phoenix, singapore | |
+| never ingested | auckland, buenos_aires, johannesburg, **moscow**, portland, sao_paulo | the daily grain costs ~26 000 weighted API calls against a 10 000/day allowance |
+| no observations in the window | london, reykjavik, sydney, tokyo | one reference year each, or a record ending in 1998 |
+
+An empty row for the unscorable ten would be a fabrication; a missing row would
+be silent. The three single-year cities are the interesting case: they *have*
+recent observations but no climatology baseline, so `z_temperature_2m_mean` is
+null — and the loader refuses a matrix with nulls rather than letting XGBoost
+route them down a default branch it never learned. A test requires every
+unscored city to carry one of the named reasons.
+
+### Idempotent by upsert
+
+`insert … on conflict (city_id, forecast_date) do update set …`, one
+transaction. Running twice for the same day leaves one row with a fresh
+`scored_at` and the same key — verified by a test that writes the sentinel
+rows twice at different risk scores and requires the count to hold at three
+while the score changes.
+
 ## Licence
 
 [MIT](LICENSE)

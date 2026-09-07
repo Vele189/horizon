@@ -94,6 +94,7 @@ __all__ = [
     "WARMUP_DAYS",
     "FeatureError",
     "build_features",
+    "city_roster",
     "day_of_year_common",
     "drop_warmup",
     "feature_columns",
@@ -353,6 +354,49 @@ def require_grain(
     frame = frame.sort_values(["city_id", "date_key"], kind="stable")
     frame["is_observed"] = True
     return frame
+
+
+def city_roster(engine: Engine | None = None) -> tuple[list[str], list[str]]:
+    """The registry, and which of it has actually been ingested.
+
+    Two lists rather than one, because a city can be absent from a downstream
+    table for two unrelated reasons and the difference is the whole point of
+    reporting the absence. ``dim_cities`` is built from ``config/cities.yml``
+    and says what the set *is*; the fact table says what has been observed of
+    it, and the gap between them is what the reconciliation report exists to
+    surface.
+
+    Here rather than in the evaluation or inference modules because both need
+    it and neither should own it — a second copy would be free to drift, and a
+    drift would be silent, since both would still return a plausible list of
+    city names.
+    """
+    owned = engine is None
+    engine = engine if engine is not None else engine_from_settings()
+    try:
+        with engine.connect() as connection:
+            roster = [
+                row[0]
+                for row in connection.execute(
+                    text(
+                        f"select city_id from {GOLD_SCHEMA}.dim_cities "
+                        "order by city_id"
+                    )
+                )
+            ]
+            ingested = [
+                row[0]
+                for row in connection.execute(
+                    text(
+                        "select distinct city_id from "
+                        f"{GOLD_SCHEMA}.fact_weather_observations order by city_id"
+                    )
+                )
+            ]
+    finally:
+        if owned:
+            engine.dispose()
+    return roster, ingested
 
 
 def build_features(observations: pd.DataFrame) -> pd.DataFrame:
