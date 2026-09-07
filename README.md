@@ -117,8 +117,9 @@ ERA5 is gridded reanalysis, not station data. The coordinates in
 | Singapore | 1.3521, 103.8198 at 15 m | 1.3708, 103.8024 at 46 m |
 
 Every row therefore carries `api_latitude`, `api_longitude`, and
-`api_elevation_m` alongside the exact `source_url`, so provenance survives an
-edit to `cities.yml`. `cell_selection=land` is sent explicitly — it is the
+`api_elevation_m`, so provenance survives an edit to `cities.yml`. The request
+URL is *not* stored per row — see [Measured storage](#measured-storage) — it is
+derived from the archived window by `archive.source_url_for()`. `cell_selection=land` is sent explicitly — it is the
 default, but it is the parameter deciding whether Lagos is Lagos or the Bight of
 Benin. `elevation` is deliberately *not* sent; passing it would override
 Open-Meteo's 90 m DEM downscaling and change the values returned.
@@ -265,9 +266,10 @@ dropped on the floor is worse than a loud failure.
 
 Replay feeds archived payloads through the *same* `parse_payload` the live
 path uses, so fixing a parser bug fixes replay by construction rather than
-twice. `source_url` is reproduced by `request_url()`, which prepares the
+twice. The request URL is reproduced by `request_url()`, which prepares the
 identical string through `requests` rather than assembling it by hand — tested
-against a live response.
+against a live response. That same function is what lets bronze omit the column
+entirely.
 
 ### Measured size
 
@@ -425,32 +427,37 @@ describes a different window tomorrow, and a plan that cannot be reproduced
 cannot be verified. 45 units, 263 160 rows, 957 weighted calls: under a tenth
 of a day's free allowance, against the daily grain's 26 026.
 
-### Measured storage, and the column that dominates it
+### Measured storage
 
 | | Rows | Bytes/row | Projected full table |
 |---|---|---|---|
-| `observations_daily` | 173 505 | 1 020 | **177 MB** |
-| `observations_hourly` | 263 160 | 746 | **196 MB** |
+| `observations_daily` | 173 505 | 270 | **47 MB** |
+| `observations_hourly` | 263 160 | 224 | **59 MB** |
 
-Two things that measurement turned up, both now reported by
-`--report` rather than left to be rediscovered:
+Bronze projects to **~106 MB**, comfortably inside the proposal's ~250–300 MB
+budget for all layers. It did not start there.
 
-- **`pg_total_relation_size` counts dead tuples.** The first hourly reading was
-  31 MB against a true 12 MB — the table had been loaded and cleared several
-  times during development. The report names the dead share when it exceeds a
-  tenth and says to `VACUUM FULL`.
-- **`source_url` is 83% of the daily row payload and 81% of the hourly one** —
-  712 and 466 bytes, the same handful of distinct strings repeated once per
-  row. Of bronze's projected ~373 MB, roughly **300 MB is that one column**.
-  Without it bronze would be about 62 MB.
+**`source_url` was 83% of the daily row payload and 81% of the hourly one** —
+712 and 466 bytes of the same few hundred distinct strings, repeated once per
+row, for a projected **300 MB of the original 373**. §5.2 asked for it per row;
+measuring it showed the column was both the dominant cost and entirely
+derivable, since `request_url()` already reconstructs the exact string from
+`(city_id, grain, start, end)` — which is what ING-03's replay depends on.
 
-Bronze never leaves the local container, so this threatens nothing today — but
-it is worth stating plainly, because the proposal budgets ~250–300 MB *across
-all layers* and bronze alone exceeds that. The column is also fully redundant:
-`request_url()` reconstructs it exactly from `(city_id, grain, start, end)`,
-which is what replay already relies on. Whether to keep the denormalised copy
-for one-glance replayability or derive it is a schema decision, recorded here
-rather than made unilaterally.
+It is gone from the schema. `archive.source_url_for(city_id, grain,
+observation_time)` finds the archived window covering a row and rebuilds its
+URL, at no bytes per row. **Deviation from §5.2, deliberate:** the trade is
+268 MB of warehouse against `data/raw/` becoming load-bearing for provenance as
+well as for replay — delete the archive and row-level URLs are no longer
+recoverable. `schema.sql` carries an idempotent `drop column if exists` so an
+existing database converges on re-apply; Postgres only returns the space on
+`VACUUM FULL`, which the schema file deliberately does not run.
+
+The other thing measurement turned up, also now in `--report`:
+**`pg_total_relation_size` counts dead tuples.** The first hourly reading was
+31 MB against a true 12 MB — the table had been loaded and cleared repeatedly
+during development. The report names the dead share when it exceeds a tenth and
+says to `VACUUM FULL`.
 
 ## Licence
 

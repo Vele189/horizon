@@ -229,12 +229,14 @@ def test_rows_carry_the_provenance_bronze_requires(settings) -> None:
     assert len(rows) == DAYS
     first = rows[0]
     assert first["city_id"] == CITY
-    assert first["source_url"] == response.url
     assert first["api_latitude"] == response.latitude
     assert first["api_longitude"] == response.longitude
     assert first["api_elevation_m"] == response.elevation_m
     assert first["observation_time"] == response.times[0]
     assert set(DAILY_VARIABLES) <= set(first)
+    # One value for the whole response, not repeated 365 times into bronze.
+    assert "source_url" not in first
+    assert response.url
 
 
 def test_source_url_is_the_exact_request(settings) -> None:
@@ -740,7 +742,7 @@ def test_every_requested_variable_has_a_bronze_column(table, variables) -> None:
 def test_every_observation_column_is_requested(table, variables) -> None:
     """And a column nothing fills would sit null forever."""
     metadata = {
-        "id", "city_id", "observation_time", "ingested_at", "source_url",
+        "id", "city_id", "observation_time", "ingested_at",
         "batch_id", "api_latitude", "api_longitude", "api_elevation_m",
         "constraint",
     }

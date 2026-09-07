@@ -1,8 +1,8 @@
 -- ============================================================================
 -- Bronze landing schema
 -- ============================================================================
--- Idempotent by construction: every statement is IF NOT EXISTS or a COMMENT,
--- so re-running against an existing database is a no-op. Apply with
+-- Idempotent by construction: every statement is IF NOT EXISTS, IF EXISTS, or
+-- a COMMENT, so re-running against an existing database is a no-op. Apply with
 --
 --     python ingestion/apply_schema.py
 --
@@ -18,6 +18,15 @@
 -- would be fatal if bronze were ever promoted to Neon's 0.5 GB allowance.
 -- Raw payloads are archived to disk as gzip under DATA_RAW_DIR (ING-03), so
 -- replay remains possible without paying for it in the warehouse.
+--
+-- There is likewise NO source_url column, for the same reason at a smaller
+-- scale. It was measured at 712 bytes per daily row and 466 per hourly one —
+-- 83% and 81% of the row payload, roughly 300 MB across the full backfill —
+-- and every value was one of a few hundred distinct strings repeated once per
+-- row. It is also fully derivable: ingestion.client.request_url() rebuilds the
+-- exact string from (city_id, grain, start, end), which is what ING-03's
+-- replay already depends on. Use ingestion.archive.source_url_for() to recover
+-- it for a given row.
 --
 -- Units are Open-Meteo's metric defaults, asserted in dbt rather than
 -- converted here (§5.3). Column names match the API's variable names so a
@@ -47,11 +56,10 @@ create table if not exists bronze_raw.observations_daily (
     -- (city_id, observation_time) cannot be the primary key.
     id                          bigint generated always as identity primary key,
 
-    -- Ingestion metadata — every row carries all five.
+    -- Ingestion metadata — every row carries all four.
     city_id                     text        not null,
     observation_time            timestamptz not null,
     ingested_at                 timestamptz not null default now(),
-    source_url                  text        not null,
     batch_id                    uuid        not null,
 
     -- Which ERA5 grid cell actually answered. Open-Meteo snaps a request to
@@ -113,8 +121,6 @@ comment on column bronze_raw.observations_daily.city_id is
   'Slug from config/cities.yml. Not a foreign key — bronze must land even if the city config changes.';
 comment on column bronze_raw.observations_daily.observation_time is
   'Midnight UTC of the aggregated day.';
-comment on column bronze_raw.observations_daily.source_url is
-  'Exact request URL, so any row can be replayed against the API.';
 comment on column bronze_raw.observations_daily.batch_id is
   'Groups every row written by one extraction run; lets a bad batch be deleted wholesale.';
 
@@ -131,7 +137,6 @@ create table if not exists bronze_raw.observations_hourly (
     city_id                  text        not null,
     observation_time         timestamptz not null,
     ingested_at              timestamptz not null default now(),
-    source_url               text        not null,
     batch_id                 uuid        not null,
 
     api_latitude             double precision,
@@ -165,6 +170,18 @@ comment on table bronze_raw.observations_hourly is
   'Append-only hourly observations, trailing 24 months. Feeds the storm-dynamics view.';
 comment on column bronze_raw.observations_hourly.observation_time is
   'Top of the hour, UTC.';
+
+
+-- ----------------------------------------------------------------------------
+-- Migrations
+-- ----------------------------------------------------------------------------
+-- Idempotent like everything above: a no-op on a database created from the
+-- current DDL, and the corrective step on one created before it. Postgres
+-- marks a dropped column dead rather than rewriting the heap, so the space is
+-- only returned by a VACUUM FULL — which is not run here, because it takes an
+-- exclusive lock and that is an operator's decision, not a schema file's.
+alter table bronze_raw.observations_daily  drop column if exists source_url;
+alter table bronze_raw.observations_hourly drop column if exists source_url;
 
 
 -- ----------------------------------------------------------------------------

@@ -336,10 +336,91 @@ def test_replay_can_be_narrowed(settings, root, no_network) -> None:
 
 
 def test_replay_url_matches_what_the_request_would_have_been(settings) -> None:
-    """source_url must be replayable against the API, not a placeholder."""
+    """The derived URL must be replayable against the API, not a placeholder."""
     assert request_url(
         CITY, START, END, "daily", settings=settings
     ).startswith(settings.openmeteo_base_url)
+
+
+# ---------------------------------------------------------------------------
+# Deriving the request URL bronze no longer stores
+# ---------------------------------------------------------------------------
+
+
+def test_the_url_is_derived_from_the_window_that_covers_a_row(
+    settings, root, no_network
+) -> None:
+    """What replaces the source_url column, at 0 bytes per row instead of 712."""
+    archive.write(UNIT, payload_bytes(), root)
+    derived = archive.source_url_for(
+        CITY, "daily", dt.datetime(2023, 1, 2, tzinfo=dt.timezone.utc),
+        root, settings=settings,
+    )
+    assert derived == request_url(CITY, START, END, "daily", settings=settings)
+
+
+def test_the_derived_url_equals_what_the_response_carried(settings, root) -> None:
+    live, _ = fetch(
+        [responds(json_body=daily_payload(DAYS, START))],
+        settings,
+        on_payload=archive.writer_for(UNIT, root),
+    )
+    for moment in live.times:
+        assert archive.source_url_for(
+            CITY, "daily", moment, root, settings=settings
+        ) == live.url
+
+
+def test_a_date_and_a_datetime_resolve_the_same(settings, root, no_network) -> None:
+    archive.write(UNIT, payload_bytes(), root)
+    as_date = archive.source_url_for(CITY, "daily", START, root, settings=settings)
+    as_datetime = archive.source_url_for(
+        CITY, "daily", dt.datetime(2023, 1, 1, tzinfo=dt.timezone.utc),
+        root, settings=settings,
+    )
+    assert as_date == as_datetime
+
+
+def test_the_covering_window_is_the_one_that_was_fetched(
+    settings, root, no_network
+) -> None:
+    """Chunk size can change between runs; the archive records what really ran."""
+    wide = WorkUnit(city_id=CITY, grain="daily",
+                    start=dt.date(2023, 1, 1), end=dt.date(2023, 6, 30))
+    archive.write(wide, payload_bytes(days=181, start=dt.date(2023, 1, 1)), root)
+    found = archive.covering_unit(
+        CITY, "daily", dt.date(2023, 3, 15), root, settings=settings
+    )
+    assert found == wide
+    assert archive.source_url_for(
+        CITY, "daily", dt.date(2023, 3, 15), root, settings=settings
+    ) == request_url(CITY, wide.start, wide.end, "daily", settings=settings)
+
+
+def test_a_row_outside_every_archived_window_says_so(
+    settings, root, no_network
+) -> None:
+    archive.write(UNIT, payload_bytes(), root)
+    assert archive.covering_unit(
+        CITY, "daily", dt.date(2024, 6, 1), root, settings=settings
+    ) is None
+    with pytest.raises(LookupError, match="no archived daily payload"):
+        archive.source_url_for(
+            CITY, "daily", dt.date(2024, 6, 1), root, settings=settings
+        )
+
+
+def test_grains_do_not_borrow_each_others_windows(
+    settings, root, no_network
+) -> None:
+    archive.write(UNIT, payload_bytes(), root)
+    with pytest.raises(LookupError):
+        archive.source_url_for(CITY, "hourly", START, root, settings=settings)
+
+
+def test_deriving_needs_no_network(settings, root, no_network) -> None:
+    archive.write(UNIT, payload_bytes(), root)
+    assert archive.source_url_for(CITY, "daily", START, root, settings=settings)
 
 
 def test_replay_applies_the_same_parser_as_the_live_path(

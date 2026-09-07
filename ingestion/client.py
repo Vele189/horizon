@@ -329,8 +329,9 @@ class ArchiveResponse:
     grain: Grain
     start: dt.date
     end: dt.date
-    #: The exact request URL, query string included. Bronze stores this per row
-    #: so any landed observation can be replayed against the API.
+    #: The exact request URL, query string included. One value per response,
+    #: not per row — bronze does not store it, and
+    #: :func:`ingestion.archive.source_url_for` rebuilds it for a landed row.
     url: str
     #: The ERA5 grid cell that actually answered, which is not the coordinate
     #: that was asked for — London's 51.5074/-0.1278 resolves to
@@ -362,15 +363,16 @@ class ArchiveResponse:
     def rows(self) -> Iterator[dict[str, Any]]:
         """One dict per timestamp, keyed to match the bronze columns.
 
-        Carries the provenance this module knows about. ``ingested_at`` and
+        Carries the provenance that varies per row. ``ingested_at`` and
         ``batch_id`` belong to the run, not the response, and are added by the
-        loader.
+        loader. :attr:`url` is deliberately *not* repeated here: it is one value
+        for the whole response, it is on this object already, and bronze does
+        not store it — see :func:`ingestion.archive.source_url_for`.
         """
         for index, observation_time in enumerate(self.times):
             row: dict[str, Any] = {
                 "city_id": self.city_id,
                 "observation_time": observation_time,
-                "source_url": self.url,
                 "api_latitude": self.latitude,
                 "api_longitude": self.longitude,
                 "api_elevation_m": self.elevation_m,

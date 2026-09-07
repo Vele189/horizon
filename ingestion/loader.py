@@ -9,9 +9,11 @@ lets a parsing fix be re-run against thirty years of history in minutes.
 unit, shifts a timezone, fills a gap, or deduplicates a row. Every one of those
 is a decision, and a decision belongs in dbt where it is SQL, version
 controlled, and covered by tests — not buried in a Python loader where it is
-invisible to anyone reading the models. What this module adds to a row is
-exactly three things the payload cannot know: when it was ingested, which URL
-produced it, and which run it belonged to.
+invisible to anyone reading the models. What this module adds to a row is the
+two things the payload cannot know: when it was ingested, and which run it
+belonged to. The request URL is not among them — it was measured at over 80%
+of the row payload for one of a few hundred distinct strings, and
+:func:`ingestion.archive.source_url_for` derives it from the archive instead.
 
 The one place that judgement is exercised is null handling, and it is exercised
 in the direction of doing nothing. A null in the payload is a null in the
@@ -82,13 +84,17 @@ TABLE_BY_GRAIN: Final[Mapping[str, str]] = {
     "hourly": "observations_hourly",
 }
 
-#: The five columns §5.2 requires on every bronze row, plus the three
-#: grid-cell columns recording which ERA5 cell actually answered.
+#: The metadata every bronze row carries, plus the three grid-cell columns
+#: recording which ERA5 cell actually answered.
+#:
+#: ``source_url`` is not among them. §5.2 asked for it per row; it measured 712
+#: bytes on a daily row and 466 on an hourly one — over 80% of the payload,
+#: roughly 300 MB across the backfill — for one of a few hundred distinct
+#: strings. :func:`ingestion.archive.source_url_for` derives it instead.
 PROVENANCE_COLUMNS: Final[tuple[str, ...]] = (
     "city_id",
     "observation_time",
     "ingested_at",
-    "source_url",
     "batch_id",
     "api_latitude",
     "api_longitude",

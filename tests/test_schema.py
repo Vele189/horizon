@@ -26,7 +26,7 @@ from config import ConfigError, get_settings  # noqa: E402
 
 SCHEMA_SQL = Path(__file__).resolve().parent.parent / "ingestion" / "schema.sql"
 
-METADATA_COLUMNS = ("city_id", "observation_time", "ingested_at", "source_url", "batch_id")
+METADATA_COLUMNS = ("city_id", "observation_time", "ingested_at", "batch_id")
 BRONZE_TABLES = ("observations_daily", "observations_hourly")
 
 
@@ -84,7 +84,7 @@ def catalog_fingerprint(cur) -> str:
 
 
 def daily_row(observation_time: dt.datetime) -> tuple:
-    return ("test_city", observation_time, "https://example.test/archive", str(uuid.uuid4()))
+    return ("test_city", observation_time, str(uuid.uuid4()))
 
 
 # ---------------------------------------------------------------------------
@@ -195,7 +195,7 @@ def test_hourly_carries_the_storm_dynamics_columns(tx) -> None:
 def test_daily_accepts_midnight_utc(tx) -> None:
     tx.execute(
         "insert into bronze_raw.observations_daily "
-        "(city_id, observation_time, source_url, batch_id) values (%s, %s, %s, %s)",
+        "(city_id, observation_time, batch_id) values (%s, %s, %s)",
         daily_row(dt.datetime(2022, 7, 19, tzinfo=dt.timezone.utc)),
     )
 
@@ -205,7 +205,7 @@ def test_daily_rejects_non_midnight(tx) -> None:
     with pytest.raises(psycopg2.errors.CheckViolation):
         tx.execute(
             "insert into bronze_raw.observations_daily "
-            "(city_id, observation_time, source_url, batch_id) values (%s, %s, %s, %s)",
+            "(city_id, observation_time, batch_id) values (%s, %s, %s)",
             daily_row(dt.datetime(2022, 7, 19, 12, 0, tzinfo=dt.timezone.utc)),
         )
 
@@ -214,7 +214,7 @@ def test_hourly_rejects_off_the_hour(tx) -> None:
     with pytest.raises(psycopg2.errors.CheckViolation):
         tx.execute(
             "insert into bronze_raw.observations_hourly "
-            "(city_id, observation_time, source_url, batch_id) values (%s, %s, %s, %s)",
+            "(city_id, observation_time, batch_id) values (%s, %s, %s)",
             daily_row(dt.datetime(2022, 7, 19, 12, 30, tzinfo=dt.timezone.utc)),
         )
 
@@ -223,9 +223,9 @@ def test_blank_city_id_rejected(tx) -> None:
     with pytest.raises(psycopg2.errors.CheckViolation):
         tx.execute(
             "insert into bronze_raw.observations_daily "
-            "(city_id, observation_time, source_url, batch_id) values (%s, %s, %s, %s)",
+            "(city_id, observation_time, batch_id) values (%s, %s, %s)",
             ("   ", dt.datetime(2022, 7, 19, tzinfo=dt.timezone.utc),
-             "https://example.test", str(uuid.uuid4())),
+             str(uuid.uuid4())),
         )
 
 
@@ -235,7 +235,7 @@ def test_append_only_allows_duplicate_natural_keys(tx) -> None:
     for _ in range(2):
         tx.execute(
             "insert into bronze_raw.observations_daily "
-            "(city_id, observation_time, source_url, batch_id) values (%s, %s, %s, %s)",
+            "(city_id, observation_time, batch_id) values (%s, %s, %s)",
             daily_row(when),
         )
     tx.execute(
@@ -249,7 +249,7 @@ def test_append_only_allows_duplicate_natural_keys(tx) -> None:
 def test_ingested_at_defaults_to_now(tx) -> None:
     tx.execute(
         "insert into bronze_raw.observations_daily "
-        "(city_id, observation_time, source_url, batch_id) values (%s, %s, %s, %s) "
+        "(city_id, observation_time, batch_id) values (%s, %s, %s) "
         "returning ingested_at",
         daily_row(dt.datetime(2022, 7, 19, tzinfo=dt.timezone.utc)),
     )

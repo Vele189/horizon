@@ -55,7 +55,7 @@ from ingestion.planner import Manifest, WorkUnit  # noqa: E402
 from http_fixtures import daily_payload, hourly_payload  # noqa: E402
 
 # parse_payload takes a city id as data, so the frame tests can use a name that
-# cannot collide with anything real. Replay rebuilds source_url through the
+# cannot collide with anything real. Replay rebuilds the request URL through the
 # registry, so the archive-backed tests need a city that exists.
 CITY = "test_loader"
 ARCHIVE_CITY = "london"
@@ -107,9 +107,9 @@ def test_one_row_per_timestamp() -> None:
 
 def test_every_row_carries_the_run_identity() -> None:
     frame = frame_for()
+    assert "source_url" not in frame.columns
     assert (frame["batch_id"] == BATCH).all()
     assert (frame["ingested_at"] == INGESTED_AT).all()
-    assert (frame["source_url"] == URL).all()
     assert (frame["city_id"] == CITY).all()
     assert frame[list(PROVENANCE_COLUMNS)].notna().all().all()
 
@@ -187,7 +187,7 @@ def test_an_empty_string_stays_quoted_and_distinct_from_null() -> None:
 
 
 def test_text_containing_a_comma_survives() -> None:
-    """source_url carries a query string; a naive join would corrupt it."""
+    """Text fields can carry commas; a naive join would corrupt them."""
     url = "https://x.test/v1?daily=a,b,c&tz=UTC"
     assert list(csv.reader(_csv_buffer([[url]])))[0] == [url]
 
@@ -372,17 +372,16 @@ def test_loading_the_same_unit_twice_duplicates(conn) -> None:
     assert len(landed(conn)) == DAYS * 2
 
 
-def test_every_landed_row_carries_the_five_metadata_columns(conn) -> None:
+def test_every_landed_row_carries_its_metadata_columns(conn) -> None:
     response = response_for("daily", days=DAYS)
     load_response(response, conn, batch_id=BATCH, ingested_at=INGESTED_AT)
     rows = landed(
-        conn, columns="city_id, observation_time, ingested_at, source_url, batch_id"
+        conn, columns="city_id, observation_time, ingested_at, batch_id"
     )
-    for city_id, observation_time, ingested_at, source_url, batch_id in rows:
+    for city_id, observation_time, ingested_at, batch_id in rows:
         assert city_id == CITY
         assert observation_time is not None
         assert ingested_at == INGESTED_AT
-        assert source_url == URL
         assert uuid.UUID(str(batch_id)) == BATCH
 
 

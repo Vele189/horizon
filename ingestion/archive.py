@@ -63,11 +63,13 @@ __all__ = [
     "SUFFIX",
     "archive_path",
     "archived_units",
+    "covering_unit",
     "exists",
     "read_bytes",
     "read_payload",
     "replay",
     "replay_unit",
+    "source_url_for",
     "stats",
     "write",
     "writer_for",
@@ -308,6 +310,67 @@ def replay_unit(
         start=unit.start,
         end=unit.end,
         url=url,
+    )
+
+
+def covering_unit(
+    city_id: str,
+    grain: Grain,
+    observation_time: dt.datetime | dt.date,
+    root: Path | str | None = None,
+    *,
+    settings: Settings | None = None,
+) -> WorkUnit | None:
+    """The archived unit whose window contains this observation, if any."""
+    day = (
+        observation_time.date()
+        if isinstance(observation_time, dt.datetime)
+        else observation_time
+    )
+    for unit in archived_units(
+        root, grain=grain, city_id=city_id, settings=settings
+    ):
+        if unit.start <= day <= unit.end:
+            return unit
+    return None
+
+
+def source_url_for(
+    city_id: str,
+    grain: Grain,
+    observation_time: dt.datetime | dt.date,
+    root: Path | str | None = None,
+    *,
+    settings: Settings | None = None,
+) -> str:
+    """The request URL that produced a given bronze row.
+
+    Bronze deliberately does not store this. Measured at 712 bytes per daily
+    row and 466 per hourly one — 83% and 81% of the row payload, roughly 300 MB
+    across the full backfill — for a value that is one of a few hundred
+    distinct strings, and that :func:`~ingestion.client.request_url` rebuilds
+    exactly from the window it came from.
+
+    The window is what the row does not carry, and the archive is the record of
+    it: the file whose name spans this observation is, by construction, the one
+    that was fetched. That makes the archive load-bearing for provenance as
+    well as for replay, which is the trade — 300 MB of warehouse against a
+    directory that must not be deleted.
+
+    Raises:
+        LookupError: No archived payload covers this observation. Either the
+            archive was pruned, or the row came from somewhere this code did
+            not put it.
+    """
+    unit = covering_unit(city_id, grain, observation_time, root, settings=settings)
+    if unit is None:
+        raise LookupError(
+            f"no archived {grain} payload covers {city_id} at "
+            f"{observation_time}; the URL cannot be derived without the window "
+            f"it was requested for. Looked under {_root(root, settings)}."
+        )
+    return request_url(
+        unit.city_id, unit.start, unit.end, unit.grain, settings=settings
     )
 
 
