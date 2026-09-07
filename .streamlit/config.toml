@@ -1,0 +1,39 @@
+# Streamlit configuration. Committed, and free of secrets by construction —
+# credentials live in .streamlit/secrets.toml, which is git-ignored, and in
+# Streamlit Community Cloud's own encrypted store.
+#
+# The colours below are the chrome tokens from dashboard/theme.py, repeated
+# here because Streamlit reads its theme from TOML and cannot import Python.
+# That duplication is the kind that rots, so tests/test_dashboard.py parses
+# this file and fails if any value drifts from the module. theme.py stays the
+# source; this is a generated-looking copy that is checked rather than trusted.
+
+[theme]
+base = "light"
+font = "sans-serif"
+
+[theme.light]
+backgroundColor = "#fcfcfb"          # theme.SURFACE["light"] — the surface the
+                                     # diverging ramp was validated against
+secondaryBackgroundColor = "#f9f9f7" # chrome("light")["plane"]
+textColor = "#0b0b0b"                # chrome("light")["ink"]
+primaryColor = "#52514e"             # chrome("light")["ink_secondary"]; ink
+                                     # rather than a hue, because no accent
+                                     # colour stays distinct from a nine-step
+                                     # blue-red ramp under CVD simulation
+borderColor = "#e1e0d9"              # chrome("light")["gridline"]
+
+[theme.dark]
+backgroundColor = "#1a1a19"          # theme.SURFACE["dark"]
+secondaryBackgroundColor = "#0d0d0d" # chrome("dark")["plane"]
+textColor = "#ffffff"                # chrome("dark")["ink"]
+primaryColor = "#c3c2b7"             # chrome("dark")["ink_secondary"]
+borderColor = "#2c2c2a"              # chrome("dark")["gridline"]
+
+[server]
+# Nothing here uploads, and a public dashboard should not accept one.
+maxUploadSize = 1
+
+[browser]
+# Usage statistics are off. The app is public and its visitors did not opt in.
+gatherUsageStats = false

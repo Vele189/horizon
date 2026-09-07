@@ -1,11 +1,14 @@
 # Development and CI only. Kept out of requirements.txt so the Streamlit
 # Community Cloud deployment does not install a test runner.
--r requirements.txt
+#
+# Pulls the pipeline file, which pulls the deployment file — so one install
+# gets everything, and the layering is expressed once rather than repeated.
+-r requirements-pipeline.txt
 pytest==8.3.4
 ruff==0.9.2
 
 # The reference TreeSHAP, used only to prove that XGBoost's built-in
 # pred_contribs returns the same values. It pulls a compiler toolchain, so it
-# stays out of requirements.txt and out of the Streamlit deployment; the
+# stays out of both files above and out of the Streamlit deployment; the
 # explanation itself needs nothing but the model.
 shap==0.52.0

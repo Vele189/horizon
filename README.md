@@ -2842,6 +2842,262 @@ identical on both sides. It is a rendering difference of the version skew
 already recorded above, not drift, and the drift check compares column types and
 nullability rather than constraint counts for exactly this reason.
 
+## The dashboard shell
+
+The four views land on Days 12 and 13. What exists now is everything
+underneath them — navigation, the route to the warehouse, and the palette —
+built first because all three are decisions that get expensive to change once
+four charts depend on them.
+
+```bash
+streamlit run dashboard/app.py
+```
+
+Nothing else to configure if `.env` already has `SERVING_DATABASE_URL`.
+
+### The credential is read, never stored
+
+The deployed app reads `DATABASE_URL` from **Streamlit secrets**, which
+Community Cloud keeps encrypted and injects at runtime. `.streamlit/secrets.toml`
+is git-ignored; only `.streamlit/secrets.toml.example`, which holds
+`USER:PASSWORD`, is committed. A test parses every module under `dashboard/`
+and fails on any string literal shaped like a connection string, and a second
+test feeds that check a deliberately leaky module and requires it to fail —
+because a guard nobody has seen fail is a guard nobody should trust.
+
+Locally there are no Streamlit secrets, so `config.py` answers instead, and it
+is still the only module in the project that reads the environment.
+`dashboard/database.py` takes the first of these that is set:
+
+| | Source | Why it is where it is |
+|---|---|---|
+| 1 | `DATABASE_URL` in Streamlit secrets | Deployed, there is one database and it is Neon |
+| 2 | `SERVING_DATABASE_URL` in Streamlit secrets | Lets a deployment use the same name the promotion does |
+| 3 | `SERVING_DATABASE_URL` from `.env` | Neon, from a development machine |
+| 4 | `DATABASE_URL` from `.env`, only when `ENVIRONMENT=serving` | The project's existing switch, honoured rather than duplicated |
+
+Rule 3 is the one worth explaining. On a development machine `DATABASE_URL` is
+the Docker container, which holds bronze and silver as well as gold — and the
+whole point of promoting only gold is that the dashboard cannot reach the rest.
+Falling back to it would quietly undo that on the one machine where the code is
+written. The dashboard is a serving-tier reader in both places it runs, so it
+asks for the serving-tier variable in both.
+
+There is no fifth rule. If none of the four is set the app renders a sentence
+saying so, with the fix for the deployed case and the local case spelled out
+separately, rather than a traceback on a public URL.
+
+### The cold start is a state, not an error
+
+Neon scales compute to zero after five minutes idle. A visitor arriving after a
+quiet afternoon is therefore the *normal* case, and it shows up in two
+different ways.
+
+**It is slow.** Measured through this layer, from a development machine in
+South Africa:
+
+| | |
+|---|---:|
+| Engine construction (no I/O — SQLAlchemy connects lazily) | 33 ms |
+| First query of a process, compute idle five minutes | 6251 ms |
+| Subsequent queries, on the pooled connection | 1020–1412 ms |
+
+That first figure is larger than the 3.6 s in §Promotion to Neon above, and the
+difference is not a contradiction: that measurement was one `select` through
+psycopg2, this one is the shell's five-subquery status read through SQLAlchemy
+on a pool that has to be built first. Both carry the same ~1.2 s of Neon
+resuming and the same ~2.4 s of ocean.
+
+Six seconds is long enough to look broken, so every cached query declares a
+spinner — and `st.cache_data` shows one only on a miss, which is exactly the
+request that might be waiting on a resume. A hit renders with no spinner at
+all, because it did not go anywhere.
+
+**The socket is dead.** This is the failure the ticket is really about. A
+pooled connection opened before the compute suspended is not closed politely;
+it is a descriptor pointing at nothing, and the next statement on it raises
+`OperationalError` from inside the driver. Three things stop that reaching a
+visitor:
+
+- `pool_pre_ping` — SQLAlchemy probes a connection at checkout and silently
+  replaces a dead one. This catches most of it.
+- `pool_recycle=240` — below Neon's five-minute idle timeout, so the pool never
+  hands out a connection old enough to have been suspended under it, and
+  pre-ping usually finds nothing to fix.
+- An explicit retry, because the first two are not sufficient: pre-ping's own
+  probe can fail while compute is still coming back, and it raises the same
+  exception the query would have.
+
+The retry disposes the whole pool rather than letting it heal one connection at
+a time. When compute suspends, *every* pooled socket dies at once, and
+per-connection recovery pays the same failure again on the next checkout —
+which is how a handled cold start still looks broken to someone clicking
+between views.
+
+It is also deliberately narrow. Only `OperationalError`, `InterfaceError` and a
+`connection_invalidated` mid-statement are retried; a missing column is raised
+on the first attempt, because retrying a query that cannot succeed turns a
+clear error into a slow one. Both halves are tested: an engine that fails the
+way a suspended compute fails, and one that fails the way a broken query fails.
+The second asserts that exactly one attempt was made.
+
+After three attempts the page says the warehouse did not answer, explains that
+the database sleeps and usually wakes, and offers a button — because "it was
+waking up" is a condition that resolves by itself and a visitor who reloads
+will most likely succeed. The sidebar degrades to "Not reachable" instead of
+disappearing, so the navigation stays usable.
+
+A third failure gets its own panel, and it is the one most easily left out
+because it is not a connection failure at all: the app deployed against a
+database the marts have not been promoted into yet. Postgres answers, and then
+says the table does not exist. That fails one page at a time rather than the
+app, so without a panel of its own it is the one that reaches a visitor as a
+stack trace — and it gets no retry button, because waiting will not create the
+table. It says which host it is reading and that `serving/promote.py` is what
+puts the marts there.
+
+### Four wake-ups a day
+
+Results are cached for **six hours**, dimensions for twenty-four. That is far
+longer than a dashboard would normally hold data, and the reason is the free
+plan's meter rather than the data.
+
+Compute stays awake for five minutes after each query. A cache miss therefore
+costs a **five-minute minimum** of the monthly allowance no matter how fast the
+query runs, so the 100 compute-hours are spent on *wake-ups*, not on queries.
+Six hours between refreshes is four wake-ups a day, twenty minutes of compute,
+about ten hours a month — a tenth of the allowance keeping the dashboard
+current, and the rest left for people actually looking at it. A five-minute TTL
+would spend the entire month's allowance on an empty room. Streamlit's cache
+lives in the process and Community Cloud runs one, so this is four wake-ups in
+total, not four per visitor.
+
+The marts only change when `serving/promote.py` runs, which is manual, so six
+hours of staleness costs nothing — except that a promotion is invisible for up
+to six hours. The sidebar carries a button that drops the cached results and
+keeps the engine, which is cheaper than a shorter TTL: it spends a wake-up when
+someone asks for one, where a TTL spends one on a timer whether anyone is
+watching or not. A test recomputes the arithmetic and fails if the TTL is ever
+shortened past the point where scheduled refreshes alone would cost 20 hours a
+month.
+
+### One palette, generated and measured
+
+Anomalies are signed — a city is colder than its own climatology or warmer than
+it — so the scale is diverging: two hues away from a neutral midpoint. Blue for
+cold, red for warm, grey between them, which is what every published
+temperature-anomaly figure does and not a thing worth being original about.
+
+The poles are ColorBrewer's `RdBu` extremes, taken as an OKLCH hue each. The
+seven steps between them were *generated* rather than chosen: lightness on an
+even ladder outward from the midpoint so a step of colour means a step of
+anomaly, chroma rising to the pole's, clipped to what sRGB can hold. Both
+ladders were then searched for the combination maximising the worst-case
+separation under simulated colour-vision deficiency. Distances are Euclidean in
+OKLab ×100, under Machado (2009) at severity 1.0; 8 is the threshold at which
+two colours are reliably different:
+
+| | light | dark |
+|---|---:|---:|
+| Cold vs warm at equal magnitude | 12.3 | 12.8 |
+| Any step vs the neutral midpoint | 15.2 | 10.5 |
+| Adjacent steps | 10.8 | 9.9 |
+| Lightness-step evenness (max ÷ min) | 1.23 | 1.40 |
+
+The first row is the one that matters. A red–blue climate figure makes one
+claim above all others — which way it went — and if a protanopic reader cannot
+separate the arms at equal magnitude, the figure is not merely less pretty for
+them, it is telling them the opposite of the truth half the time. At 12.3 the
+sign survives.
+
+Everything in that table is recomputed by `tests/test_dashboard.py` from the
+hex values `theme.py` ships, and the table inside `theme.py` is *parsed* and
+checked cell by cell — the same trick the model card uses, for the same reason:
+a docstring that can drift from the thing it describes stops being evidence.
+The colour maths is implemented in the test rather than imported, so an edit
+that changed the palette and its checker together would still have to survive
+an independent measurement.
+
+**One number is below its floor, and it stays admitted.** The palest step of
+each arm sits at 1.81:1 against the light surface, under the 2:1 that says a
+mark must be visible against empty background. A search over lightness ladders
+showed the floor and even spacing cannot both be had: clearing 2:1 costs a
+doubled first step, which would exaggerate small anomalies and compress large
+ones — a worse chart than a pale swatch. So even spacing wins and the
+mitigation is structural rather than chromatic: heatmap cells tile the plot
+with a gap between them, map points carry a surface ring, legend swatches carry
+a hairline border. In dark mode the same step measures 2.30:1 and the question
+does not arise. A test pins both figures and fails if the shortfall the prose
+explains stops being the shortfall the palette has.
+
+**There is no accent colour.** Chrome — links, focus rings, the selected nav
+item — wants one, and every chromatic candidate collapsed into the ramp under
+simulation: a teal at mid-lightness lands 1.0–6.0 from a blue step under
+deuteranopia, well inside the distance that means "the same colour". Nine steps
+of blue and red leave no room for a tenth hue. So the accent is ink, and a
+colour on this page always means a number.
+
+`.streamlit/config.toml` repeats the surface and ink tokens because Streamlit
+reads TOML and cannot import Python. That duplicate is checked rather than
+trusted: a test parses the file and fails if any value drifts from `theme.py`,
+because a contrast figure measured against a background nobody is looking at is
+not a weaker check but a meaningless one.
+
+### What Streamlit Community Cloud installs
+
+`requirements.txt` is the deployed app's runtime and nothing else. It was
+previously the whole project's — ingestion, dbt, the model and the plotting
+library — which meant Cloud built a **1.5 GB** dependency tree, `dbt-core`
+included, to serve pages that import `streamlit`, `pandas` and `sqlalchemy`.
+That is a slow cold build and it puts dbt's transitive pins on the critical
+path of a deploy that has nothing to do with dbt.
+
+So the pins are layered, and each file includes the one below it:
+
+| File | Holds | Installed by |
+|---|---|---|
+| `requirements.txt` | the dashboard's runtime | Streamlit Cloud, on every deploy |
+| `requirements-pipeline.txt` | the API client, dbt, the model | whoever builds the warehouse |
+| `requirements-dev.txt` | pytest, ruff, reference SHAP | CI and development |
+
+The dashboard reads *finished* marts: it does not ingest, does not run dbt, and
+does not score — predictions are computed by `predict.py` and promoted into
+`fact_ml_predictions` ahead of time. None of the pipeline is a runtime
+dependency of the deployed app.
+
+A split like this rots in one direction — a view gains an import and the
+manifest does not — so it is checked rather than maintained. One test walks
+every import under `dashboard/`, resolves each to the distribution that
+provides it, and fails if it is not pinned for deployment; without it, the
+first anyone hears of a missing Plotly is a `ModuleNotFoundError` on a public
+URL, after a deploy that reported success. A second test asserts the toolchain
+has not crept back in, and a third that nothing is pinned for deployment that
+no page needs. Three pins are exempt from the last one and say why in the file:
+`psycopg2-binary`, which SQLAlchemy loads by name rather than by import, and
+`numpy` and `python-dotenv`, which arrive underneath pandas and `config.py`.
+
+### What the four pages hold today
+
+Each is a real page with its question, its caption, the colour key it will use,
+and a live probe of the mart it will read — so opening any of them exercises the
+connection layer end to end rather than leaving it unproven until the charts
+arrive.
+
+| Page | Reads | Chart lands in |
+|---|---|---|
+| Global Anomaly Map | `fact_weather_anomalies` | BI-03 |
+| Climate Matrix | `fact_weather_anomalies` | BI-03 |
+| Storm Dynamics | `fact_weather_hourly` | BI-03 |
+| Risk Horizon | `fact_ml_predictions` | BI-04 |
+
+One open question is recorded on the page it belongs to rather than deferred
+silently. Storm Dynamics is specified as a scatter "coloured by city" over
+fifteen cities; no colour-blind-safe categorical palette carries fifteen hues,
+and inventing them to fill the gap is what makes a scatter unreadable. BI-03
+resolves it by encoding something other than identity — small multiples, or a
+density surface with one city highlighted — rather than by stretching the
+palette.
+
 ## Licence
 
 [MIT](LICENSE)
