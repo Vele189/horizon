@@ -64,7 +64,10 @@ from xgboost import XGBClassifier
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from config import get_settings  # noqa: E402
+from machine_learning.artifact import (  # noqa: E402
+    MAX_COMMITTED_BYTES,
+    save_artifact,
+)
 from machine_learning.baselines import build_metrics, metrics_path  # noqa: E402
 from machine_learning.evaluation import (  # noqa: E402
     SPLITS,
@@ -86,8 +89,7 @@ __all__ = [
     "TrainingError",
     "Fit",
     "fit_once",
-    "model_path",
-    "save_model",
+    "save_models",
     "scale_pos_weight_from",
     "train_model",
     "training_matrix",
@@ -290,34 +292,41 @@ def tune(
     return best
 
 
-def model_path() -> Path:
-    """``machine_learning/artifacts/model.joblib``. Not committed."""
-    return get_settings().model_artifact_dir / "model.joblib"
+def save_models(
+    fits: Mapping[str, "Fit"],
+    block: Mapping[str, Any],
+    parts: Mapping[str, pd.DataFrame],
+    *,
+    baselines: Mapping[str, Any] | None = None,
+    snapshot: Mapping[str, Any] | None = None,
+    directory: Path | None = None,
+) -> dict[str, Any]:
+    """Persist **both** variants, each with the metadata that makes it usable.
 
-
-def save_model(fit: Fit, path: Path | None = None) -> Path:
-    """Persist the estimator beside its metrics.
-
-    (The resampler names this module must not contain are listed in
-    ``tests/test_training.py``; prose here avoids them so the scan that looks
-    for them does not find its own explanation.)
-
-    The artefact is gitignored and ``metrics.json`` is not, which is the right
-    way round: a binary nobody can diff is not evidence, and the numbers are.
+    Both, because the two tickets that produced them disagree and neither is
+    wrong: ML-05 specifies ``scale_pos_weight`` at the observed ratio, and
+    ML-06 measures that variant losing to *doing nothing* on Brier. Saving only
+    the specified one would put the model nobody should deploy on disk while
+    the explanations describe a different one; saving only the recommended one
+    would quietly overrule a ticket. The sidecar names which is which, and
+    :func:`~machine_learning.artifact.load_model` defaults to the recommended.
     """
-    import joblib
-
-    destination = Path(path) if path is not None else model_path()
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(
-        {
-            "estimator": fit.estimator,
-            "features": list(fit.feature_names),
-            "describe": fit.describe(),
-        },
-        destination,
-    )
-    return destination
+    _, y_train = training_matrix(parts["train"])
+    recommended = block.get("recommended_variant")
+    saved: dict[str, Any] = {}
+    for variant, fit in fits.items():
+        saved[variant] = save_artifact(
+            fit,
+            variant=variant,
+            train=parts["train"],
+            target=y_train,
+            metrics=block["variants"][variant],
+            baselines=baselines,
+            snapshot=snapshot,
+            recommended=variant == recommended,
+            directory=directory,
+        )
+    return saved
 
 
 def train_model(
@@ -459,7 +468,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     population = evaluation_frame()
     block, fits = train_model(frame=population)
-    specified = fits[block["specified_variant"]]
 
     print(f"train      {_split_window('train')}")
     print(f"seed {SEED}   threads {N_JOBS}   resampling {block['resampling']}")
@@ -496,10 +504,27 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.write or args.out:
         destination = Path(args.out) if args.out else metrics_path()
         merged = merge_into_metrics(block, frame=population, path=destination)
+        merged["model"]["artifacts"] = save_models(
+            fits,
+            merged["model"],
+            split_frame(population),
+            baselines=merged.get("baselines"),
+            snapshot=merged.get("snapshot"),
+            directory=destination.parent,
+        )
         destination.write_text(json.dumps(merged, indent=2, sort_keys=True) + "\n")
-        saved = save_model(specified)
         print(f"\nwrote {destination}")
-        print(f"wrote {saved}")
+        for variant, record in merged["model"]["artifacts"].items():
+            mark = " (recommended)" if record["recommended"] else ""
+            print(
+                f"wrote {destination.parent / record['filename']}  "
+                f"{record['bytes']:,} bytes{mark}"
+            )
+            if not record["committable"]:
+                print(
+                    f"  WARNING: over {MAX_COMMITTED_BYTES:,} bytes — too "
+                    "large to commit; it belongs in a release asset."
+                )
     else:
         print("\n(not written — pass --write to update metrics.json)")
     return 0

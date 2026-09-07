@@ -2295,6 +2295,107 @@ Anchoring the assertion to `predict_proba` rather than to the booster's own
 margin is what catches it, and a companion test reproduces the wrong tree range
 and requires the identity to fail, so the check is known to be doing work.
 
+## Model artefacts
+
+`machine_learning/artifact.py` writes and reads the model. Both variants are
+persisted, each with the metadata that makes it usable by somebody who was not
+there when it was trained:
+
+| | filename | bytes | |
+|---|---|---:|---|
+| unweighted | `model-unweighted-v1-2ad772ff7b18.joblib` | 256 970 | **recommended** |
+| weighted | `model-weighted-v1-4696869b4c0f.joblib` | 270 433 | as ML-05 specifies |
+
+Both, because the two tickets that produced them disagree and neither is wrong.
+ML-05 specifies `scale_pos_weight` at the observed ratio; ML-06 measures that
+variant losing to *doing nothing* on Brier. Saving only the specified one would
+leave the model nobody should deploy on disk while the SHAP explanations
+describe a different one; saving only the recommended one would quietly
+overrule a ticket. The sidecar names which is which and `load_model()` defaults
+to the recommended.
+
+### The filename is a fingerprint, not a timestamp
+
+`model-{variant}-v{format}-{fingerprint}.joblib`, where the fingerprint hashes
+exactly the things that determine the model: the training window, the feature
+list *in order*, the hyperparameters, the seed, the library versions, and the
+warehouse snapshot.
+
+Two artefacts with the same name **are** the same model, and a retrain that
+changes nothing produces no diff. A timestamp would change when nothing had —
+which for a file committed to git is the difference between a history and a
+pile. Superseded artefacts of the same variant are pruned on write; git keeps
+them, a working tree accumulating one binary per retrain helps nobody.
+
+### What the sidecar records
+
+Everything in `metrics.json` under `model.artifacts`:
+
+- **training window** — 1995-01-31 to 2018-12-24, 45 069 rows, 2 483 positive
+  (5.51%), and the cities it covers
+- **feature list and order** — all 27, as a list, because the order is the part
+  a caller can get wrong silently
+- **hyperparameters** — including the seed, the rounds early stopping kept, and
+  `scale_pos_weight`
+- **all metrics** on train, validation and test
+- **baseline comparison**, carried rather than referenced: PR-AUC and Brier for
+  each baseline with the deltas and a per-metric verdict, so somebody deciding
+  whether to deploy does not need two other blocks in their head to find out
+  whether 0.3494 is good
+- **library versions** — xgboost 3.4.1, scikit-learn 1.9.0, numpy 2.5.3,
+  pandas 3.0.5, joblib 1.6.0
+- **git commit, branch and dirty flag**, and the file's own SHA-256, size, and
+  creation timestamp
+
+On the git hash: it records the commit the tree was on **when the model was
+trained**, and whether that tree was clean. It cannot be the commit that
+*contains* the model — the artefact has to exist before it can be committed —
+so `"dirty": true` in a committed sidecar is the normal case. It is recorded
+rather than hidden, because a hash with no dirty flag implies a provenance it
+does not have.
+
+### The loader validates before it predicts
+
+Three checks, each guarding a failure that otherwise returns a confident
+number rather than an error.
+
+**Feature order.** `predict()` selects the recorded features *by name, in the
+recorded order*. That makes a mis-ordered frame impossible rather than merely
+detectable — a caller who hands over the right columns backwards gets the right
+answer, and one missing a column gets an error naming it. A test proves the
+hazard is real: the same columns fed as a bare array in reverse produce
+completely different probabilities and no complaint. Which is why a bare array
+is **refused** — its order cannot be checked against anything, so accepting one
+would mean trusting the caller about the one thing the method exists to check.
+
+**Tree range.** Early stopping leaves 68 trees in a booster that scores on 18.
+`predict_proba` knows that through the `best_iteration` it was pickled with,
+and the loader asserts it survived the round trip — the same failure that made
+the first SHAP values explain a model nobody runs.
+
+**The file itself.** Loaded through the sidecar, the SHA-256 is checked. An
+artefact that changed after the metrics were written cannot be loaded under
+them.
+
+There is no `latest.joblib` symlink to go stale: `metrics.json` is the index,
+`load_model()` reads it, and the file it names is the file it verifies.
+
+### Committed, while it stays small
+
+`.gitignore` keeps `*.joblib` out and re-includes
+`machine_learning/artifacts/model-*.joblib`. That is deliberate: Streamlit
+Community Cloud cannot reach the warehouse this model is trained from, so an
+artefact outside the repository means the deployed dashboard has no model at
+all. 257 KB that makes a clone runnable is worth more than an empty artifacts
+directory.
+
+git cannot express *"unless it is over two megabytes"*, so a test does — it
+walks every tracked `.joblib` and fails on any over the threshold, where the
+trade stops paying and the file belongs in a release asset instead. A second
+test requires every tracked artefact to carry a version in its name, since an
+unversioned `model.joblib` would be overwritten in place and its history would
+be a sequence of indistinguishable binaries.
+
 ## Licence
 
 [MIT](LICENSE)

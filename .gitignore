@@ -34,8 +34,16 @@ machine_learning/artifacts/*
 
 # metrics.json is the exception, and deliberately so. The baseline scores it
 # holds are the target a model is measured against, and a target is only fixed
-# in advance if it is committed in advance. The .joblib beside it stays out.
+# in advance if it is committed in advance.
 !machine_learning/artifacts/metrics.json
+
+# So is the model itself, while it stays small. Streamlit Community Cloud
+# cannot reach the warehouse the model is trained from, so an artefact outside
+# the repository means the deployed dashboard has no model at all. git cannot
+# express "unless it is under two megabytes", so the rule lives in
+# tests/test_artifact.py, which fails on any tracked .joblib over the
+# threshold. Everything else matching *.joblib above stays ignored.
+!machine_learning/artifacts/model-*.joblib
 
 # ---------------------------------------------------------------------------
 # dbt

@@ -54,7 +54,6 @@ from machine_learning.train import (  # noqa: E402
     TrainingError,
     fit_once,
     merge_into_metrics,
-    save_model,
     scale_pos_weight_from,
     train_model,
     training_matrix,
@@ -289,21 +288,31 @@ def test_two_runs_in_separate_processes_produce_identical_metrics() -> None:
 def test_the_saved_artefact_predicts_what_the_fit_predicted(
     synthetic_parts, tmp_path
 ) -> None:
-    import joblib
+    """Serialisation itself is covered in ``test_artifact.py``; this is the
+    one property the trainer owns — what came back out predicts what went in."""
+    from machine_learning.artifact import load_model, save_artifact
 
+    train = synthetic_parts["train"]
     fit = fit_once(
-        synthetic_parts["train"],
+        train,
         synthetic_parts["validation"],
         {"max_depth": 3, "learning_rate": 0.1, "min_child_weight": 10},
         scale_pos_weight=1.0,
     )
-    path = save_model(fit, tmp_path / "model.joblib")
-    loaded = joblib.load(path)
+    _, target = training_matrix(train)
+    record = save_artifact(
+        fit,
+        variant="unweighted",
+        train=train,
+        target=target,
+        metrics={},
+        directory=tmp_path,
+    )
+    loaded = load_model(tmp_path / record["filename"], verify=False)
 
-    assert loaded["features"] == list(feature_columns())
-    matrix, _ = training_matrix(synthetic_parts["test"])
+    assert list(loaded.features) == list(feature_columns())
     np.testing.assert_array_equal(
-        loaded["estimator"].predict_proba(matrix)[:, 1],
+        loaded.predict(synthetic_parts["test"]),
         fit.predict(synthetic_parts["test"]),
     )
 
