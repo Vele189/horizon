@@ -393,6 +393,7 @@ class CityCoverage:
 
     @property
     def completeness(self) -> float:
+        """Distinct observations landed over observations the range asked for."""
         return self.distinct_days / self.expected_days if self.expected_days else 0.0
 
     @property
@@ -468,10 +469,14 @@ def bronze_coverage(
     for city_id, row_count, distinct_times, first, last, largest_step in rows:
         first_day = first.date() if first else None
         last_day = last.date() if last else None
+        # Measured against the range that was *asked for*, not against the
+        # city's own last row. Clipping to last_day would report a city holding
+        # only 1995 as 100% complete — 365 days observed out of 365 expected —
+        # which is precisely the state this gate exists to catch.
         window_start = start or first_day
         expected = 0
-        if window_start and last_day:
-            span = (min(resolved_end, last_day) - window_start).days + 1
+        if window_start:
+            span = (resolved_end - window_start).days + 1
             expected = span if grain == "daily" else span * 24
         # A step of one unit is contiguous; anything more is a gap of the
         # difference. Reported in days for both grains so one threshold reads

@@ -554,3 +554,38 @@ def test_completeness_is_a_ratio_of_distinct_days_to_the_window() -> None:
     short = CityCoverage(CITY, 300, 300, START, END, 20, 365)
     assert not short.within_one_percent
     assert short.has_unexplained_gap
+
+
+def test_a_city_holding_only_its_first_year_is_not_complete(
+    settings, manifest, root, engine, cleanup, scripted, instant
+) -> None:
+    """The false pass the gate exists to catch.
+
+    Measuring expected days to the city's own last row rather than to the end
+    of the requested range reports 365 of 365 — 100% — for a city that is one
+    year into a three-year backfill.
+    """
+    pending = units_for(settings=settings, manifest=manifest)
+    first = pending[0]
+    archive.write(
+        first, json.dumps(daily_payload(first.days, first.start)).encode(), root
+    )
+    scripted([])
+    result = run_backfill(
+        grains=("daily",), cities=[load_cities()[CITY]], start=START, end=END,
+        root=root, manifest=manifest, settings=settings, engine=engine,
+        max_weight=0.0,
+    )
+    cleanup.append(result.batch_id)
+    assert result.units_completed == 1
+
+    entry = next(
+        c for c in bronze_coverage(
+            engine, grain="daily", start=START, end=END, batch_ids=cleanup
+        )
+        if c.city_id == CITY
+    )
+    assert entry.distinct_days == first.expected_rows
+    assert entry.last_day == first.end
+    assert entry.completeness < 0.4
+    assert not entry.within_one_percent
