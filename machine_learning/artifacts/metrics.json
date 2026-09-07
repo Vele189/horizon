@@ -392,7 +392,228 @@
       }
     }
   },
-  "generated_at": "2026-09-07T09:19:05+00:00",
+  "explainability": {
+    "cases": {
+      "false_positive": {
+        "base_value": -2.878248691558838,
+        "city_id": "cairo",
+        "contributions": [
+          {
+            "feature": "z_temperature_2m_mean",
+            "shap": 2.259150266647339,
+            "value": 2.9488762532156407
+          },
+          {
+            "feature": "anomaly_days_trailing30",
+            "shap": 0.7294891476631165,
+            "value": 10.0
+          },
+          {
+            "feature": "pressure_tendency_72h",
+            "shap": 0.08694939315319061,
+            "value": 4.600000000000023
+          },
+          {
+            "feature": "temperature_2m_mean_roll30_var",
+            "shap": 0.08081893622875214,
+            "value": 6.447402298852877
+          },
+          {
+            "feature": "temperature_2m_mean_roll30_mean",
+            "shap": 0.07541263103485107,
+            "value": 18.613333333333333
+          },
+          {
+            "feature": "day_of_year_cos",
+            "shap": 0.07123598456382751,
+            "value": 0.6901733882429719
+          },
+          {
+            "feature": "pressure_msl_mean_roll30_var",
+            "shap": 0.06474190205335617,
+            "value": 9.837517241399143
+          },
+          {
+            "feature": "day_of_year_sin",
+            "shap": 0.06465501338243484,
+            "value": 0.7236440382959124
+          }
+        ],
+        "date_key": "2026-02-16",
+        "label": false,
+        "margin": 0.7688117027282715,
+        "predicted": 0.6832637190818787
+      },
+      "true_positive": {
+        "base_value": -2.878248691558838,
+        "city_id": "delhi",
+        "contributions": [
+          {
+            "feature": "z_temperature_2m_mean",
+            "shap": 2.2908952236175537,
+            "value": 2.767787735617837
+          },
+          {
+            "feature": "anomaly_days_trailing30",
+            "shap": 0.8993672132492065,
+            "value": 5.0
+          },
+          {
+            "feature": "day_of_year_sin",
+            "shap": 0.18578681349754333,
+            "value": 0.9209712877166346
+          },
+          {
+            "feature": "pressure_tendency_72h",
+            "shap": 0.0808989405632019,
+            "value": 2.2000000000000455
+          },
+          {
+            "feature": "pressure_msl_mean_roll30_var",
+            "shap": 0.06907129287719727,
+            "value": 9.948333333488527
+          },
+          {
+            "feature": "temperature_2m_mean_roll30_mean",
+            "shap": 0.06261104345321655,
+            "value": 22.496666666666666
+          },
+          {
+            "feature": "pressure_msl_mean_roll7_mean",
+            "shap": 0.033266883343458176,
+            "value": 1011.2142857142857
+          },
+          {
+            "feature": "pressure_msl_mean",
+            "shap": 0.025289544835686684,
+            "value": 1012.2
+          }
+        ],
+        "date_key": "2026-03-09",
+        "label": true,
+        "margin": 0.8253295421600342,
+        "predicted": 0.6953664422035217
+      }
+    },
+    "explained_variant": "unweighted",
+    "implementation": "xgboost pred_contribs (TreeSHAP)",
+    "note": "SHAP values are in log-odds. The base value is -2.8782, which is 0.0532 as a probability.",
+    "recorded_at": "2026-09-07T09:41:25+00:00",
+    "rows_explained": 8506,
+    "space": "log-odds",
+    "static_city_share": 0.13713666443400768,
+    "tail_response": [
+      {
+        "band": "(-inf, -2.5]",
+        "mean_shap": 1.8491977453231812,
+        "rows": 61
+      },
+      {
+        "band": "(-2.5, -1.5]",
+        "mean_shap": 0.6980443000793457,
+        "rows": 368
+      },
+      {
+        "band": "(-1.5, -0.5]",
+        "mean_shap": -0.14077676832675934,
+        "rows": 1272
+      },
+      {
+        "band": "(-0.5, 0.5]",
+        "mean_shap": -0.27002859115600586,
+        "rows": 2785
+      },
+      {
+        "band": "(0.5, 1.5]",
+        "mean_shap": -0.1756056398153305,
+        "rows": 2691
+      },
+      {
+        "band": "(1.5, 2.5]",
+        "mean_shap": 0.8460498452186584,
+        "rows": 1100
+      },
+      {
+        "band": "(2.5, inf]",
+        "mean_shap": 1.9105348587036133,
+        "rows": 229
+      }
+    ],
+    "threshold": 0.10242609679698944,
+    "top_features": [
+      {
+        "correlation": 0.34372664208045783,
+        "feature": "z_temperature_2m_mean",
+        "mean_abs": 0.38608843088150024,
+        "mean_signed": 0.03928946331143379,
+        "static_per_city": false
+      },
+      {
+        "correlation": 0.8392124607414508,
+        "feature": "anomaly_days_trailing30",
+        "mean_abs": 0.21015332639217377,
+        "mean_signed": 0.06620315462350845,
+        "static_per_city": false
+      },
+      {
+        "correlation": -0.8449696514406959,
+        "feature": "elevation_m",
+        "mean_abs": 0.10613438487052917,
+        "mean_signed": -0.02506466582417488,
+        "static_per_city": true
+      },
+      {
+        "correlation": -0.4246106058395557,
+        "feature": "temperature_2m_mean_roll30_mean",
+        "mean_abs": 0.072560153901577,
+        "mean_signed": -0.018894735723733902,
+        "static_per_city": false
+      },
+      {
+        "correlation": 0.7476500157526532,
+        "feature": "latitude",
+        "mean_abs": 0.05755399912595749,
+        "mean_signed": -0.01930502988398075,
+        "static_per_city": true
+      },
+      {
+        "correlation": 0.5789531813532116,
+        "feature": "day_of_year_sin",
+        "mean_abs": 0.039062801748514175,
+        "mean_signed": -0.0049460469745099545,
+        "static_per_city": false
+      },
+      {
+        "correlation": 0.4502974824826238,
+        "feature": "pressure_msl_mean_roll30_var",
+        "mean_abs": 0.034846555441617966,
+        "mean_signed": -0.016414059326052666,
+        "static_per_city": false
+      },
+      {
+        "correlation": 0.2247232899230393,
+        "feature": "day_of_year_cos",
+        "mean_abs": 0.03029138408601284,
+        "mean_signed": -0.0018372301710769534,
+        "static_per_city": false
+      },
+      {
+        "correlation": -0.10607640195561911,
+        "feature": "temperature_2m_mean_roll30_var",
+        "mean_abs": 0.028518743813037872,
+        "mean_signed": -0.007433050312101841,
+        "static_per_city": false
+      },
+      {
+        "correlation": -0.40842409865954604,
+        "feature": "temperature_2m_mean",
+        "mean_abs": 0.0235397070646286,
+        "mean_signed": -0.019100284203886986,
+        "static_per_city": false
+      }
+    ]
+  },
+  "generated_at": "2026-09-07T09:44:30+00:00",
   "label": {
     "horizon_days": 7,
     "window": "t+1 .. t+7 inclusive"
@@ -830,7 +1051,7 @@
     },
     "xgboost_version": "3.4.1"
   },
-  "schema_version": 4,
+  "schema_version": 5,
   "snapshot": {
     "cities": 6,
     "first_date": "1995-01-31",

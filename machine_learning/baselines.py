@@ -100,7 +100,9 @@ log = logging.getLogger(__name__)
 #: baselines exist before the model does, which is the whole point of them.
 #: 4 — ML-06 added ``evaluation``, written by ``evaluate.py``: the test-split
 #: table, the per-city breakdown, and the per-metric verdict.
-METRICS_SCHEMA_VERSION: Final[int] = 4
+#: 5 — ML-07 added ``explainability``, written by ``explain.py``: the SHAP
+#: ranking, the both-tails response, and the two explained predictions.
+METRICS_SCHEMA_VERSION: Final[int] = 5
 
 #: Pseudo-counts tried for the climatology's shrinkage, chosen on **validation**
 #: Brier. A (city, week) cell holds around 130 training rows here, so a cell
@@ -531,9 +533,8 @@ def write_metrics(payload: Mapping[str, Any], path: Path | None = None) -> Path:
     payload = dict(payload)
     if destination.exists():
         previous = json.loads(destination.read_text())
-        carried = {
-            key: previous[key] for key in ("model", "evaluation") if key in previous
-        }
+        downstream = ("model", "evaluation", "explainability")
+        carried = {key: previous[key] for key in downstream if key in previous}
         if carried:
             if previous.get("snapshot") == payload.get("snapshot"):
                 payload.update(carried)
@@ -541,7 +542,7 @@ def write_metrics(payload: Mapping[str, Any], path: Path | None = None) -> Path:
                 log.warning(
                     "dropping %s: they describe %s rows to %s and the "
                     "baselines now describe %s rows to %s. Re-run train.py "
-                    "--write and evaluate.py --write.",
+                    "--write, evaluate.py --write and explain.py --write.",
                     " and ".join(sorted(carried)),
                     previous["snapshot"]["rows"],
                     previous["snapshot"]["last_date"],

@@ -2159,6 +2159,142 @@ the picture actually moved. A test regenerates both and compares bytes.
 The precision–recall curve is thinned to 800 vertices for drawing only; the
 metric is computed from every one of the 8 506 points.
 
+## What the model uses, and why it said what it said
+
+`machine_learning/explain.py` computes exact TreeSHAP contributions with
+XGBoost's own `pred_contribs`, not the `shap` package. The values are
+**bit-identical** — a test asserts it against the reference implementation —
+and `shap` pulls a compiler toolchain into an application that deploys to
+Streamlit Community Cloud, so it stays a development dependency.
+
+**The values are log-odds.** A contribution of +2.29 does not mean "adds 229%
+risk"; it moves the logit 2.29 from a base of −2.88, which is 5.3% to 35%.
+Anything that prints these beside a probability has to say which space they are
+in, or the explanation will not add up to the number next to it.
+
+### Top ten, on the test split
+
+![SHAP beeswarm of the ten highest-impact features on the test split, coloured by feature value](docs/images/shap_summary.png)
+
+| # | feature | mean \|SHAP\| | mean push | corr(value, SHAP) |
+|---:|---|---:|---:|---:|
+| 1 | `z_temperature_2m_mean` | 0.3861 | +0.039 | +0.34 |
+| 2 | `anomaly_days_trailing30` | 0.2102 | +0.066 | **+0.84** |
+| 3 | `elevation_m` *(city constant)* | 0.1061 | −0.025 | −0.85 |
+| 4 | `temperature_2m_mean_roll30_mean` | 0.0726 | −0.019 | −0.42 |
+| 5 | `latitude` *(city constant)* | 0.0576 | −0.019 | +0.75 |
+| 6 | `day_of_year_sin` | 0.0391 | −0.005 | +0.58 |
+| 7 | `pressure_msl_mean_roll30_var` | 0.0348 | −0.016 | +0.45 |
+| 8 | `day_of_year_cos` | 0.0303 | −0.002 | +0.22 |
+| 9 | `temperature_2m_mean_roll30_var` | 0.0285 | −0.007 | −0.11 |
+| 10 | `temperature_2m_mean` | 0.0235 | −0.019 | −0.41 |
+
+The magnitude column ranks; the other two say which way. A feature can matter
+enormously and average almost no push, which is what a U-shaped response looks
+like — and reporting only the magnitude would hide exactly that.
+
+### The plausibility check that matters: it found both tails on its own
+
+The label is `abs(z) > 2.5`. The model was handed a binary column and never
+told what produced it. Mean contribution of `z_temperature_2m_mean`, by band:
+
+| Z band | rows | mean contribution |
+|---|---:|---:|
+| below −2.5 | 61 | **+1.85** |
+| −2.5 to −1.5 | 368 | +0.70 |
+| −1.5 to −0.5 | 1 272 | −0.14 |
+| −0.5 to +0.5 | 2 785 | **−0.27** |
+| +0.5 to +1.5 | 2 691 | −0.18 |
+| +1.5 to +2.5 | 1 100 | +0.85 |
+| above +2.5 | 229 | **+1.91** |
+
+A clean U. Risk is pushed *up* at both extremes and is quietest at Z ≈ 0, and
+the cold tail (+1.85, from 61 rows) is nearly as strong as the hot one (+1.91,
+from 229). The model recovered the shape of `abs(z)` from the labels alone —
+and it did so on a test period running 231 hot anomalies to 61 cold, which a
+model that had merely memorised the period would not.
+
+This is also the strongest independent corroboration of the `fact_weather_anomalies`
+decision to flag on both tails. A warm-only label would have produced a
+monotone response here, and the picture would have said so.
+
+The rest is meteorologically sensible rather than surprising:
+
+- **Persistence dominates** (`anomaly_days_trailing30`, corr **+0.84**). Extreme
+  spells cluster; the model is beating the persistence baseline partly by using
+  it, which is the expected shape rather than a defect.
+- **The seasonally adjusted anomaly outranks the raw temperature** — Z is first,
+  `temperature_2m_mean` is tenth. Raw daily temperature is mostly a statement
+  about the season, and the target is "unusual *for this day of year*". A model
+  ranking these the other way round would be reaching the right answer through
+  the wrong quantity, so it is a test.
+- **Pressure enters as variability, not level or tendency.**
+  `pressure_msl_mean_roll30_var` at +0.45 says an unsettled month raises risk —
+  active synoptic weather swings temperature further in both directions. The
+  3-day tendency features, which are storm-development signals, rank low, and
+  that is the right answer for a *temperature* target rather than a missing one.
+- **`temperature_2m_mean_roll30_mean` pushes negative** (corr −0.42): a warm
+  recent month lowers risk. Consistent with the target being a departure — a
+  month that is already warm has raised the bar the next day has to clear.
+
+### The city lookup, quantified
+
+`elevation_m` and `latitude` are third and fifth, and they are constant within
+a city. The model is not learning about elevation; it is learning **which city
+it is**, and city base rates in this set run from 5.2% to 23.7%.
+
+Together they are **13.7% of total contribution**. That is legitimate and
+useful with six cities, and none of it transfers to a city the model has not
+seen. A test bounds the share at 25% — above that the model is a base-rate
+table with weather attached — and requires the top-ranked feature to be
+something other than a city constant.
+
+### Two predictions, and why one of them is wrong
+
+![SHAP contributions for the most confident true positive and the most confident false positive](docs/images/shap_cases.png)
+
+Chosen at the same validation-tuned threshold the F1 column uses, and chosen
+for **confidence** rather than marginality: a borderline case explains why a
+coin landed on its edge, a confident mistake explains what the model believes.
+
+| | true positive | false positive |
+|---|---|---|
+| | Delhi, 2026-03-09 | Cairo, 2026-02-16 |
+| predicted | 0.695 | 0.683 |
+| `z_temperature_2m_mean` | 2.77 → **+2.29** | 2.95 → **+2.26** |
+| `anomaly_days_trailing30` | 5 → +0.90 | 10 → +0.73 |
+| what happened next | anomalous on 3 of the next 7 days | nothing |
+
+**The two explanations are nearly identical, and the outcomes are opposite.**
+The false positive had *more* evidence — a hotter day and twice the anomaly
+count. Cairo was eight days into a hot spell (Z of 3.16, 2.44, 1.64, 2.32,
+3.09, 1.94, 2.70, 2.95) and the model said 68%. Then the spell simply broke:
+1.41, 0.91, 0.48, 0.52, 0.47, 0.69, 0.04.
+
+That is not a hallucination and it is not a feature problem. It is a limit of
+the target: **at a seven-day horizon this model can tell you a spell is
+running, not when it will end.** Delhi's spell had three days left in it and
+Cairo's had none, and nothing in the feature set distinguishes those two states
+— a genuine forecast model would need the synoptic pattern, not a city's own
+history. Worth saying plainly in the dashboard rather than leaving a reader to
+infer that a 68% is a promise.
+
+### The bug the identity caught
+
+TreeSHAP contributions must reproduce the model's own output: pushed through
+the logistic, contributions plus base value equal `predict_proba`, exactly.
+
+The first draft of this module did not satisfy that, and looked like it did.
+`pred_contribs` defaults to **every tree in the booster** while the classifier
+stops early on validation and scores with the first eighteen. The
+contributions summed perfectly — to the fuller model's margin — and explained
+a Delhi day at 0.64 that the model had actually scored at 0.695. An internally
+consistent explanation of a model nobody runs.
+
+Anchoring the assertion to `predict_proba` rather than to the booster's own
+margin is what catches it, and a companion test reproduces the wrong tree range
+and requires the identity to fail, so the check is known to be doing work.
+
 ## Licence
 
 [MIT](LICENSE)
