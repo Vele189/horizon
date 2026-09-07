@@ -96,7 +96,8 @@ log = logging.getLogger(__name__)
 BACKFILL_START: Final[dt.date] = dt.date(1995, 1, 1)
 
 #: Hourly observations are only needed for the storm-dynamics view, so they
-#: trail the present rather than reaching back.
+#: trail the anchor rather than reaching back. Overridden by
+#: ``INGEST_HOURLY_MONTHS``; this is the fallback when no settings are supplied.
 HOURLY_BACKFILL_MONTHS: Final[int] = 24
 
 #: The archive trails the present. Open-Meteo states its exact cut-off in the
@@ -594,6 +595,7 @@ def plan_backfill(
     start: dt.date | None = None,
     end: dt.date | None = None,
     chunk_months: int | None = None,
+    hourly_months: int | None = None,
     manifest: Manifest | None = None,
     settings: Settings | None = None,
 ) -> Plan:
@@ -603,11 +605,16 @@ def plan_backfill(
         grains: Which grains to plan. Both by default.
         cities: Defaults to every city in ``config/cities.yml``, in file order.
         start: First day for the daily grain. Defaults to
-            :data:`BACKFILL_START`. Hourly always trails the end by
-            :data:`HOURLY_BACKFILL_MONTHS` regardless, since a thirty-year
-            hourly pull is neither needed nor affordable.
-        end: Last day. Defaults to :func:`archive_end_date`.
+            :data:`BACKFILL_START`. The hourly grain ignores it except as a
+            floor, since a thirty-year hourly pull is neither needed nor
+            affordable.
+        end: Last day, and the **anchor** the hourly window trails. Defaults to
+            :func:`archive_end_date`. Pass it explicitly for a reproducible
+            plan: left to the default, "the trailing 24 months" names a
+            different window tomorrow.
         chunk_months: Months per unit. Defaults to ``INGEST_CHUNK_MONTHS``.
+        hourly_months: How far the hourly grain reaches back from the anchor.
+            Defaults to ``INGEST_HOURLY_MONTHS``.
         manifest: Completed units are excluded. Defaults to the manifest at
             ``INGEST_MANIFEST_PATH``.
         settings: Override the process configuration. Intended for tests.
@@ -628,6 +635,17 @@ def plan_backfill(
         if chunk_months is not None
         else resolved_settings.ingest_chunk_months
     )
+    resolved_hourly_months = (
+        hourly_months
+        if hourly_months is not None
+        else getattr(
+            resolved_settings, "ingest_hourly_months", HOURLY_BACKFILL_MONTHS
+        )
+    )
+    if resolved_hourly_months < 1:
+        raise ValueError(
+            f"hourly_months must be at least 1, got {resolved_hourly_months}."
+        )
     resolved_manifest = (
         manifest
         if manifest is not None
@@ -645,7 +663,7 @@ def plan_backfill(
             f"start {daily_start} precedes the ERA5 archive ({ARCHIVE_START})."
         )
     hourly_start = max(
-        daily_start, _add_months(resolved_end, -HOURLY_BACKFILL_MONTHS)
+        daily_start, _add_months(resolved_end, -resolved_hourly_months)
     )
 
     pending: list[WorkUnit] = []

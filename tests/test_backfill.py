@@ -36,10 +36,14 @@ from ingestion import archive, backfill  # noqa: E402
 from ingestion.backfill import (  # noqa: E402
     MAX_ACCEPTABLE_GAP_DAYS,
     MAX_CONSECUTIVE_FAILURES,
+    NEON_STORAGE_BUDGET_BYTES,
+    STORM_DYNAMICS_COLUMNS,
     _Interruptible,
     _pace,
     bronze_coverage,
+    column_population,
     run_backfill,
+    table_size,
 )
 from ingestion.loader import BRONZE_SCHEMA, TABLE_BY_GRAIN, engine_from_settings  # noqa: E402
 from ingestion.planner import Manifest, Plan, plan_backfill  # noqa: E402
@@ -589,3 +593,78 @@ def test_a_city_holding_only_its_first_year_is_not_complete(
     assert entry.last_day == first.end
     assert entry.completeness < 0.4
     assert not entry.within_one_percent
+
+
+# ---------------------------------------------------------------------------
+# Storage and column population
+# ---------------------------------------------------------------------------
+
+
+def test_the_storm_dynamics_columns_exist_in_the_hourly_schema() -> None:
+    """Those four are the whole reason the hourly grain is pulled at all."""
+    import re
+
+    sql = (
+        Path(__file__).resolve().parent.parent / "ingestion" / "schema.sql"
+    ).read_text(encoding="utf-8")
+    match = re.search(
+        r"create table if not exists bronze_raw\.observations_hourly \((.*?)\n\);",
+        sql,
+        re.DOTALL,
+    )
+    assert match
+    columns = {
+        m.group(1)
+        for m in re.finditer(r"^\s{4}([a-z_][a-z0-9_]*)\s+\S", match.group(1), re.M)
+    }
+    assert set(STORM_DYNAMICS_COLUMNS) <= columns
+
+
+def test_the_client_requests_every_storm_dynamics_column() -> None:
+    from ingestion.client import HOURLY_VARIABLES
+
+    assert set(STORM_DYNAMICS_COLUMNS) <= set(HOURLY_VARIABLES)
+
+
+def test_table_size_reports_rows_table_and_indexes(engine) -> None:
+    measured = table_size(engine, "hourly")
+    assert measured.table == f"{BRONZE_SCHEMA}.observations_hourly"
+    assert measured.total_bytes >= measured.table_bytes
+    assert measured.total_bytes >= measured.index_bytes
+    assert measured.rows >= 0
+    if measured.rows:
+        assert measured.bytes_per_row > 0
+
+
+def test_the_neon_budget_is_the_yardstick_not_the_target(engine) -> None:
+    """Bronze never goes to Neon; only gold marts are promoted (§5.4)."""
+    measured = table_size(engine, "hourly")
+    assert 0.0 <= measured.share_of_neon_budget() <= 1.0
+    assert NEON_STORAGE_BUDGET_BYTES == 500 * 1000 * 1000
+
+
+def test_column_population_counts_nulls_not_rows(
+    settings, manifest, root, engine, cleanup, scripted, instant
+) -> None:
+    """A row present but null in a storm-dynamics column feeds nothing."""
+    pending = units_for(settings=settings, manifest=manifest)
+    body = daily_payload(pending[0].days, pending[0].start)
+    body["daily"]["precipitation_sum"] = [None] * pending[0].days
+    scripted([responds(json_body=body)])
+    result = run(settings, manifest, root, cleanup, engine=engine, max_units=1)
+    assert result.units_completed == 1
+
+    with engine.connect() as connection:
+        filled, nulls = connection.execute(
+            text(
+                "select count(precipitation_sum), "
+                "count(*) - count(precipitation_sum) "
+                f"from {BRONZE_SCHEMA}.observations_daily where batch_id = :b"
+            ),
+            {"b": str(result.batch_id)},
+        ).one()
+    assert filled == 0
+    assert nulls == pending[0].expected_rows
+
+    populated = column_population(engine, "daily", ["city_id"])
+    assert populated["city_id"][1] == 0, "city_id is NOT NULL in the schema"

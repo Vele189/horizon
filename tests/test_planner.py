@@ -576,6 +576,76 @@ def test_daily_reaches_back_thirty_years_and_hourly_does_not(
     assert daily[-1].end == hourly[-1].end == end
 
 
+def test_the_hourly_window_is_anchored_not_relative_to_today(
+    settings, manifest
+) -> None:
+    """A plan must name the same window tomorrow as it does today.
+
+    Left to the default the anchor is the archive edge, which moves. Passing it
+    explicitly is what makes "the trailing 24 months" a reproducible statement
+    rather than a description of when the command happened to run.
+    """
+    anchor = dt.date(2026, 9, 2)
+    built = plan_backfill(
+        grains=("hourly",), cities=[load_cities()[CITY]], end=anchor,
+        manifest=manifest, settings=settings,
+    )
+    assert built.units[0].start == dt.date(2024, 9, 2)
+    assert built.units[-1].end == anchor
+    # Same anchor, same plan — whatever the clock says.
+    again = plan_backfill(
+        grains=("hourly",), cities=[load_cities()[CITY]], end=anchor,
+        manifest=manifest, settings=settings,
+    )
+    assert [u.key for u in built.units] == [u.key for u in again.units]
+
+
+def test_the_hourly_reach_is_configurable(settings, manifest) -> None:
+    anchor = dt.date(2026, 9, 2)
+    for months, expected in ((24, dt.date(2024, 9, 2)), (6, dt.date(2026, 3, 2))):
+        built = plan_backfill(
+            grains=("hourly",), cities=[load_cities()[CITY]], end=anchor,
+            hourly_months=months, manifest=manifest, settings=settings,
+        )
+        assert built.units[0].start == expected
+
+
+def test_the_hourly_reach_comes_from_configuration(settings, manifest) -> None:
+    twelve = dataclasses.replace(settings, ingest_hourly_months=12)
+    built = plan_backfill(
+        grains=("hourly",), cities=[load_cities()[CITY]],
+        end=dt.date(2026, 9, 2), manifest=manifest, settings=twelve,
+    )
+    assert built.units[0].start == dt.date(2025, 9, 2)
+
+
+def test_the_default_hourly_reach_is_two_years() -> None:
+    assert get_settings().ingest_hourly_months == HOURLY_BACKFILL_MONTHS == 24
+
+
+def test_a_zero_month_hourly_reach_is_rejected(settings, manifest) -> None:
+    with pytest.raises(ValueError, match="at least 1"):
+        plan_backfill(
+            grains=("hourly",), hourly_months=0, manifest=manifest,
+            settings=settings,
+        )
+
+
+def test_hourly_is_two_years_not_thirty(settings, manifest) -> None:
+    """Thirty years of hourly is ~4 million rows for no analytical benefit."""
+    anchor = dt.date(2026, 9, 2)
+    hourly = plan_backfill(
+        grains=("hourly",), end=anchor, manifest=manifest, settings=settings
+    )
+    daily = plan_backfill(
+        grains=("daily",), end=anchor, manifest=manifest, settings=settings
+    )
+    assert 255_000 < hourly.expected_rows < 270_000
+    thirty_years_hourly = daily.expected_rows * 24
+    assert thirty_years_hourly > 4_000_000
+    assert hourly.expected_rows < thirty_years_hourly / 15
+
+
 def test_hourly_never_starts_before_the_daily_range(settings, manifest) -> None:
     built = plan_backfill(
         cities=[load_cities()[CITY]],

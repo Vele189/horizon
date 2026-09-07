@@ -146,6 +146,7 @@ class Settings:
     retry_backoff_seconds: int
     request_delay_seconds: float
     ingest_chunk_months: int
+    ingest_hourly_months: int
     data_raw_dir: Path
     ingest_manifest_path: Path
     model_artifact_dir: Path
@@ -225,6 +226,7 @@ def _build_settings() -> Settings:
         retry_backoff_seconds=_get_positive_int("RETRY_BACKOFF_SECONDS", 2),
         request_delay_seconds=_get_positive_float("REQUEST_DELAY_SECONDS", 1.0),
         ingest_chunk_months=_get_positive_int("INGEST_CHUNK_MONTHS", 12),
+        ingest_hourly_months=_get_positive_int("INGEST_HOURLY_MONTHS", 24),
         data_raw_dir=_get_path("DATA_RAW_DIR", "data/raw"),
         ingest_manifest_path=_get_path(
             "INGEST_MANIFEST_PATH", "data/manifest.jsonl"

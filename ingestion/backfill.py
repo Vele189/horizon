@@ -72,16 +72,22 @@ from ingestion.loader import (  # noqa: E402
 from ingestion.planner import (  # noqa: E402
     DAILY_QUOTA_CALLS,
     Manifest,
+    _add_months,
     Plan,
     WorkUnit,
     plan_backfill,
 )
 
 __all__ = [
+    "NEON_STORAGE_BUDGET_BYTES",
+    "STORM_DYNAMICS_COLUMNS",
     "BackfillResult",
     "CityCoverage",
+    "TableSize",
     "bronze_coverage",
+    "column_population",
     "run_backfill",
+    "table_size",
 ]
 
 log = logging.getLogger("ingestion.backfill")
@@ -176,6 +182,7 @@ def run_backfill(
     start: dt.date | None = None,
     end: dt.date | None = None,
     chunk_months: int | None = None,
+    hourly_months: int | None = None,
     max_weight: float = DAILY_QUOTA_CALLS,
     max_units: int | None = None,
     root: Path | str | None = None,
@@ -205,6 +212,7 @@ def run_backfill(
         start=start,
         end=end,
         chunk_months=chunk_months,
+        hourly_months=hourly_months,
         manifest=resolved_manifest,
         settings=resolved_settings,
     )
@@ -496,6 +504,79 @@ def bronze_coverage(
     return coverage
 
 
+#: The columns the Storm Dynamics view reads. A row present but null in these
+#: is a row that feeds nothing, so the acceptance report names them.
+STORM_DYNAMICS_COLUMNS: Final[tuple[str, ...]] = (
+    "temperature_2m",
+    "wind_speed_10m",
+    "wind_gusts_10m",
+    "surface_pressure",
+)
+
+#: Neon's free plan. Bronze never goes there — only gold marts are promoted —
+#: but the hourly table is the largest thing the pipeline builds, so it is the
+#: number worth checking a design against.
+NEON_STORAGE_BUDGET_BYTES: Final[int] = 500 * 1000 * 1000
+
+
+@dataclass(frozen=True)
+class TableSize:
+    """One table's footprint, as Postgres accounts for it."""
+
+    table: str
+    rows: int
+    total_bytes: int
+    table_bytes: int
+    index_bytes: int
+
+    @property
+    def bytes_per_row(self) -> float:
+        return self.total_bytes / self.rows if self.rows else 0.0
+
+    def share_of_neon_budget(self) -> float:
+        return self.total_bytes / NEON_STORAGE_BUDGET_BYTES
+
+
+def table_size(engine: Engine, grain: Grain) -> TableSize:
+    """Measure a bronze table including its indexes and TOAST."""
+    table = TABLE_BY_GRAIN[grain]
+    qualified = f"{BRONZE_SCHEMA}.{table}"
+    with engine.connect() as connection:
+        rows = connection.execute(
+            text(f"select count(*) from {qualified}")
+        ).scalar_one()
+        total, relation, indexes = connection.execute(
+            text(
+                "select pg_total_relation_size(:t), pg_table_size(:t), "
+                "pg_indexes_size(:t)"
+            ),
+            {"t": qualified},
+        ).one()
+    return TableSize(
+        table=qualified,
+        rows=rows,
+        total_bytes=total,
+        table_bytes=relation,
+        index_bytes=indexes,
+    )
+
+
+def column_population(
+    engine: Engine, grain: Grain, columns: Sequence[str]
+) -> dict[str, tuple[int, int]]:
+    """Per column: rows populated, rows null."""
+    table = f"{BRONZE_SCHEMA}.{TABLE_BY_GRAIN[grain]}"
+    selects = ", ".join(
+        f'count("{c}") as "{c}_filled", '
+        f'count(*) - count("{c}") as "{c}_null"'
+        for c in columns
+    )
+    with engine.connect() as connection:
+        row = connection.execute(text(f"select {selects} from {table}")).one()
+    values = dict(zip(row._fields, row))
+    return {c: (values[f"{c}_filled"], values[f"{c}_null"]) for c in columns}
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -523,8 +604,22 @@ def _configure_logging(settings: Settings) -> Path:
     return path
 
 
-def _print_report(engine: Engine, grain: Grain, expected_start: dt.date) -> int:
-    coverage = bronze_coverage(engine, grain=grain, start=expected_start)
+def _bytes(count: float) -> str:
+    for unit, size in (("GB", 1e9), ("MB", 1e6), ("kB", 1e3)):
+        if count >= size:
+            return f"{count / size:.1f} {unit}"
+    return f"{count:.0f} B"
+
+
+def _print_report(
+    engine: Engine,
+    grain: Grain,
+    expected_start: dt.date,
+    expected_end: dt.date | None = None,
+) -> int:
+    coverage = bronze_coverage(
+        engine, grain=grain, start=expected_start, end=expected_end
+    )
     registry = load_cities()
     present = {c.city_id for c in coverage}
     missing = [city.id for city in registry if city.id not in present]
@@ -565,7 +660,42 @@ def _print_report(engine: Engine, grain: Grain, expected_start: dt.date) -> int:
     if not (missing or off or gapped):
         print("  all cities present, within 1%, no gap over "
               f"{MAX_ACCEPTABLE_GAP_DAYS} days")
-    return 1 if (missing or off or gapped) else 0
+
+    total_rows = sum(c.rows for c in coverage)
+    print(f"\n  {total_rows:,} rows total, {expected_start}..{expected_end or 'now'}")
+
+    # The columns the downstream view actually reads. A row present but null in
+    # these is a row that feeds nothing.
+    checked = STORM_DYNAMICS_COLUMNS if grain == "hourly" else (
+        "temperature_2m_max", "temperature_2m_min", "precipitation_sum",
+        "wind_speed_10m_max",
+    )
+    unpopulated = []
+    if total_rows:
+        print()
+        for column, (filled, nulls) in column_population(
+            engine, grain, checked
+        ).items():
+            share = filled / (filled + nulls) if filled + nulls else 0.0
+            print(f"  {column:24} {filled:>9,} populated  {nulls:>7,} null  "
+                  f"{share:6.2%}")
+            if nulls:
+                unpopulated.append(column)
+
+    size = table_size(engine, grain)
+    print(
+        f"\n  {size.table}: {_bytes(size.total_bytes)} "
+        f"({_bytes(size.table_bytes)} table + {_bytes(size.index_bytes)} indexes)"
+    )
+    if size.rows:
+        print(f"  {size.bytes_per_row:.0f} bytes/row including indexes")
+    print(
+        f"  {size.share_of_neon_budget():.1%} of Neon's "
+        f"{_bytes(NEON_STORAGE_BUDGET_BYTES)} free-plan allowance "
+        "— bronze stays local, this is the yardstick only"
+    )
+
+    return 1 if (missing or off or gapped or unpopulated) else 0
 
 
 def _main(argv: list[str] | None = None) -> int:
@@ -575,6 +705,23 @@ def _main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start", type=dt.date.fromisoformat, default=None)
     parser.add_argument("--end", type=dt.date.fromisoformat, default=None)
     parser.add_argument("--chunk-months", type=int, default=None)
+    parser.add_argument(
+        "--hourly-months",
+        type=int,
+        default=None,
+        help="how far the hourly grain reaches back from the anchor "
+             "(default: INGEST_HOURLY_MONTHS)",
+    )
+    parser.add_argument(
+        "--anchor",
+        type=dt.date.fromisoformat,
+        default=None,
+        dest="anchor",
+        help="the date the trailing hourly window ends at; same thing as "
+             "--end, named for what it does. Pass it for a reproducible plan — "
+             "left to the default, 'the trailing 24 months' names a different "
+             "window tomorrow",
+    )
     parser.add_argument(
         "--max-weight",
         type=float,
@@ -589,6 +736,9 @@ def _main(argv: list[str] | None = None) -> int:
         "--report", action="store_true", help="report bronze coverage, then exit"
     )
     args = parser.parse_args(argv)
+    if args.anchor is not None and args.end is not None and args.anchor != args.end:
+        parser.error("--anchor and --end are the same date; pass only one")
+    args.end = args.end or args.anchor
 
     settings = get_settings()
     registry = load_cities()
@@ -604,9 +754,19 @@ def _main(argv: list[str] | None = None) -> int:
         logging.basicConfig(level=settings.log_level)
         engine = engine_from_settings(settings)
         try:
-            from ingestion.planner import BACKFILL_START
+            from ingestion.planner import BACKFILL_START, archive_end_date
 
-            return _print_report(engine, args.grain, args.start or BACKFILL_START)
+            start = args.start
+            if start is None:
+                start = (
+                    BACKFILL_START
+                    if args.grain == "daily"
+                    else _add_months(
+                        args.end or archive_end_date(),
+                        -(args.hourly_months or settings.ingest_hourly_months),
+                    )
+                )
+            return _print_report(engine, args.grain, start, args.end)
         finally:
             engine.dispose()
 
@@ -620,6 +780,7 @@ def _main(argv: list[str] | None = None) -> int:
             start=args.start,
             end=args.end,
             chunk_months=args.chunk_months,
+            hourly_months=args.hourly_months,
             manifest=manifest,
             settings=settings,
         )
@@ -645,6 +806,7 @@ def _main(argv: list[str] | None = None) -> int:
         start=args.start,
         end=args.end,
         chunk_months=args.chunk_months,
+        hourly_months=args.hourly_months,
         max_weight=args.max_weight,
         max_units=args.max_units,
         root=args.root,
