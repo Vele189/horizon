@@ -1,0 +1,60 @@
+# =============================================================================
+# Horizon — Climate Volatility & Risk Engine
+# =============================================================================
+# Bronze is landed by Python (ingestion/); everything from silver upwards is
+# dbt's. The layers map onto the schemas ingestion/schema.sql already creates,
+# which is why generate_schema_name is overridden — see macros/.
+# =============================================================================
+
+name: horizon
+version: 1.0.0
+config-version: 2
+
+# Resolved in profiles.yml, which is git-ignored and generated from
+# DATABASE_URL. See profiles.yml.example.
+profile: horizon
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+analysis-paths: ["analyses"]
+
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+# Fail the run rather than warn when a model selects a column that does not
+# exist, or a source is missing. A silently-empty mart is worse than a red run.
+flags:
+  send_anonymous_usage_stats: false
+
+models:
+  horizon:
+    # Silver: deduplicated, unit-asserted, UTC-cast. Views, because these are
+    # thin projections over bronze and materialising them would double the
+    # storage for no query benefit — nothing reads silver directly except the
+    # marts built on top of it.
+    staging:
+      +materialized: view
+      +schema: silver_staging
+
+    # Intermediate: the joins and window functions the marts share. Ephemeral,
+    # so they are inlined into the models that use them rather than becoming
+    # objects nobody queries.
+    intermediate:
+      +materialized: ephemeral
+      +schema: silver_staging
+
+    # Gold: the star schema, climatology, and predictions. Tables, because the
+    # dashboard queries these directly and over a serverless connection the
+    # difference between reading a table and re-running a thirty-year window
+    # function is the difference between a usable dashboard and a slow one.
+    # This is also the only layer promoted to Neon (§5.4).
+    marts:
+      +materialized: table
+      +schema: gold_marts
+
+seeds:
+  horizon:
+    +schema: silver_staging

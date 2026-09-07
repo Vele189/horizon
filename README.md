@@ -576,6 +576,81 @@ The report separates these from each other and from `delta`, because a row
 count above expectation is as much a discrepancy as one below, and the two
 have different causes.
 
+## dbt
+
+```bash
+python dbt_analytics/dbt_env.py --write-profile      # once, generates the git-ignored profiles.yml
+python dbt_analytics/dbt_env.py -- dbt build         # every run
+python dbt_analytics/dbt_env.py -- dbt source freshness
+```
+
+| layer | path | materialised | schema |
+|---|---|---|---|
+| silver | `models/staging` | view | `silver_staging` |
+| — | `models/intermediate` | ephemeral | `silver_staging` |
+| gold | `models/marts` | table | `gold_marts` |
+
+Staging models are views because they are thin projections over bronze and
+materialising them would double the storage for no query benefit — nothing
+reads silver directly. Marts are tables because the dashboard queries them over
+a serverless connection, where the difference between reading a table and
+re-running a thirty-year window function is the difference between a usable
+dashboard and a slow one. Intermediate models are ephemeral, so they inline
+into the marts rather than becoming objects nobody queries.
+
+### One connection string, split on demand
+
+dbt's postgres adapter takes host, user, password, port and dbname as separate
+settings and cannot accept a URL. The obvious fix — a second set of `DBT_*`
+variables in `.env` — creates two places a connection lives and one of them
+goes stale, so a dbt run quietly builds against yesterday's database.
+
+Instead `DATABASE_URL` stays the only place a connection is written, and
+[`dbt_analytics/dbt_env.py`](dbt_analytics/dbt_env.py) splits it into what dbt
+needs and injects them. Every field in
+[`profiles.yml.example`](dbt_analytics/profiles.yml.example) is an `env_var()`
+lookup — nothing is hardcoded, and `profiles.yml` itself is git-ignored. A test
+parses the template for the variables it reads and asserts the bridge supplies
+every one, because either file can change without the other and the failure is
+a dbt run against nothing.
+
+`dev` (local Docker) is the default; `prod` (Neon) exists only to promote gold
+marts. `SERVING_DATABASE_URL` being unset omits the prod variables rather than
+faking them, so `--target prod` fails loudly instead of connecting somewhere
+unintended.
+
+### The schema override that stops `gold_marts` becoming `public_gold_marts`
+
+dbt's default `generate_schema_name` builds `<target.schema>_<custom>`. A mart
+configured into `gold_marts` would land in `public_gold_marts` — beside the
+empty `gold_marts` that `ingestion/schema.sql` created, with nothing to say
+which is real. The default exists to keep several developers on one warehouse
+apart; here local development has a private database in Docker and the only
+other target holds one copy of the marts by design. So
+[`macros/generate_schema_name.sql`](dbt_analytics/macros/generate_schema_name.sql)
+uses the configured name verbatim.
+
+Verified end to end rather than asserted — a throwaway model in each layer,
+run and then dropped:
+
+```
+OK created sql view model  silver_staging._wiring_check       CREATE VIEW
+OK created sql table model gold_marts._wiring_check_mart      SELECT 1
+```
+
+### Source freshness
+
+Both bronze tables are declared with `ingested_at` as the freshness clock —
+when *this pipeline* landed a row, not when the observation happened, which
+would report every row as decades stale.
+
+Thresholds are deliberately loose: **warn after 7 days, error after 30**. The
+archive trails the present by several days, the backfill is quota-bound across
+roughly three, and the analysis is a thirty-year climatology where a week of
+staleness moves no number that matters. A month means the pipeline has stopped,
+which does. Anything tighter would fail continuously during a normal backfill
+and teach everyone to ignore the check.
+
 ## Licence
 
 [MIT](LICENSE)

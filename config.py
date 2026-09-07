@@ -25,6 +25,7 @@ from dataclasses import dataclass, fields
 from functools import lru_cache
 from pathlib import Path
 from typing import Final
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from dotenv import load_dotenv
 
@@ -129,6 +130,71 @@ def mask_secret(value: str | None) -> str:
 
 
 @dataclass(frozen=True)
+class DatabaseParts:
+    """A connection string taken apart, for tools that will not take it whole.
+
+    dbt's postgres adapter wants host, user, password, port and dbname as
+    separate settings; it has no way to accept a URL. Rather than add a second
+    set of environment variables that could drift from ``DATABASE_URL``, the
+    URL stays the single source and this splits it on demand. One place the
+    connection is written, one place it is read, one place it is taken apart.
+    """
+
+    host: str
+    port: int
+    user: str
+    password: str | None
+    dbname: str
+    sslmode: str | None = None
+
+    def as_env(self, prefix: str) -> dict[str, str]:
+        """Shell-style variables, for injecting into a subprocess."""
+        out = {
+            f"{prefix}_HOST": self.host,
+            f"{prefix}_PORT": str(self.port),
+            f"{prefix}_USER": self.user,
+            f"{prefix}_PASSWORD": self.password or "",
+            f"{prefix}_DBNAME": self.dbname,
+            f"{prefix}_SSLMODE": self.sslmode or "prefer",
+        }
+        return out
+
+
+def split_database_url(url: str, *, name: str = "DATABASE_URL") -> DatabaseParts:
+    """Split a Postgres URL into the fields dbt needs.
+
+    Raises:
+        ConfigError: The URL is missing a host, a user, or a database name —
+            each of which dbt would otherwise fail on with a message that does
+            not mention the URL at all.
+    """
+    parsed = urlsplit(url)
+    if parsed.scheme not in {"postgres", "postgresql"}:
+        raise ConfigError(
+            f"{name} must be a postgresql:// URL, got scheme "
+            f"{parsed.scheme or '<none>'!r}."
+        )
+    if not parsed.hostname:
+        raise ConfigError(f"{name} has no host.")
+    if not parsed.username:
+        raise ConfigError(f"{name} has no user.")
+
+    dbname = unquote(parsed.path).lstrip("/")
+    if not dbname:
+        raise ConfigError(f"{name} has no database name.")
+
+    query = parse_qs(parsed.query)
+    return DatabaseParts(
+        host=parsed.hostname,
+        port=parsed.port or 5432,
+        user=unquote(parsed.username),
+        password=unquote(parsed.password) if parsed.password else None,
+        dbname=dbname,
+        sslmode=query.get("sslmode", [None])[0],
+    )
+
+
+@dataclass(frozen=True)
 class Settings:
     """Resolved, validated configuration for one process."""
 
@@ -175,6 +241,16 @@ class Settings:
                 "the promotion step."
             )
         return self.serving_database_url
+
+    def database_parts(self) -> DatabaseParts:
+        """``DATABASE_URL`` split into the fields dbt's profile reads."""
+        return split_database_url(self.require_database_url())
+
+    def serving_database_parts(self) -> DatabaseParts:
+        """``SERVING_DATABASE_URL`` split the same way."""
+        return split_database_url(
+            self.require_serving_database_url(), name="SERVING_DATABASE_URL"
+        )
 
     def redacted(self) -> dict[str, str]:
         """Every setting as strings, with secrets masked. Safe to log."""

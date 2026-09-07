@@ -1,0 +1,59 @@
+# =============================================================================
+# dbt connection profile — TEMPLATE
+# =============================================================================
+# Copy to profiles.yml, which is git-ignored:
+#
+#     python dbt_analytics/dbt_env.py --write-profile
+#
+# That generates it from this file's shape and leaves the values as env_var()
+# lookups, so no credential is ever written to disk here either.
+#
+# Every field is read from the environment. Nothing is hardcoded and nothing is
+# committed. The variables are derived from DATABASE_URL and
+# SERVING_DATABASE_URL rather than being a second set to keep in step —
+# `dbt_env.py` splits the URL and exports them:
+#
+#     eval "$(python dbt_analytics/dbt_env.py)"   # then dbt run
+#     python dbt_analytics/dbt_env.py -- dbt run  # or inject and exec
+#
+# `dev` is the local Docker warehouse and the default. `prod` is Neon, and is
+# only used to promote gold marts (§5.4) — the backfill and all dbt iteration
+# run against dev, because a multi-hour job against a serverless database is
+# slow and wastes the free compute allowance.
+# =============================================================================
+
+horizon:
+  target: "{{ env_var('DBT_TARGET', 'dev') }}"
+  outputs:
+
+    dev:
+      type: postgres
+      host: "{{ env_var('DBT_HOST') }}"
+      port: "{{ env_var('DBT_PORT') | int }}"
+      user: "{{ env_var('DBT_USER') }}"
+      password: "{{ env_var('DBT_PASSWORD') }}"
+      dbname: "{{ env_var('DBT_DBNAME') }}"
+      sslmode: "{{ env_var('DBT_SSLMODE', 'prefer') }}"
+      # Models declare their own schema (silver_staging, gold_marts). This is
+      # the fallback for anything that does not, and where dbt puts its own
+      # bookkeeping.
+      schema: public
+      threads: 4
+      keepalives_idle: 0
+      connect_timeout: 10
+
+    prod:
+      type: postgres
+      host: "{{ env_var('DBT_SERVING_HOST') }}"
+      port: "{{ env_var('DBT_SERVING_PORT') | int }}"
+      user: "{{ env_var('DBT_SERVING_USER') }}"
+      password: "{{ env_var('DBT_SERVING_PASSWORD') }}"
+      dbname: "{{ env_var('DBT_SERVING_DBNAME') }}"
+      # Neon requires TLS; the pooled endpoint refuses a plaintext connection.
+      sslmode: "{{ env_var('DBT_SERVING_SSLMODE', 'require') }}"
+      schema: public
+      # Fewer than dev: Neon's free plan bills compute time, and the promotion
+      # is a bulk load rather than an iterative build.
+      threads: 2
+      keepalives_idle: 0
+      connect_timeout: 30

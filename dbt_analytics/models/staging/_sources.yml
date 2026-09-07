@@ -1,0 +1,61 @@
+version: 2
+
+sources:
+  - name: bronze
+    description: >
+      The append-only landing zone, written by ingestion/ rather than by dbt.
+      Parsed API columns plus ingestion metadata; no raw payloads and no
+      source_url — those live on disk under DATA_RAW_DIR, gzipped, because a
+      per-row copy measured over 80% of the row payload for a value that
+      ingestion.archive.source_url_for() reconstructs exactly.
+    schema: bronze_raw
+
+    # `ingested_at` is when *this pipeline* landed a row, not when the
+    # observation happened — which is the right clock for freshness. The
+    # observation clock would report every row as decades stale.
+    loaded_at_field: ingested_at
+
+    # Deliberately loose. The archive itself trails the present by several
+    # days, the backfill is quota-bound across roughly three days, and the
+    # analysis is a thirty-year climatology: a week of staleness moves no
+    # number that matters. A month means the pipeline has stopped, which does.
+    # A tighter threshold here would fail continuously during a normal backfill
+    # and teach everyone to ignore the check.
+    freshness:
+      warn_after: {count: 7, period: day}
+      error_after: {count: 30, period: day}
+
+    tables:
+      - name: observations_daily
+        description: >
+          One row per city per UTC day, 1995 to the archive edge. Roughly
+          173,500 rows at fifteen cities. Duplicates are legal and expected —
+          re-ingesting a window appends rather than replaces, and silver
+          deduplicates on (city_id, observation_time) by newest ingested_at.
+        columns:
+          - name: city_id
+            description: Slug from config/cities.yml. Not a foreign key — bronze must land even if the city config changes.
+          - name: observation_time
+            description: Midnight UTC of the aggregated day.
+          - name: ingested_at
+            description: One timestamp per extraction run, so a run's rows tie rather than order by how long the COPY took.
+          - name: batch_id
+            description: Groups every row written by one run; lets a bad batch be deleted wholesale.
+          - name: api_latitude
+            description: The ERA5 grid cell that answered, which is not the coordinate requested.
+          - name: temperature_2m_mean
+            description: Daily mean 2 m air temperature, °C.
+
+      - name: observations_hourly
+        description: >
+          One row per city per hour, trailing 24 months from a configurable
+          anchor. Roughly 263,000 rows at fifteen cities. Feeds the storm
+          dynamics view and nothing else — thirty years at this grain would be
+          over four million rows for no analytical benefit.
+        columns:
+          - name: observation_time
+            description: Top of the hour, UTC.
+          - name: wind_gusts_10m
+            description: Maximum 10 m wind gust for the hour, km/h.
+          - name: surface_pressure
+            description: Surface pressure, hPa.
