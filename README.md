@@ -469,11 +469,18 @@ and neither is sufficient alone.
 again, so a re-run makes no requests and writes no rows. This is exact, not
 approximate: the row count after a re-run is the *same number*.
 
+Measured against the three cities complete in bronze — 35 069 rows, ids
+5272..135388:
+
 ```
-first run   6 units, 2 192 rows
-re-run      0 units, 0 rows, 0 requests   fingerprint identical
-×10 re-runs                               fingerprint identical
+re-run 1:  0 units planned, 0 requests, 0 rows, 0.00s
+re-run 2:  0 units planned, 0 requests, 0 rows, 0.00s
+re-run 3:  0 units planned, 0 requests, 0 rows, 0.00s
+fingerprint (count, min id, max id, distinct observations): identical
 ```
+
+A no-op re-run costs one manifest read and no network at all, which is what
+makes putting ingestion in `make run` reasonable rather than merely tolerable.
 
 **2. Row level — append-only bronze, deduplicated in silver (DBT-02).** There
 is exactly one window layer 1 cannot cover: a crash between the warehouse
