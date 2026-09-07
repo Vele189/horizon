@@ -1232,6 +1232,65 @@ passes on absent data is worse than one that says it is waiting, and this is
 the specific check the ticket names — a false green here would be the worst
 kind.
 
+## VALIDATION GATE — not passed
+
+`tests/test_validation_gate.py` is the automated form of DBT-11. It reads the
+seven dated events from `config/cities.yml` rather than restating them, so a
+change to an event date is a change to a test.
+
+**It is currently red, and it should be.** None of the seven events can be
+checked: their cities have not backfilled. The daily grain costs ~26 000
+weighted API calls against a free-tier allowance of 10 000 a day, and 164 of
+480 units have landed.
+
+| city | event | status |
+|---|---|---|
+| portland | 2021-06-28, PNW heat dome | 0 years ingested |
+| moscow | 2010-07-29, Russian heat wave | 0 years |
+| sao_paulo | 2021-07-30, Antarctic cold wave | 0 years |
+| buenos_aires | 2022-01-11, Southern Cone heat | 0 years |
+| london | 2022-07-19, first UK 40 °C | 1 year |
+| sydney | 2020-01-04, Black Summer | 1 year |
+| tokyo | 2018-07-23, Japan heat wave | 4 years |
+
+A missing city **skips with a reason and does not pass**, and a separate test
+fails while *any* event is unverifiable — so the ticket cannot close on a green
+suite that quietly checked nothing. That is the specific failure this gate
+exists to prevent, wearing the costume of success. The backfill driver has been
+re-pointed to fetch these seven cities first.
+
+### The two events the ticket names that the registry does not carry
+
+The checklist asks for Phoenix (July 2023) and Delhi (29 May 2024). Neither is
+a configured validation event, and both are fully backfilled — so both were
+checked anyway. **Neither flags**, and the investigation says why rather than
+the threshold being lowered until they do.
+
+**Phoenix, July 2023.** Peak Z = **+1.97**, zero flagged days in the 31-day
+streak. Ruled out in turn:
+
+- *the warming trend* — the July window mean moved −0.08 °C over the record
+- *the measure* — Z(max) is +1.77, **lower** than Z(mean)
+- *inflated σ* — 2.94 at that date against a 3.22 annual mean, so lower
+- *the data* — 2023 is **rank 1 of 32** for July days ≥ 43.3 °C, 23 against a
+  next-best 17
+
+Phoenix in July is always about 46 °C, so no single day of the streak departs
+far from its own seasonal normal. What was unprecedented is how long it lasted,
+and **a single-day Z-score cannot express duration by construction**. A rolling
+31-day mean-Z was tried and does not fix it either — March 2026 scores higher
+than July 2023 on that measure. This is a limit of the detector, not a defect
+in the climatology.
+
+**Delhi, 29 May 2024.** Z = **+2.22**, under the threshold — and proportionate:
+in this grid cell 2024 was the *second*-warmest late May in thirty-two years,
+behind 1998. A detector that called the second-warmest such day a 2.5σ extreme
+would be miscalibrated.
+
+Both findings are recorded as executable tests, including a guard that fires if
+Phoenix ever *does* clear the threshold, so the reasoning gets revisited rather
+than silently invalidated.
+
 ## Licence
 
 [MIT](LICENSE)
