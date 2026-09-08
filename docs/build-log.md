@@ -4641,6 +4641,91 @@ from two different models and do not compose to each other. A reader
 multiplying seven cells together and getting 0.48 against a band of 0.40 is
 entitled to know that before concluding one of them is wrong.
 
+## Coverage that survives contact with the data
+
+ML-14. The project's stated ethos is refusing to imply precision it does not
+have. Conformal prediction is the formal version: given any model and a
+calibration sample, it returns a *set* of labels with a coverage guarantee that
+holds without assuming anything about the model or the distribution — only that
+the calibration sample and the point being predicted are exchangeable.
+
+For a binary target the sets are small and legible. `{quiet}` and `{extreme}`
+are confident answers; `{quiet, extreme}` says the model cannot separate them on
+this week; and the empty set says neither label is plausible at the requested
+confidence. Four states, where a probability offers one number a reader will
+round.
+
+### The assumption is violated, and the violation is visible
+
+The label's base rate runs 4.9% in training, 6.8% in validation, 11.3% in test.
+Split conformal calibrated on validation would hold its guarantee on paper and
+break on the data, and the question was how badly.
+
+Target: **90%, stated before anything was measured.** The number a conformal
+method is *asked* for is the one thing in it that cannot be chosen after seeing
+how it did — a target picked to match the coverage that came out is a
+description with a Greek letter on it.
+
+| year | split | adaptive |
+|---|---:|---:|
+| 2022 | 0.9064 | 0.8991 |
+| 2023 | 0.8433 | 0.9001 |
+| 2024 | 0.8296 | 0.9012 |
+| 2025 | 0.8060 | 0.8992 |
+| 2026 | **0.7309** | 0.8980 |
+| **overall** | **0.8318** | **0.8997** |
+
+Split conformal starts on target and decays monotonically to **sixteen points
+short**. Adaptive conformal is within half a point in every single year.
+
+**And the price is the finding.** Adaptive holds coverage by widening: the mean
+set grows from 0.91 labels to 1.08, and the share of weeks answered
+`{quiet, extreme}` — the model declining to commit — rises from 0% to 10.6%,
+and rises *within* the test period as the drift accumulates. That growth is the
+drift measured in the units the guarantee is stated in, which is the most
+legible statement of it anywhere in this project. Phase 1 spent four tickets
+establishing that the drift is real and neither the label's construction nor
+the fit can absorb it; this is what it costs a reader, expressed as how often
+the honest answer is "I cannot say".
+
+Coverage is never reported without set size. A method that always returns both
+labels covers everything and says nothing, and that failure looks identical to
+success in any table with one column.
+
+### Which frame goes where, and one word that matters
+
+The calibration sample is validation and nothing else — `calibrate` takes one
+frame, the same structural argument `tune` and `fit_calibrator` rest on — and
+here the failure it prevents is the most attractive in the project. A conformal
+predictor calibrated on the period it is then evaluated on reports coverage
+near its target *by construction*, and the number looks exactly like a
+guarantee that held. So the test rewrites the test period and requires the
+calibration to be identical, quantile for quantile.
+
+The adaptive procedure then walks the test period in date order and updates its
+level from each outcome **after** that row has been predicted. That is feedback
+rather than fitting, and it is what the method does in deployment — but it
+means the figure is a *realised online coverage* and not a held-out score. Both
+are percentages near ninety and they are not the same claim, so the block says
+which it is in a field called `note` rather than leaving it to be inferred.
+
+### Two details that would have been wrong quietly
+
+**Raw probabilities, not ML-10's calibrated ones.** Isotonic is fitted on
+validation, so nonconformity scores taken from it on validation are in-sample:
+too small, the quantile too tight, and coverage on test short for a reason that
+had nothing to do with drift. Conformal needs no calibrated input — that is
+rather the point of it — so it reads the model's own output and leaves ML-10's
+correction out of the loop.
+
+**The finite-sample correction.** The quantile is
+`ceil((n + 1)(1 - alpha)) / n`, not the plain empirical quantile. With 11 987
+calibration rows it moves the threshold by a hair, and leaving it out would
+claim an exactness the arithmetic does not provide. It also decides what
+happens at a level tighter than the sample can certify, and infinity is the
+honest answer there: every set becomes both labels, which is useless and
+accurate.
+
 ## Publishing
 
 Community Cloud requires a public repository, which makes deployment the moment

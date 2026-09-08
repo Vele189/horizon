@@ -49,6 +49,12 @@ pytest.importorskip("matplotlib")
 from ml_fixtures import labelled_span, repository_sources  # noqa: E402
 
 from machine_learning.baselines import metrics_path  # noqa: E402
+from machine_learning.conformal import (  # noqa: E402
+    Calibration,
+    adaptive_report,
+    calibrate,
+    prediction_sets,
+)
 from machine_learning.evaluate import (  # noqa: E402
     CALIBRATION_BINS,
     FIGURE_DIR,
@@ -715,3 +721,158 @@ def test_the_recorded_hold_out_never_trained_on_the_city_it_scored() -> None:
     named = set(block["cities_held_out"]) | set(block["cities_not_held_out"])
     assert not set(block["cities_held_out"]) & set(block["cities_not_held_out"])
     assert named, "the block accounts for no city at all"
+
+
+# --------------------------------------------------------------------------
+# Adaptive conformal prediction (ML-14)
+# --------------------------------------------------------------------------
+
+
+def test_the_calibration_never_intersects_the_test_period(three_cities) -> None:
+    """The acceptance's third bullet, behaviourally rather than structurally.
+
+    ``calibrate`` takes one frame, so there is no test split to hand it. That
+    is the same argument ``tune`` and ``fit_calibrator`` rest on, and here the
+    failure it prevents is the most attractive in the project: a conformal
+    predictor calibrated on the period it is then evaluated on reports coverage
+    near the target by construction, and the number looks exactly like a
+    guarantee that held.
+
+    So the test period is rewritten and the calibration required to be
+    identical, quantile for quantile.
+    """
+    parts = split_frame(three_cities)
+    from machine_learning.train import tune
+
+    fit = tune(parts["train"], parts["validation"], scale_pos_weight=1.0)
+    baseline = calibrate(
+        parts["validation"][LABEL], fit.predict(parts["validation"])
+    )
+
+    wrecked = three_cities.copy()
+    later = wrecked["date_key"] >= pd.Timestamp("2022-01-01")
+    wrecked.loc[later, LABEL] = ~wrecked.loc[later, LABEL]
+    rebuilt_parts = split_frame(wrecked)
+    rebuilt = calibrate(
+        rebuilt_parts["validation"][LABEL], fit.predict(rebuilt_parts["validation"])
+    )
+
+    np.testing.assert_array_equal(baseline.scores, rebuilt.scores)
+    for alpha in (0.05, 0.10, 0.25):
+        assert baseline.quantile(alpha) == rebuilt.quantile(alpha)
+
+
+def test_the_conformal_quantile_carries_the_finite_sample_correction() -> None:
+    """``ceil((n + 1)(1 - alpha)) / n``, not the plain empirical quantile.
+
+    The correction is the difference between a guarantee that holds at the
+    sample size you have and one that holds asymptotically. It also decides
+    what happens when the level is tighter than the sample can certify, and
+    infinity is the honest answer there: every set becomes both labels, which
+    is a useless prediction and an accurate one.
+    """
+    scores = np.linspace(0.0, 1.0, 100)
+    calibration = Calibration(scores=scores)
+
+    # rank = ceil(101 * 0.9) = 91, so the 91st smallest of 100.
+    assert calibration.quantile(0.10) == pytest.approx(scores[90])
+    # Tighter than 100 rows can certify: ceil(101 * 0.999) = 101 > 100.
+    assert calibration.quantile(0.001) == float("inf")
+    for bad in (0.0, 1.0, -0.1):
+        with pytest.raises(ValueError, match="strictly between"):
+            calibration.quantile(bad)
+
+
+def test_a_prediction_set_can_hold_both_labels_or_neither() -> None:
+    """Four states, and the two unusual ones are the point of the method.
+
+    A probability rounds to a decision. A set says which decisions the evidence
+    supports: both labels when the model cannot separate them, and neither when
+    the week is unlike anything in calibration. Collapsing those to a number
+    is what conformal prediction exists to avoid.
+    """
+    sets = prediction_sets([0.02, 0.5, 0.98], threshold=0.2)
+    assert list(sets["quiet"]) == [True, False, False]
+    assert list(sets["extreme"]) == [False, False, True]
+    assert sets.sum(axis=1).tolist() == [1, 0, 1]
+
+    # A loose threshold admits both; the set is honest and uninformative.
+    wide = prediction_sets([0.5], threshold=0.6)
+    assert bool(wide["quiet"].iloc[0]) and bool(wide["extreme"].iloc[0])
+
+
+def test_the_adaptive_level_moves_only_after_the_outcome(three_cities) -> None:
+    """Online means online: row t's set is formed before row t is revealed.
+
+    If the level were updated before scoring, the procedure would be reading
+    each outcome to predict it and the coverage would be meaningless. The check
+    is that the first row is scored at exactly the starting level.
+    """
+    parts = split_frame(three_cities)
+    from machine_learning.train import tune
+
+    fit = tune(parts["train"], parts["validation"], scale_pos_weight=1.0)
+    calibration = calibrate(
+        parts["validation"][LABEL], fit.predict(parts["validation"])
+    )
+    report = adaptive_report(
+        calibration, parts["test"], fit.predict(parts["test"]), target=0.9
+    )
+
+    assert report["alpha_start"] == pytest.approx(0.1)
+    assert report["alpha_range"][0] <= report["alpha_start"]
+    assert report["alpha_range"][1] >= report["alpha_start"]
+    assert report["calibrated_on"] == "validation"
+    assert "not a held-out score" in report["note"]
+
+
+def test_coverage_is_reported_with_the_set_size_that_bought_it(
+    three_cities,
+) -> None:
+    """Coverage alone is trivially satisfiable by never committing.
+
+    A method that always returns both labels covers everything and says
+    nothing, so every coverage figure in the block is accompanied by the mean
+    set size and the share of rows where the set held both labels.
+    """
+    parts = split_frame(three_cities)
+    from machine_learning.train import tune
+
+    fit = tune(parts["train"], parts["validation"], scale_pos_weight=1.0)
+    calibration = calibrate(
+        parts["validation"][LABEL], fit.predict(parts["validation"])
+    )
+    report = adaptive_report(calibration, parts["test"], fit.predict(parts["test"]))
+
+    for arm in ("split", "adaptive"):
+        entry = report[arm]
+        assert 0.0 <= entry["coverage"] <= 1.0
+        assert entry["shortfall"] == pytest.approx(
+            entry["coverage"] - report["target_coverage"]
+        )
+        assert 0.0 <= entry["mean_set_size"] <= 2.0
+        assert entry["by_city"] and entry["by_year"]
+        for row in entry["by_city"] + entry["by_year"]:
+            assert {"rows", "coverage", "mean_set_size", "shortfall"} <= set(row)
+        assert 0.0 <= entry["share_uninformative"] <= 1.0
+
+
+def test_the_recorded_conformal_block_reports_both_arms() -> None:
+    """And the committed sentence is the one the numbers produced."""
+    path = metrics_path()
+    if not path.exists():
+        pytest.skip("no metrics.json; run baselines.py --write first")
+    block = json.loads(path.read_text()).get("conformal")
+    if block is None:
+        pytest.skip("run `evaluate.py --conformal --write` first")
+
+    assert block["calibrated_on"] == "validation"
+    assert block["scored_on"] == "test"
+    assert 0.0 < block["target_coverage"] < 1.0
+    for arm in ("split", "adaptive"):
+        assert 0.0 <= block[arm]["coverage"] <= 1.0
+    assert block["adaptive_is_closer_to_target"] is (
+        abs(block["adaptive"]["coverage"] - block["target_coverage"])
+        <= abs(block["split"]["coverage"] - block["target_coverage"])
+    )
+    assert block["statement"].endswith(".")

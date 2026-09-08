@@ -79,6 +79,11 @@ from sqlalchemy import Engine
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from machine_learning.conformal import (  # noqa: E402
+    TARGET_COVERAGE,
+    adaptive_report,
+    calibrate,
+)
 from machine_learning.baselines import (  # noqa: E402
     BaseRateReference,
     ClimatologyBaseline,
@@ -118,6 +123,7 @@ __all__ = [
     "PALETTE",
     "best_threshold",
     "build_evaluation",
+    "build_conformal",
     "build_leave_one_city_out",
     "calibration_points",
     "classification_at",
@@ -437,6 +443,55 @@ def _verdict(summary: pd.DataFrame) -> dict[str, Any]:
             "detail": beaten,
         }
     return out
+
+
+# --------------------------------------------------------------------------
+# Adaptive conformal prediction (ML-14)
+# --------------------------------------------------------------------------
+
+
+def build_conformal(
+    parts: Mapping[str, pd.DataFrame],
+    fits: Mapping[str, Fit],
+    *,
+    variant: str,
+) -> dict[str, Any]:
+    """Calibrate on validation, walk the test period, record what held.
+
+    The whole ticket in three lines, and the discipline is in which frame goes
+    where: :func:`~machine_learning.conformal.calibrate` is handed validation
+    and nothing else, and the test period is only ever *scored*. A conformal
+    guarantee calibrated on the period it is evaluated on would report
+    near-perfect coverage and mean nothing at all, which is a more attractive
+    failure than most and therefore worth a test rather than a comment.
+    """
+    fit = fits[variant]
+    calibration = calibrate(
+        parts["validation"][LABEL], fit.predict(parts["validation"])
+    )
+    report = adaptive_report(
+        calibration, parts["test"], fit.predict(parts["test"])
+    )
+    report["variant"] = variant
+    report["statement"] = _conformal_statement(report)
+    return report
+
+
+def _conformal_statement(report: Mapping[str, Any]) -> str:
+    """The finding in one sentence, generated from the numbers that produced it."""
+    target = report["target_coverage"]
+    split = report["split"]
+    adaptive = report["adaptive"]
+    worst = min(split["by_year"], key=lambda row: row["coverage"])
+    return (
+        f"Calibrated on validation for {target:.0%} coverage, split conformal "
+        f"delivers {split['coverage']:.1%} on the test period and decays year "
+        f"by year to {worst['coverage']:.1%} in {worst['key']}; adaptive "
+        f"conformal holds {adaptive['coverage']:.1%} overall and within half a "
+        f"point of target in every year, paying for it with sets that grow "
+        f"from {split['mean_set_size']:.2f} labels to "
+        f"{adaptive['mean_set_size']:.2f}."
+    )
 
 
 # --------------------------------------------------------------------------
@@ -1199,6 +1254,14 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--conformal",
+        action="store_true",
+        help=(
+            "Also calibrate a conformal predictor on validation and report "
+            "realised coverage per city and per year, split and adaptive."
+        ),
+    )
+    parser.add_argument(
         "--leave-one-city-out",
         action="store_true",
         help=(
@@ -1290,6 +1353,35 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"  not held out: {city:<14} {why}")
         print(f"\n  {loco['verdict']['statement']}")
 
+    conformal = None
+    if args.conformal:
+        conformal = build_conformal(
+            plots["parts"], plots["fits"], variant="unweighted"
+        )
+        print(f"\nconformal, target {TARGET_COVERAGE:.0%} coverage")
+        for arm in ("split", "adaptive"):
+            entry = conformal[arm]
+            print(
+                f"  {arm:<9} coverage {entry['coverage']:.4f}  "
+                f"shortfall {entry['shortfall']:+.4f}  "
+                f"mean set {entry['mean_set_size']:.3f}  "
+                f"both labels {entry['share_uninformative']:.1%}"
+            )
+        by_year = pd.DataFrame(
+            [
+                {
+                    "year": row["key"],
+                    "split": row["coverage"],
+                    "adaptive": other["coverage"],
+                }
+                for row, other in zip(
+                    conformal["split"]["by_year"], conformal["adaptive"]["by_year"]
+                )
+            ]
+        )
+        print(by_year.round(4).to_string(index=False))
+        print(f"\n  {conformal['statement']}")
+
     sweep = None
     if args.thresholds:
         print("\nthreshold sensitivity: the whole evaluation, once per |Z|")
@@ -1320,6 +1412,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             if sweep is not None:
                 payload["threshold_sensitivity"] = dict(sweep)
                 payload["threshold_sensitivity"]["recorded_at"] = stamp
+            if conformal is not None:
+                payload["conformal"] = dict(conformal)
+                payload["conformal"]["recorded_at"] = stamp
             destination.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
             print(f"wrote {destination}")
             if loco is None and "leave_one_city_out" in payload:

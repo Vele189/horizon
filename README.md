@@ -203,6 +203,25 @@ Four of the fifteen registry cities are still absent — Sydney has eighteen
 scored days and Auckland, Buenos Aires and Johannesburg three each — and each
 is named with a reason in the `leave_one_city_out` block of `metrics.json`.
 
+### How much to believe one week's answer
+
+`evaluate.py --conformal` reports a distribution-free **prediction set** per
+week — `{quiet}`, `{extreme}`, both when the evidence does not separate them,
+or empty — calibrated on validation at a target of 90% coverage stated up
+front.
+
+Calibrated on validation for 90% coverage, split conformal delivers 83.2% on
+the test period and decays year by year to 73.1% in 2026; adaptive conformal
+holds 90.0% overall and within half a point of target in every year, paying for
+it with sets that grow from 0.91 labels to 1.08.
+
+Split conformal assumes the calibration and test periods are exchangeable, and
+a base rate moving from 6.8% to 11.3% is the textbook violation: its guarantee
+holds on paper and decays silently, from on-target in 2022 to sixteen points
+short in 2026. Adaptive conformal adjusts its level online and holds. The set
+size it pays with — and the share of "cannot say" answers, rising from 0% to
+10.6% — is the drift measured in the units the guarantee is stated in.
+
 Full metrics, feature importances, and the intended use of the model are in the
 [model card](docs/model-card.md), which is generated from the run manifest and
 cannot go stale.

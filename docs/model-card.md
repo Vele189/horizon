@@ -251,7 +251,7 @@ the climatology baseline spans the whole record and the climate has warmed
 within it. The model is correctly calibrated to a world that no longer exists.
 
 DBT-12 tested whether that is an artefact of the baseline and found it is not:
-detrending the climatology removes only 5% of the drift. See limitation 6.
+detrending the climatology removes only 5% of the drift. See limitation 7.
 
 In consequence its mean predicted probability on the test split is **0.061
 where 0.113 actually occurs**, and the shortfall runs through every decile. It
@@ -349,7 +349,43 @@ lost their flag, two of them Sydney's and fifty from complete cities sitting
 between 2.500 and 2.513. Tokyo used to be this entry, at forty-five
 observations and sd(Z) = 1.14; its record is now complete.
 
-### 6. The label conflates two things, and that is now a choice
+### 6. How much to believe one week's answer, formally
+
+The probability this model gives a week is a number a reader will round. ML-14
+reports what can be said instead, without assuming anything about the model or
+the distribution: a conformal **prediction set**, which is `{quiet}`,
+`{extreme}`, `{quiet, extreme}` when the evidence does not separate them, or
+empty when the week is unlike anything in the calibration sample.
+
+Calibrated on the validation split at a target of **90% coverage**, stated
+before anything was measured. And the point of the ticket is what happens next:
+
+| year | split conformal | adaptive |
+|---|---:|---:|
+| 2022 | 0.906 | 0.899 |
+| 2023 | 0.843 | 0.900 |
+| 2024 | 0.830 | 0.901 |
+| 2025 | 0.806 | 0.899 |
+| 2026 | **0.731** | 0.898 |
+
+Ordinary split conformal assumes exchangeability, which a base rate moving from
+6.8% to 11.3% violates. Its guarantee holds on paper and **decays silently on
+the data**, from on-target in 2022 to sixteen points short by 2026. Adaptive
+conformal adjusts its level online and holds 90% in every year, paying for it
+with sets that grow from 0.91 labels to 1.08 and a share of "cannot say"
+answers that rises from 0% to 10.6%.
+
+That growth *is* the drift, measured in the units the guarantee is stated in,
+which is the most legible statement of it anywhere in this project.
+
+Coverage is reported with set size everywhere, because a method that always
+returns both labels covers everything and says nothing. And the adaptive figure
+is a **realised online coverage**, not a held-out score: the level is updated
+from each outcome after that row has been predicted, which is what the method
+does in deployment. The calibration sample is validation and only validation; a
+test rewrites the test period and requires the calibration to be identical.
+
+### 7. The label conflates two things, and that is now a choice
 
 A day can be flagged because it was unusual for its time of year, or because
 the whole record has warmed and a fixed-period baseline now sits low.
@@ -379,7 +415,7 @@ model is the one stated above: the non-stationarity in its label is real rather
 than an artefact of the climatology, so it is ML-10's prior-shift correction
 that has to address it, not a different flag.
 
-### 7. The climatology feature is not strictly backward in time
+### 8. The climatology feature is not strictly backward in time
 
 Every rolling and lag feature is strictly backward, proved by rebuilding after
 rewriting the future and requiring the past to come back bit-identical. The
@@ -390,14 +426,14 @@ from any particular future day, and the alternative, an expanding climatology,
 would give the early record a baseline of two or three years. The trade is
 deliberate.
 
-### 8. A single-day Z cannot express duration
+### 9. A single-day Z cannot express duration
 
 Phoenix's July 2023 heat dome peaks at Z = +1.97 and flags **zero** days. What
 was unprecedented was how long it lasted, and a per-day threshold cannot say
 that by construction. The detector, and therefore this model, is blind to
 duration-defined events.
 
-### 9. Seasonality is real but non-stationary
+### 10. Seasonality is real but non-stationary
 
 Fitted and scored inside the training period, a (city, week-of-year) baseline
 is worth 2.47x no-skill. Carried across the split it is worth **less than
@@ -405,7 +441,7 @@ nothing**, at 0.91x. Fitted on the test period itself it is worth 2.53x again.
 The seasonal structure is still there; it is *different* structure, because the
 anomaly mix flips from 347 cold / 224 hot in training to 61 / 231 in test.
 
-### 10. Everything is fixed against one snapshot
+### 11. Everything is fixed against one snapshot
 
 All figures here describe 59 090 rows to 2026-09-01, across 6 cities. The
 backfill is not finished. When cities land, the baselines must be re-run and

@@ -106,6 +106,9 @@ log = logging.getLogger(__name__)
 #: table, the per-city breakdown, and the per-metric verdict.
 #: 5. ML-07 added ``explainability``, written by ``explain.py``: the SHAP
 #: ranking, the both-tails response, and the two explained predictions.
+#: 9. ML-14 added ``conformal``, written by ``evaluate.py --conformal``: the
+#: realised coverage of split and adaptive conformal prediction sets, per city
+#: and per year, against a target stated up front.
 #: 8. ML-10 added ``model.calibration``, written by ``train.py``: the expected
 #: calibration error and reliability curve of the raw, calibrated and
 #: prior-shifted probabilities, the class prior EM estimates on the target
@@ -119,7 +122,7 @@ log = logging.getLogger(__name__)
 #: with that city removed entirely, scored against that city's own persistence
 #: baseline. A file may legitimately lack it, since it costs one training run
 #: per city and is not part of every evaluation.
-METRICS_SCHEMA_VERSION: Final[int] = 8
+METRICS_SCHEMA_VERSION: Final[int] = 9
 
 #: The baseline every other predictor is reported against, beside the base rate.
 #:
@@ -594,6 +597,7 @@ def write_metrics(payload: Mapping[str, Any], path: Path | None = None) -> Path:
             "explainability",
             "leave_one_city_out",
             "threshold_sensitivity",
+            "conformal",
         )
         carried = {key: previous[key] for key in downstream if key in previous}
         if carried:

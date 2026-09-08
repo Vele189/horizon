@@ -207,6 +207,271 @@
       }
     }
   },
+  "conformal": {
+    "adaptive": {
+      "by_city": [
+        {
+          "coverage": 0.8288235294117647,
+          "key": "cairo",
+          "mean_set_size": 1.0970588235294119,
+          "rows": 1700,
+          "shortfall": -0.07117647058823529
+        },
+        {
+          "coverage": 0.9358823529411765,
+          "key": "delhi",
+          "mean_set_size": 1.0235294117647058,
+          "rows": 1700,
+          "shortfall": 0.035882352941176476
+        },
+        {
+          "coverage": 0.8886283704572099,
+          "key": "lagos",
+          "mean_set_size": 1.0797186400937866,
+          "rows": 1706,
+          "shortfall": -0.01137162954279014
+        },
+        {
+          "coverage": 0.9288235294117647,
+          "key": "london",
+          "mean_set_size": 1.0723529411764705,
+          "rows": 1700,
+          "shortfall": 0.028823529411764692
+        },
+        {
+          "coverage": 0.9505882352941176,
+          "key": "moscow",
+          "mean_set_size": 1.0511764705882354,
+          "rows": 1700,
+          "shortfall": 0.0505882352941176
+        },
+        {
+          "coverage": 0.9388235294117647,
+          "key": "phoenix",
+          "mean_set_size": 1.086470588235294,
+          "rows": 1700,
+          "shortfall": 0.0388235294117647
+        },
+        {
+          "coverage": 0.8805882352941177,
+          "key": "portland",
+          "mean_set_size": 1.088235294117647,
+          "rows": 1700,
+          "shortfall": -0.01941176470588235
+        },
+        {
+          "coverage": 0.9470588235294117,
+          "key": "reykjavik",
+          "mean_set_size": 1.0605882352941176,
+          "rows": 1700,
+          "shortfall": 0.04705882352941171
+        },
+        {
+          "coverage": 0.9044995408631772,
+          "key": "sao_paulo",
+          "mean_set_size": 1.0514233241505968,
+          "rows": 1089,
+          "shortfall": 0.004499540863177165
+        },
+        {
+          "coverage": 0.8146627565982405,
+          "key": "singapore",
+          "mean_set_size": 1.1079178885630498,
+          "rows": 1705,
+          "shortfall": -0.08533724340175952
+        },
+        {
+          "coverage": 0.88,
+          "key": "tokyo",
+          "mean_set_size": 1.1205882352941177,
+          "rows": 1700,
+          "shortfall": -0.020000000000000018
+        }
+      ],
+      "by_year": [
+        {
+          "coverage": 0.8991282689912827,
+          "key": 2022,
+          "mean_set_size": 0.9554171855541719,
+          "rows": 4015,
+          "shortfall": -0.0008717310087172914
+        },
+        {
+          "coverage": 0.9001245330012453,
+          "key": 2023,
+          "mean_set_size": 1.0545454545454545,
+          "rows": 4015,
+          "shortfall": 0.0001245330012452639
+        },
+        {
+          "coverage": 0.9012192087583976,
+          "key": 2024,
+          "mean_set_size": 1.090072157253048,
+          "rows": 4019,
+          "shortfall": 0.0012192087583975386
+        },
+        {
+          "coverage": 0.8991780821917809,
+          "key": 2025,
+          "mean_set_size": 1.1095890410958904,
+          "rows": 3650,
+          "shortfall": -0.0008219178082191636
+        },
+        {
+          "coverage": 0.8979591836734694,
+          "key": 2026,
+          "mean_set_size": 1.2473969179508537,
+          "rows": 2401,
+          "shortfall": -0.0020408163265306367
+        }
+      ],
+      "coverage": 0.8996685082872928,
+      "mean_set_size": 1.0771270718232044,
+      "share_empty": 0.028729281767955802,
+      "share_uninformative": 0.10585635359116022,
+      "shortfall": -0.00033149171270718814
+    },
+    "adaptive_is_closer_to_target": true,
+    "alpha_end": 0.04000000000000403,
+    "alpha_range": [
+      0.0020000000000031885,
+      0.30100000000000016
+    ],
+    "alpha_start": 0.09999999999999998,
+    "calibrated_on": "validation",
+    "calibration_rows": 11987,
+    "fixed_threshold": 0.14496056735515594,
+    "gamma": 0.01,
+    "note": "Adaptive coverage is realised online: the level is updated from each outcome after that row has been predicted, which is what the method does in deployment. It is not a held-out score.",
+    "recorded_at": "2026-09-08T22:15:28+00:00",
+    "scored_on": "test",
+    "split": {
+      "by_city": [
+        {
+          "coverage": 0.7052941176470588,
+          "key": "cairo",
+          "mean_set_size": 0.8188235294117647,
+          "rows": 1700,
+          "shortfall": -0.19470588235294117
+        },
+        {
+          "coverage": 0.8976470588235295,
+          "key": "delhi",
+          "mean_set_size": 0.93,
+          "rows": 1700,
+          "shortfall": -0.0023529411764705577
+        },
+        {
+          "coverage": 0.8106682297772567,
+          "key": "lagos",
+          "mean_set_size": 0.9103165298944901,
+          "rows": 1706,
+          "shortfall": -0.0893317702227433
+        },
+        {
+          "coverage": 0.8623529411764705,
+          "key": "london",
+          "mean_set_size": 0.928235294117647,
+          "rows": 1700,
+          "shortfall": -0.03764705882352948
+        },
+        {
+          "coverage": 0.9076470588235294,
+          "key": "moscow",
+          "mean_set_size": 0.9523529411764706,
+          "rows": 1700,
+          "shortfall": 0.00764705882352934
+        },
+        {
+          "coverage": 0.88,
+          "key": "phoenix",
+          "mean_set_size": 0.9247058823529412,
+          "rows": 1700,
+          "shortfall": -0.020000000000000018
+        },
+        {
+          "coverage": 0.8205882352941176,
+          "key": "portland",
+          "mean_set_size": 0.9094117647058824,
+          "rows": 1700,
+          "shortfall": -0.0794117647058824
+        },
+        {
+          "coverage": 0.9158823529411765,
+          "key": "reykjavik",
+          "mean_set_size": 0.9470588235294117,
+          "rows": 1700,
+          "shortfall": 0.01588235294117646
+        },
+        {
+          "coverage": 0.8659320477502296,
+          "key": "sao_paulo",
+          "mean_set_size": 0.9504132231404959,
+          "rows": 1089,
+          "shortfall": -0.03406795224977044
+        },
+        {
+          "coverage": 0.7102639296187683,
+          "key": "singapore",
+          "mean_set_size": 0.8920821114369502,
+          "rows": 1705,
+          "shortfall": -0.18973607038123175
+        },
+        {
+          "coverage": 0.7864705882352941,
+          "key": "tokyo",
+          "mean_set_size": 0.9035294117647059,
+          "rows": 1700,
+          "shortfall": -0.11352941176470588
+        }
+      ],
+      "by_year": [
+        {
+          "coverage": 0.9063511830635118,
+          "key": 2022,
+          "mean_set_size": 0.9554171855541719,
+          "rows": 4015,
+          "shortfall": 0.006351183063511789
+        },
+        {
+          "coverage": 0.8433374844333749,
+          "key": 2023,
+          "mean_set_size": 0.9232876712328767,
+          "rows": 4015,
+          "shortfall": -0.05666251556662516
+        },
+        {
+          "coverage": 0.8295595919382931,
+          "key": 2024,
+          "mean_set_size": 0.9203782035332172,
+          "rows": 4019,
+          "shortfall": -0.07044040806170693
+        },
+        {
+          "coverage": 0.806027397260274,
+          "key": 2025,
+          "mean_set_size": 0.8994520547945205,
+          "rows": 3650,
+          "shortfall": -0.09397260273972607
+        },
+        {
+          "coverage": 0.7309454394002499,
+          "key": 2026,
+          "mean_set_size": 0.8404831320283215,
+          "rows": 2401,
+          "shortfall": -0.1690545605997501
+        }
+      ],
+      "coverage": 0.8318232044198896,
+      "mean_set_size": 0.9139779005524862,
+      "share_empty": 0.08602209944751381,
+      "share_uninformative": 0.0,
+      "shortfall": -0.06817679558011047
+    },
+    "statement": "Calibrated on validation for 90% coverage, split conformal delivers 83.2% on the test period and decays year by year to 73.1% in 2026; adaptive conformal holds 90.0% overall and within half a point of target in every year, paying for it with sets that grow from 0.91 labels to 1.08.",
+    "target_coverage": 0.9,
+    "variant": "unweighted"
+  },
   "evaluation": {
     "accuracy_note": "Accuracy is excluded: at this base rate, always answering \"no anomaly\" scores 88.7% and predicts nothing.",
     "accuracy_reported": false,
@@ -453,7 +718,7 @@
         "rows": 1700
       }
     ],
-    "recorded_at": "2026-09-08T15:33:25+00:00",
+    "recorded_at": "2026-09-08T22:15:28+00:00",
     "scored_on": "test",
     "summary": [
       {
@@ -806,7 +1071,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-08T15:26:56+00:00",
+  "generated_at": "2026-09-08T21:57:23+00:00",
   "label": {
     "anomaly_z_threshold": 2.5,
     "horizon_days": 7,
@@ -1849,7 +2114,7 @@
     "min_held_out_positives": 20,
     "min_held_out_rows": 200,
     "min_training_cities": 2,
-    "recorded_at": "2026-09-08T15:33:25+00:00",
+    "recorded_at": "2026-09-08T22:15:28+00:00",
     "scored_on": "test",
     "trained_on": "every other city's train and validation splits",
     "verdict": {
@@ -3697,7 +3962,7 @@
     },
     "xgboost_version": "3.4.1"
   },
-  "schema_version": 8,
+  "schema_version": 9,
   "snapshot": {
     "cities": 12,
     "first_date": "1995-01-31",
@@ -4277,7 +4542,7 @@
         }
       }
     ],
-    "recorded_at": "2026-09-08T15:33:25+00:00",
+    "recorded_at": "2026-09-08T22:15:28+00:00",
     "reference": "persistence",
     "shipped_threshold": 2.5,
     "statement": "Re-run at |Z| thresholds 2, 2.5, 3, the recommended model beats every baseline on PR-AUC and Brier at all three, and on F1 at some but not all of them.",
