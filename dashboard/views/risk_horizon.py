@@ -6,15 +6,32 @@ This is where the model becomes visible to someone who will never read
 ``train.py``, which makes what the picture *claims* more important here than
 anywhere else in the dashboard.
 
-**One score per city per week, not seven daily scores.** The model's target is
-"does an anomaly occur at any point in the next seven days", so
-``fact_ml_predictions`` holds one row per city per forecast date with
-``horizon_days = 7``. There is no per-day probability to draw, and inventing
-one by spreading the week's number across seven cells would be a chart claiming
-a resolution the model does not have. So each city is drawn as a single
-continuous band across the seven days its score covers: the calendar tells the
-reader *which* days, and the absence of any internal boundary tells them the
-score does not vary within them.
+**Seven cells where a model earned them, one band where it did not (BI-09).**
+This view drew a single continuous band for a long time, and the reason was
+sound: the weekly model's target is "does an anomaly occur at any point in the
+next seven days", so spreading that number across seven cells would have
+claimed a resolution it did not have.
+
+ML-13 built the per-day model instead of faking it -- a discrete-time hazard,
+``P(anomaly on day t+k | none before it)`` -- and ``fact_ml_predictions`` now
+carries those seven numbers beside the weekly one. Where they exist each day
+gets its own cell, separated by a gap, because the days are now separate
+statements. Where they do not, the band stays: a city with no per-day model
+behind it should not look like one that has seven answers.
+
+**And the cells are not a gradient across the week.** ML-13 measured what the
+hazard actually separates and the answer is *two levels, not seven*: on 71% of
+city-days the model gives days two to seven the same number. Six of the ten
+covered cities still show visible structure -- Portland falls away from
+tomorrow, Moscow and Tokyo *rise* into the week, because six days have more
+chances to go wrong than one does -- and four are flat because the model says
+they are. The view states that above the grid rather than leaving a reader to
+infer a precision the cells do not carry.
+
+**The day and the week come from two different models**, and the day cells do
+not multiply up to the band. That is said on every tooltip, because a reader
+composing seven cells and getting a different number is entitled to know why
+before they conclude one of them is wrong.
 
 **Ten of fifteen cities have no prediction, and each absence has a reason.**
 Those reasons are read from the model's own ``metrics.json`` rather than
@@ -237,8 +254,83 @@ def absence_reasons() -> dict[str, str]:
     return reasons
 
 
+_DAYS_SQL = f"""
+    with latest as (
+        select max(forecast_date) as forecast_date
+          from {GOLD_SCHEMA}.fact_ml_predictions
+         where horizon_day = 0
+    )
+    select p.city_id,
+           p.horizon_day,
+           p.horizon_start,
+           p.risk_score,
+           p.model_version
+      from {GOLD_SCHEMA}.fact_ml_predictions p
+      join latest l on l.forecast_date = p.forecast_date
+     where p.horizon_day > 0
+     order by p.city_id, p.horizon_day
+"""
+
+
 def load() -> pd.DataFrame:
     return run_query(_LATEST_SQL)
+
+
+def load_days() -> pd.DataFrame:
+    """The per-day hazards for the current forecast, if any were written.
+
+    Empty is the ordinary case rather than a failure: a warehouse scored before
+    ML-13, or by a run with no hazard artefact on disk, has only window rows.
+    The view falls back to the flat band, which is what it drew before and what
+    it should keep drawing when there is no per-day model behind the cells.
+    """
+    try:
+        return run_query(_DAYS_SQL)
+    except Exception:  # noqa: BLE001 - a missing column is a pre-ML-13 warehouse
+        return pd.DataFrame(
+            columns=["city_id", "horizon_day", "horizon_start", "risk_score"]
+        )
+
+
+def hazard_resolution() -> Mapping[str, Any]:
+    """What the hazard model actually separates, from the committed record.
+
+    ML-13 measured it: two levels, not seven. Read rather than re-derived, for
+    the same reason every other number on this view is.
+    """
+    return model_report().get("model", {}).get("hazard", {}).get("profile", {})
+
+
+def resolution_sentence() -> str:
+    """What the cells mean, in a sentence, chosen by the measurement.
+
+    The ticket's own trap: if the days come out near-uniform the view has to
+    say so rather than draw a gradient nobody can read. They did, in a sharper
+    form than expected -- days two to seven are identical on most city-days --
+    so the sentence names the resolution the model has instead of letting seven
+    cells imply seven answers.
+    """
+    profile = hazard_resolution()
+    if not profile:
+        return ""
+    levels = profile.get("distinct_levels")
+    flat = profile.get("share_with_flat_tail")
+    horizon = len(profile.get("predicted_by_day", [])) or 7
+    if not levels or flat is None:
+        return ""
+    if levels >= horizon - 1:
+        return (
+            "The model gives each day its own probability, and they differ "
+            "across the week."
+        )
+    return (
+        f"**The model separates tomorrow from the rest of the week, and no "
+        f"further.** On {flat:.0%} of city-days it gives days two to seven the "
+        f"same number, so the cells after the first are identical by the "
+        f"model's own account rather than by rounding. Seven cells are drawn "
+        f"because the calendar has seven days, not because there are seven "
+        f"answers."
+    )
 
 
 def horizon_days(frame: pd.DataFrame) -> list[dt.date]:
@@ -279,36 +371,96 @@ def _threshold_rule() -> str:
     )
 
 
-def _cell_text(row: pd.Series, day: dt.date, reasons: Mapping[str, str]) -> str:
+def _cell_text(
+    row: pd.Series,
+    day: dt.date,
+    reasons: Mapping[str, str],
+    hazard: float | None = None,
+) -> str:
     head = f"<b>{row['name']}</b>, {row['country']}<br>{day:%a %d %b %Y}"
     if pd.isna(row["risk_score"]):
         reason = reasons.get(row["city_id"], "not scored by this model")
         return f"{head}<br><i>{reason}</i>"
     verdict = "above threshold" if row["prediction_label"] else "below threshold"
+    weekly = (
+        f"<br><b>{row['risk_score']:.3f}</b> for the week, {verdict}"
+        f"<br>threshold <b>{row['decision_threshold']:.4f}</b>"
+    )
+    if hazard is None:
+        return (
+            f"{head}{weekly}"
+            f"<br><span style='font-size:0.85em'>one score for "
+            f"{int(row['horizon_days'])} days: "
+            f"{row['horizon_start']:%d %b} - {row['horizon_end']:%d %b}. No "
+            f"per-day model covers this city.</span>"
+        )
     return (
         f"{head}"
-        f"<br><b>{row['risk_score']:.3f}</b> risk score, {verdict}"
-        f"<br>threshold <b>{row['decision_threshold']:.4f}</b>"
-        f"<br><span style='font-size:0.85em'>one score for "
-        f"{int(row['horizon_days'])} days: "
-        f"{row['horizon_start']:%d %b} - {row['horizon_end']:%d %b}</span>"
+        f"<br><b>{hazard:.3f}</b> on this day, if the week has been quiet "
+        f"until now{weekly}"
+        # Said on every cell, because the two numbers come from two models and
+        # a reader multiplying the seven days together will not get the week.
+        f"<br><span style='font-size:0.85em'>the day is the hazard model's, "
+        f"the week is the weekly model's; they do not compose to each "
+        f"other</span>"
     )
 
 
-def grid(frame: pd.DataFrame, days: Sequence[dt.date]) -> tuple[list, list, list]:
-    """Rows of step indices and tooltips, one column per horizon day."""
+def grid(
+    frame: pd.DataFrame,
+    days: Sequence[dt.date],
+    hazards: pd.DataFrame | None = None,
+) -> tuple[list, list, list]:
+    """Rows of step indices and tooltips, one column per horizon day.
+
+    A city with per-day hazards gets one step per day; a city without gets the
+    flat band it always had. Both shapes appear in the same grid on purpose:
+    the alternative is to hide the cities the hazard model does not cover, and
+    a row that is flat because nothing per-day was written should look
+    different from one that is flat because the model says the days are alike.
+
+    The day cells are binned against the *daily equivalent* of the weekly
+    threshold, not against the weekly threshold itself. See
+    :func:`~dashboard.theme.daily_equivalent`: a hazard and a weekly
+    probability are different quantities, and binning one on the other's
+    boundaries would paint a flagged week entirely in the lowest step.
+    """
     reasons = absence_reasons()
+    by_city: Mapping[str, Mapping[int, float]] = {}
+    if hazards is not None and not hazards.empty:
+        by_city = {
+            city: dict(zip(group["horizon_day"], group["risk_score"]))
+            for city, group in hazards.groupby("city_id")
+        }
+
     steps: list[list[float | None]] = []
     texts: list[list[str]] = []
     for _, row in frame.iterrows():
+        per_day = by_city.get(row["city_id"], {})
         if pd.isna(row["risk_score"]):
-            value: float | None = None
+            values: list[float | None] = [None] * len(days)
+        elif per_day:
+            daily = theme.daily_equivalent(
+                float(row["decision_threshold"]), int(row["horizon_days"])
+            )
+            values = [
+                theme.risk_step(float(per_day[offset]), daily) + 0.5
+                if offset in per_day
+                else None
+                for offset in range(1, len(days) + 1)
+            ]
         else:
-            value = theme.risk_step(
+            band = theme.risk_step(
                 float(row["risk_score"]), float(row["decision_threshold"])
             ) + 0.5
-        steps.append([value] * len(days))
-        texts.append([_cell_text(row, day, reasons) for day in days])
+            values = [band] * len(days)
+        steps.append(values)
+        texts.append(
+            [
+                _cell_text(row, day, reasons, per_day.get(offset))
+                for offset, day in enumerate(days, start=1)
+            ]
+        )
     return list(frame["name"]), steps, texts
 
 
@@ -321,10 +473,15 @@ def _discrete_scale(colours: Sequence[str]) -> list[list]:
     return scale
 
 
-def _figure(frame: pd.DataFrame, days: Sequence[dt.date], mode: theme.Mode) -> go.Figure:
+def _figure(
+    frame: pd.DataFrame,
+    days: Sequence[dt.date],
+    mode: theme.Mode,
+    hazards: pd.DataFrame | None = None,
+) -> go.Figure:
     tokens = theme.chrome(mode)
     colours = theme.risk_scale(mode)
-    names, steps, texts = grid(frame, days)
+    names, steps, texts = grid(frame, days, hazards)
 
     figure = go.Figure(
         go.Heatmap(
@@ -338,10 +495,14 @@ def _figure(frame: pd.DataFrame, days: Sequence[dt.date], mode: theme.Mode) -> g
             zmin=0,
             zmax=len(colours),
             showscale=False,
-            # No gap *within* a row: the seven days carry one score, and an
-            # internal boundary would draw seven cells where the model made one
-            # statement. Rows are separated; days are not.
-            xgap=0,
+            # A gap between days only where the days are separate statements.
+            # Before ML-13 the seven cells carried one score, and an internal
+            # boundary would have drawn seven answers where the model made one;
+            # the hazard now gives each day its own number and the boundary is
+            # what says so. A city with no per-day model still reads as one
+            # band, because its seven cells hold the same value and no gap can
+            # make them look different.
+            xgap=1 if hazards is not None and not hazards.empty else 0,
             ygap=3,
         )
     )

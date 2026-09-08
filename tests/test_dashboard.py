@@ -2472,6 +2472,13 @@ def test_the_reason_a_city_is_missing_comes_from_the_model_not_a_guess() -> None
 
 
 def test_the_tooltip_says_the_score_covers_the_whole_window() -> None:
+    """With no per-day model, the cell still says it is one score for a week.
+
+    BI-09 gives a covered city seven cells with seven numbers. A city the
+    hazard does not cover keeps the band, and its tooltip has to keep saying
+    so -- a flat row that looked like seven answers would be the overclaim the
+    band existed to avoid.
+    """
     from dashboard.views import risk_horizon as risk
 
     frame = _risk_frame()
@@ -2479,10 +2486,51 @@ def test_the_tooltip_says_the_score_covers_the_whole_window() -> None:
     _, _, texts = risk.grid(frame, days)
 
     scored = texts[0][3]
-    assert "risk score" in scored
+    assert "for the week" in scored
     assert "threshold" in scored
     assert "one score for 7 days" in scored
     assert "03 Sep - 09 Sep" in scored
+    assert "No per-day model covers this city" in scored
+
+
+def test_a_covered_city_gets_seven_numbers_and_says_where_they_came_from() -> None:
+    """The per-day cells, and the caveat that has to travel with them.
+
+    The day and the week come from two different models and do not compose to
+    each other -- ML-13 measured Lagos's days composing to 0.48 against a band
+    of 0.40. A reader multiplying seven cells together is entitled to know that
+    before they wonder why it does not add up, so every covered cell says it.
+    """
+    from dashboard.views import risk_horizon as risk
+
+    frame = _risk_frame()
+    days = risk.horizon_days(frame)
+    # Spanning the ramp's breaks, which sit at 0.25x to 2x the *daily*
+    # equivalent of the weekly threshold -- 0.0154 for this fixture. Values all
+    # above 2x would every one land in the top step, which is what the real
+    # Lagos and London do and is a true statement about them, but it would make
+    # this test pass whatever grid() did with the ordering.
+    hazards = pd.DataFrame(
+        {
+            "city_id": [frame.iloc[0]["city_id"]] * len(days),
+            "horizon_day": range(1, len(days) + 1),
+            "risk_score": [0.200, 0.030, 0.015, 0.008, 0.004, 0.004, 0.004],
+        }
+    )
+    _, steps, texts = risk.grid(frame, days, hazards)
+
+    covered = texts[0]
+    assert "on this day" in covered[0]
+    assert "do not compose to each other" in covered[0]
+    assert "0.200" in covered[0] and "0.004" in covered[-1]
+
+    # Seven cells, ordered as the hazards are, and the first differs from the
+    # tail: the shape ML-13 found.
+    assert len(steps[0]) == len(days)
+    assert steps[0] == sorted(steps[0], reverse=True)
+    assert steps[0][0] > steps[0][-1]
+    # An uncovered city keeps one value across the row.
+    assert len(set(steps[1])) == 1
 
 
 def test_the_vintage_is_on_the_page() -> None:

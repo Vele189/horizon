@@ -180,6 +180,7 @@ __all__ = [
     "anomaly_step",
     "calibration_colours",
     "chrome",
+    "daily_equivalent",
     "diverging_scale",
     "emphasis",
     "risk_scale",
@@ -629,6 +630,30 @@ def calibration_colours(mode: Mode) -> Mapping[str, str]:
 #: sentence under the curve is chosen by a number rather than by whoever last
 #: edited the copy.
 CALIBRATION_TRUST_CEILING: Final[float] = 0.025
+
+
+def daily_equivalent(threshold: float, horizon_days: int) -> float:
+    """The per-day hazard that would compose to a weekly threshold.
+
+    BI-09 paints per-day cells from ML-13's hazards, and those live on a
+    different scale from the weekly score: a hazard of 0.007 against a weekly
+    decision threshold of 0.117 is not sixteen times too small, it is a
+    different quantity. Binning it on the weekly boundaries would paint every
+    day cell in the lowest step and say "no risk anywhere" about a week the
+    model flagged.
+
+    The conversion is the same identity ML-13 composes with, run backwards:
+    seven days each at ``h`` compose to ``1 - (1 - h)^7``, so the ``h`` that
+    composes to the threshold is ``1 - (1 - threshold)^(1/7)``. A day above it
+    is a day contributing more than its even share of a week that would just
+    clear the bar, which is the comparison a reader of a per-day cell is
+    actually making.
+    """
+    if not 0.0 <= threshold < 1.0:
+        raise ValueError(f"a weekly threshold outside [0, 1): {threshold}")
+    if horizon_days < 1:
+        raise ValueError(f"a horizon of {horizon_days} days has no daily share")
+    return 1.0 - (1.0 - threshold) ** (1.0 / horizon_days)
 
 
 def risk_key_html(mode: Mode, threshold: float) -> str:

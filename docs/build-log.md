@@ -4570,6 +4570,77 @@ a single day, so the day rows repeat the week's decision and the check that ties
 label to score is scoped to `horizon_day = 0` rather than dropped — the property
 still holds everywhere it means anything.
 
+## The per-day horizon, drawn at the resolution the model earned
+
+BI-09. The Risk Horizon view drew one continuous band across seven days for a
+long time, and the reason was sound: the weekly model's target is "an anomaly
+at any point in the next seven days", so spreading that number across seven
+cells would have claimed a resolution it did not have. ML-13 built the per-day
+model instead of faking it, so the cells can now be drawn — and the interesting
+part is how much of the week they turn out to describe.
+
+### Two levels, not seven, and the view says so
+
+ML-13's measurement is the whole design input: on 71% of city-days the hazard
+gives days two through seven the *same number*. Seven cells drawn from two
+numbers would be the same overclaim in a new shape.
+
+So the cells are drawn, and a line above the grid says what they mean: *the
+model separates tomorrow from the rest of the week, and no further.* The
+sentence is chosen by the recorded profile rather than typed — if a later model
+resolved the days properly it would say so instead, and a test asserts the
+prose follows `distinct_levels`.
+
+On the current forecast six of the ten covered cities still show visible
+structure, and it is not all one direction:
+
+| | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---|--:|--:|--:|--:|--:|--:|--:|
+| portland | 4 | 3 | 1 | 1 | 1 | 1 | 1 |
+| singapore | 4 | 4 | 4 | 3 | 3 | 3 | 3 |
+| moscow | 0 | 1 | 1 | 1 | 1 | 1 | 1 |
+| cairo | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
+
+Portland falls away from tomorrow; Moscow and Tokyo *rise* into the week,
+because six days carry more chances to go wrong than one does; Cairo is flat.
+Lagos and London saturate at the top step, which is a true statement about them
+— every day of their week is well past the bar.
+
+### The scale a day cell is painted on
+
+A hazard and a weekly probability are different quantities, and this is the
+detail that would have quietly ruined the chart. Binning a hazard of 0.007 on
+the weekly threshold's boundaries — 0.117 — puts every day cell in the lowest
+step and paints "no risk anywhere" across a week the model flagged.
+
+`theme.daily_equivalent` runs ML-13's composition backwards: the per-day hazard
+that would compose to the weekly threshold is `1 - (1 - threshold)^(1/7)`,
+which is 0.0177 here. A cell above it is a day contributing more than its even
+share of a week that would just clear the bar, which is the comparison a reader
+of a per-day cell is actually making.
+
+The first version of the test for this used hazards of 0.20 down to 0.05 and
+asserted the first cell differed from the last. It did not: the ramp's top
+break is at twice the threshold and every one of those values is past it, so
+they all landed in the same step. The fixture was wrong rather than the code —
+real Lagos does exactly that and it is the right answer for Lagos — but a test
+that passes whatever the ordering does is not a test, so it now spans the
+breaks.
+
+### What a city without a per-day model looks like
+
+The same band it always had, and its tooltip still says *one score for 7 days*.
+Both shapes appear in the same grid on purpose. The alternative is to hide the
+cities the hazard does not cover, and a row that is flat because nothing
+per-day was written should not look identical to one that is flat because the
+model says the days are alike — so the gap between cells appears only when
+there is something to separate.
+
+Every covered tooltip also carries the caveat that the day and the week come
+from two different models and do not compose to each other. A reader
+multiplying seven cells together and getting 0.48 against a band of 0.40 is
+entitled to know that before concluding one of them is wrong.
+
 ## Publishing
 
 Community Cloud requires a public repository, which makes deployment the moment
