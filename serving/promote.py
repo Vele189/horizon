@@ -22,6 +22,17 @@ definition: columns, types, not-nulls, defaults, primary keys, check
 constraints, indexes and comments are all introspected from ``pg_catalog`` and
 replayed. Adding a column to a dbt model and re-running is the whole change.
 
+**Indexes are reconciled by shape, not by name.** dbt names an index with a
+content hash it regenerates on every run, so the same index reaches the target
+under a new name each time the marts are rebuilt. Matching on the name never
+recognised the copy already there, and because a table that has not drifted is
+truncated rather than dropped, its old indexes survived: every promotion built
+another identical index beside the last one, paid for out of Neon's half a
+gigabyte and out of the load time of every run after it. The target is now made
+to match the local mart's *set of index definitions* — missing shapes created,
+duplicate and no-longer-defined ones dropped — which is the same relationship
+the rest of this module already has with the local catalog.
+
 **The whole promotion is one transaction.** Not one per table. A dashboard
 joining ``fact_ml_predictions`` to ``dim_cities`` while a per-table promotion
 was halfway through would read a new fact against an old dimension and show a
@@ -52,6 +63,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import re
 import sys
 import tempfile
 import time
@@ -119,6 +131,24 @@ def _quote(identifier: str) -> str:
 
 def _qualified(table: str) -> str:
     return f"{_quote(GOLD_SCHEMA)}.{_quote(table)}"
+
+
+#: An index's identity is its shape, not its name. dbt names the indexes it
+#: creates with a content hash it regenerates on every run, so the same index
+#: arrives under a new name each time the marts are rebuilt. Keying on the name
+#: therefore never recognised the copy already on the target: every promotion
+#: built a second identical index beside the first, and the cost came out of
+#: Neon's half-gigabyte cap and out of the load time of every run after it.
+#: Masking the name out makes "already there" mean what it says.
+_INDEX_NAME_RE: Final = re.compile(
+    r"^(create\s+(?:unique\s+)?index\s+)(.+?)(\s+on\s+)", re.IGNORECASE
+)
+
+
+def _index_shape(indexdef: str) -> str:
+    """One index's definition with its name masked and whitespace flattened."""
+    masked = _INDEX_NAME_RE.sub(r"\1<name>\3", indexdef, count=1)
+    return " ".join(masked.split()).lower()
 
 
 # ---------------------------------------------------------------------------
@@ -468,6 +498,7 @@ class TablePromotion:
     created: bool = False
     recreated: bool = False
     indexes_created: int = 0
+    indexes_dropped: int = 0
     extract_seconds: float = 0.0
     load_seconds: float = 0.0
     source_checksum: int | None = None
@@ -693,16 +724,56 @@ def promote(
 
                 # After the rows, not before: a fresh table's indexes build
                 # once over a full heap instead of being maintained per row.
+                #
+                # Reconciled by shape, and in both directions. A shape the local
+                # mart defines and the target lacks is created; a shape the
+                # target holds more than once, or no longer defines, is dropped.
+                # One direction alone is not enough: creating without dropping
+                # is what accumulated the duplicates in the first place, and the
+                # local warehouse is the definition, so an index that is only on
+                # Neon is drift rather than a local decision.
+                #
+                # Constraint-backed indexes are excluded on both sides. They
+                # belong to their constraint, `create_table_sql` already
+                # replayed it, and dropping one would take the constraint with
+                # it.
                 cur.execute(
-                    "select indexname from pg_indexes "
-                    "where schemaname = %s and tablename = %s",
-                    (GOLD_SCHEMA, definition.name),
+                    """
+                    select i.relname, pg_get_indexdef(x.indexrelid)
+                    from pg_index x
+                    join pg_class i on i.oid = x.indexrelid
+                    where x.indrelid = %s::regclass
+                      and not exists (
+                          select 1 from pg_constraint c
+                          where c.conindid = x.indexrelid
+                      )
+                    """,
+                    (_qualified(definition.name),),
                 )
-                existing_indexes = {row[0] for row in cur.fetchall()}
-                for name, indexdef in definition.indexes:
-                    if name not in existing_indexes:
+                on_target: dict[str, list[str]] = {}
+                for name, indexdef in cur.fetchall():
+                    on_target.setdefault(_index_shape(indexdef), []).append(name)
+
+                wanted: dict[str, str] = {
+                    _index_shape(indexdef): indexdef
+                    for _, indexdef in definition.indexes
+                }
+                for shape, indexdef in wanted.items():
+                    if shape not in on_target:
                         cur.execute(indexdef)
                         result.indexes_created += 1
+
+                # Every copy of an unwanted shape, and every copy but one of a
+                # wanted shape. Sorted so the run is reproducible.
+                for shape, names in on_target.items():
+                    redundant = (
+                        sorted(names) if shape not in wanted else sorted(names)[1:]
+                    )
+                    for name in redundant:
+                        cur.execute(
+                            f"drop index {_quote(GOLD_SCHEMA)}.{_quote(name)}"
+                        )
+                        result.indexes_dropped += 1
 
                 cur.execute(
                     "select count(*) from pg_indexes "
@@ -802,6 +873,8 @@ def _print_report(report: PromotionReport, definitions: Sequence[TableDefinition
         )
         if result.indexes_created:
             state += f", {result.indexes_created} index(es)"
+        if result.indexes_dropped:
+            state += f", {result.indexes_dropped} redundant dropped"
         print(
             f"  {result.table:28}{result.source_rows:>10,}"
             f"{_size(result.copied_bytes):>11}"
