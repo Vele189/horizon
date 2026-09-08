@@ -70,12 +70,15 @@ from machine_learning.labels import (  # noqa: E402
 )
 from machine_learning.features import (  # noqa: E402
     drop_warmup,
+    gold_frame,
     on_daily_calendar,
     require_grain,
     trailing_anomaly_counts,
 )
 
 __all__ = [
+    "ANOMALY_THRESHOLD",
+    "ANOMALY_THRESHOLDS",
     "MIN_HELD_OUT_POSITIVES",
     "MIN_HELD_OUT_ROWS",
     "PERSISTENCE_COUNT",
@@ -95,6 +98,8 @@ __all__ = [
     "drop_scorable_gaps",
     "evaluation_frame",
     "hold_out_city",
+    "lift_over",
+    "reflag",
     "scorable_cities",
     "score",
     "split_frame",
@@ -164,6 +169,28 @@ PURGE_DAYS: Final[int] = HORIZON_DAYS
 #: be measured rather than argued, and the measurement is in the build log:
 #: it moves test PR-AUC by less than a thousandth.
 EMBARGO_DAYS: Final[int] = 0
+
+
+#: The |Z| the warehouse flags an anomaly at, and the one every committed
+#: number in this project is measured against. Kept here as well as in
+#: ``dbt_project``'s ``anomaly_z_threshold`` because the sweep below has to be
+#: able to say which of its points is the shipped one.
+ANOMALY_THRESHOLD: Final[float] = 2.5
+
+#: The thresholds ML-09 re-runs the whole evaluation at.
+#:
+#: 2.5 is a choice, and every conclusion in this project inherits it: the
+#: label, two of the twenty-seven features, all three baselines, both model
+#: variants and every per-city verdict. A finding that holds only at 2.5 is a
+#: finding about 2.5. Three points either side of it are enough to see whether
+#: a verdict is a property of the model or of the line, and few enough that the
+#: sweep is a minute rather than an afternoon.
+#:
+#: 2.0 and 3.0 rather than a finer grid, because the interesting quantity is
+#: whether a verdict *flips*, not where it flips. A grid fine enough to locate
+#: the crossing would invite reading a threshold off it, which is exactly the
+#: decision ML-11 is meant to make on cost rather than on a curve.
+ANOMALY_THRESHOLDS: Final[tuple[float, ...]] = (2.0, 2.5, 3.0)
 
 
 @dataclass(frozen=True)
@@ -241,6 +268,75 @@ def score(labels: pd.Series, predictions) -> Score:
         brier=float(brier_score_loss(truth, values)),
         lift=pr_auc / rate,
     )
+
+
+def lift_over(result: Score, reference: Score) -> dict[str, float]:
+    """What a predictor is worth against another predictor, not against chance.
+
+    ``Score.lift`` divides by the base rate, which answers "is this better than
+    guessing". That is the right first question and the wrong last one. The
+    base rate is a *floor*: on this data persistence scores 1.69x it pooled and
+    up to 2.9x in a single city, so a new method reported at 1.8x over chance
+    sounds like progress and is a regression. Every method arriving from
+    phases 2 to 4 will be measured against something, and if the something is
+    the floor it will look better than it is.
+
+    So the reference is passed in and named at the call site. Both figures read
+    the same way round -- above one is better -- which for Brier means the
+    ratio is inverted, because Brier is a loss.
+
+    Returns:
+        ``pr_auc`` and ``brier`` ratios. A reference scoring zero on either
+        yields ``inf``, which is honest: nothing divided into something is not
+        a comparison, and a nan here would be silently dropped by every
+        aggregation downstream.
+    """
+    return {
+        "pr_auc": (
+            result.pr_auc / reference.pr_auc
+            if reference.pr_auc > 0
+            else float("inf")
+        ),
+        "brier": (
+            reference.brier / result.brier if result.brier > 0 else float("inf")
+        ),
+    }
+
+
+def reflag(gold: pd.DataFrame, threshold: float) -> pd.DataFrame:
+    """Re-derive ``is_anomaly`` from the Z-score at a different threshold.
+
+    In Python rather than by rebuilding the mart, and the reason is not speed.
+    Rebuilding ``fact_weather_anomalies`` with a different
+    ``anomaly_z_threshold`` writes the sweep's intermediate states into the
+    warehouse every other model, every committed metric and the dashboard all
+    read from. A run interrupted between two points of the sweep would leave
+    the project describing a threshold nobody chose, and the failure would be
+    silent because every number would still be a plausible number.
+
+    The arithmetic is the mart's, transcribed once: ``abs(z) > threshold``,
+    null-preserving, because an unscored day is not a quiet day.
+    ``tests/test_baselines.py`` asserts that reflagging at
+    :data:`ANOMALY_THRESHOLD` reproduces the warehouse's own column exactly, so
+    the middle point of the sweep is provably the shipped pipeline rather than
+    a reimplementation of it that happens to agree.
+
+    **The threshold is not only the label's.** ``is_anomaly`` feeds
+    ``anomaly_days_trailing30`` and the persistence signal as well as the
+    label, so moving it moves two of the twenty-seven features and the
+    strongest baseline at the same time as the target. That is the point: the
+    sweep asks what the *project* looks like at 2.0, not what the model scores
+    when only its answer key is changed.
+    """
+    if "z_temperature_2m_mean" not in gold.columns:
+        raise ValueError(
+            "the frame has no 'z_temperature_2m_mean' to re-flag from. This "
+            "needs the gold frame, before features are built."
+        )
+    z = gold["z_temperature_2m_mean"]
+    flagged = pd.Series(pd.NA, index=gold.index, dtype="boolean")
+    flagged = flagged.mask(z.notna(), z.abs() > threshold)
+    return gold.assign(is_anomaly=flagged)
 
 
 def split_frame(
@@ -362,7 +458,9 @@ def split_summary(parts: Mapping[str, pd.DataFrame]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def evaluation_frame(engine=None, **kwargs) -> pd.DataFrame:
+def evaluation_frame(
+    engine=None, *, threshold: float | None = None, **kwargs
+) -> pd.DataFrame:
     """The rows every model and every baseline is scored on. One definition.
 
     Labelled, past the feature warm-up, and with every model input present.
@@ -380,8 +478,24 @@ def evaluation_frame(engine=None, **kwargs) -> pd.DataFrame:
     the same act :func:`~machine_learning.features.drop_warmup` documents and
     declines to perform on its own, and it is done in one place so the model
     and the baselines cannot end up disagreeing about which rows exist.
+
+    Args:
+        threshold: Re-flag ``is_anomaly`` at this |Z| before building anything,
+            for ML-09's sweep. ``None`` reads the warehouse's own column, which
+            is what every committed number is measured on. Passing
+            :data:`ANOMALY_THRESHOLD` explicitly is not the same code path and
+            is not meant to be: a test asserts the two agree row for row, which
+            is what makes the sweep's middle point evidence about the shipped
+            pipeline rather than about a copy of it.
     """
-    whole = add_persistence_signal(training_frame(engine, **kwargs))
+    if threshold is None:
+        whole = add_persistence_signal(training_frame(engine, **kwargs))
+    else:
+        # One read, re-flagged, then the ordinary pipeline. `training_frame`
+        # takes the frame rather than the sweep rebuilding features and labels
+        # itself, so the merge that aligns them stays in one place.
+        gold = reflag(gold_frame(engine, **kwargs), threshold)
+        whole = add_persistence_signal(training_frame(frame=gold))
     return drop_scorable_gaps(drop_warmup(drop_unlabelled(whole)))
 
 

@@ -238,7 +238,11 @@ def test_every_limitation_the_workstream_found_is_recorded(card) -> None:
     for finding in (
         "not a forecast",           # no synoptic input
         "city lookup",              # latitude/elevation are constants
-        "four years",               # tokyo's short baseline
+        # A city whose baseline rests on too few observations over-flags by
+        # construction. Matched on the finding rather than on the city: this
+        # read "four years" while Tokyo was the example, and Tokyo's record has
+        # since completed. The defect moved to Sydney; it did not go away.
+        "over-flag",
         "duration",                 # phoenix 2023
         "non-stationary",           # the week-of-year regime shift
         "snapshot",                 # the incomplete backfill

@@ -212,6 +212,7 @@ def training_frame(
     cities: Sequence[str] | None = None,
     start: dt.date | str | None = None,
     end: dt.date | str | None = None,
+    frame: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Features and label on one row, read in a single pass over gold.
 
@@ -228,9 +229,20 @@ def training_frame(
     carry in a full build. Trimming first would give the first rows of the
     slice a warm-up they have already served and the last rows a label the
     warehouse can answer.
+
+    Args:
+        frame: A gold frame to build from, instead of reading one. ML-09's
+            threshold sweep re-derives ``is_anomaly`` at 2.0 and 3.0 and needs
+            the features and the label rebuilt from the *same* re-flagged
+            frame, because the threshold is not only the label's: two of the
+            twenty-seven features are counts of flagged days. Passing the frame
+            in is what keeps that one merge and its alignment check in one
+            place; a sweep that rebuilt them separately would be free to align
+            them differently from the pipeline it is a sweep of.
     """
     padded_end = pd.Timestamp(end) + pd.Timedelta(days=HORIZON_DAYS) if end else None
-    frame = gold_frame(engine, cities=cities, start=None, end=padded_end)
+    if frame is None:
+        frame = gold_frame(engine, cities=cities, start=None, end=padded_end)
     features = build_features(frame)
     labels = build_labels(frame)
 

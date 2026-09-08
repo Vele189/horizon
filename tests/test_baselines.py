@@ -17,6 +17,7 @@ to come back unchanged.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -28,7 +29,7 @@ np = pytest.importorskip("numpy")
 pd = pytest.importorskip("pandas")
 pytest.importorskip("sklearn")
 
-from ml_fixtures import labelled_span, spanning  # noqa: E402
+from ml_fixtures import labelled_span, scored_population, spanning  # noqa: E402
 
 from machine_learning.baselines import (  # noqa: E402
     METRICS_SCHEMA_VERSION,
@@ -41,17 +42,24 @@ from machine_learning.baselines import (  # noqa: E402
     write_metrics,
 )
 from machine_learning.evaluation import (  # noqa: E402
+    ANOMALY_THRESHOLD,
+    ANOMALY_THRESHOLDS,
     EMBARGO_DAYS,
     PERSISTENCE_FLAG,
     PURGE_DAYS,
+    Score,
     add_persistence_signal,
     base_rate,
     evaluation_frame,
+    lift_over,
+    reflag,
     score,
     split_frame,
 )
 from machine_learning.features import (  # noqa: E402
+    ANOMALY_COUNT_WINDOW,
     build_features,
+    feature_columns,
     on_daily_calendar,
     require_grain,
     trailing_anomaly_counts,
@@ -401,10 +409,17 @@ def test_the_week_of_year_signal_does_not_survive_the_split(population) -> None:
     Fitted and scored inside the training period the (city, week) climatology
     is worth about 2.3x no-skill, so the seasonal structure is real and the
     baseline is not broken. Carried across the split it is worth *less than
-    nothing*, since the unsmoothed version ranks below random, because the anomaly
-    mix flips from mostly cold to mostly hot, and hot extremes fall in
-    different weeks than cold ones. Validation therefore shrinks the week term
-    away entirely, and the surviving baseline is a per-city rate.
+    nothing*: the unsmoothed version ranks below random, because the anomaly
+    mix flips from mostly cold to mostly hot and hot extremes fall in different
+    weeks than cold ones. Validation therefore shrinks the week term away
+    entirely, and what survives is a per-city rate.
+
+    **And on twelve cities that rate has no skill either.** It used to clear
+    the base rate by a little; it now scores 0.9955x it on test, which is
+    chance. :func:`test_the_per_city_rate_does_not_survive_the_split_either`
+    measures why, and the consequence is ML-09's whole argument: two of the
+    three baselines are worth exactly 1.00x, so persistence is the only
+    reference in this file that means anything.
     """
     parts = split_frame(population)
     raw = ClimatologyBaseline(smoothing=0.0).fit(parts["train"])
@@ -422,7 +437,45 @@ def test_the_week_of_year_signal_does_not_survive_the_split(population) -> None:
     assert np.isinf(tuned.smoothing), (
         "validation no longer wants the week term shrunk away entirely"
     )
-    assert score(parts["test"][LABEL], tuned.predict(parts["test"])).lift > 1.0
+    collapsed = score(parts["test"][LABEL], tuned.predict(parts["test"]))
+    assert collapsed.lift == pytest.approx(1.0, abs=0.05), (
+        f"the collapsed climatology scores {collapsed.lift:.4f}x the base rate "
+        "on test. It was chance to within a twentieth when this was written, "
+        "and both directions are news: skill means the per-city ordering has "
+        "started surviving the split, and anti-skill means it has inverted."
+    )
+
+
+def test_the_per_city_rate_does_not_survive_the_split_either(population) -> None:
+    """Why the climatology baseline has stopped being a baseline.
+
+    Shrinkage collapses it to "this city's own historical rate", which is only
+    a predictor if the cities keep their order. Across this split they do not:
+    Reykjavik is the *most* anomalous city in training and the least in test,
+    Singapore the second least and the most. The rank correlation between the
+    two periods is about zero, so a per-city rate ranks the test period no
+    better than a coin.
+
+    This is the same regime shift the label's base rate shows, seen from
+    another angle, and it is the reason ML-09 moved the reporting onto
+    persistence: a reference predictor that has quietly become chance is worse
+    than no reference, because it still produces a lift.
+    """
+    parts = split_frame(population)
+    rates = {
+        name: positives(parts[name][LABEL]).groupby(parts[name]["city_id"]).mean()
+        for name in ("train", "test")
+    }
+    paired = pd.DataFrame(rates).dropna()
+    if len(paired) < 5:
+        pytest.skip(f"only {len(paired)} cities in both splits; a rank means little")
+
+    agreement = paired["train"].corr(paired["test"], method="spearman")
+    assert abs(agreement) < 0.5, (
+        f"the per-city anomaly rate now carries across the split "
+        f"(Spearman {agreement:+.3f}); the climatology baseline has become a "
+        "predictor again and the finding above needs revisiting"
+    )
 
 
 def test_the_committed_metrics_match_a_fresh_run(population) -> None:
@@ -456,3 +509,287 @@ def test_the_committed_metrics_match_a_fresh_run(population) -> None:
                 assert entry[split_name][metric] == pytest.approx(
                     committed["baselines"][name][split_name][metric], rel=1e-9
                 ), f"{name}/{split_name}/{metric} drifted from the committed target"
+
+
+# ---------------------------------------------------------------------------
+# Threshold sensitivity, and persistence as the yardstick (ML-09)
+# ---------------------------------------------------------------------------
+
+#: Words a README sentence can use to name the metric it is claiming about.
+METRIC_WORDS = {
+    "pr_auc": ("pr-auc", "ranking", "ranks", "average precision"),
+    "brier": ("brier", "calibration", "calibrated"),
+    "f1": ("f1",),
+}
+
+#: Words that scope a claim to a threshold, so it is not claiming all of them.
+QUALIFIERS = ("threshold", "|z|", "2.0", "2.5", "3.0", "at some", "not all")
+
+CLAIM = re.compile(
+    r"\bbeat(?:s|en|ing)?\b.*"
+    r"\b(?:baselines?|persistence|climatology|no-skill)\b",
+    re.IGNORECASE,
+)
+
+#: A sentence ends at a full stop followed by whitespace. Not at any full stop:
+#: the qualifiers this scanner looks for are thresholds, and "2.0" carries one.
+#: Splitting on every period truncates "at |Z| > 2.0 it beats the climatology"
+#: to "0 it beats the climatology", losing the very words that scope the claim
+#: and reporting a properly qualified sentence as a bare boast.
+SENTENCE_END = re.compile(r"(?<=[.])\s+")
+
+
+def flattened(text: str) -> str:
+    """Text with its line breaks forgotten; the README wraps at 79 columns."""
+    return " ".join(text.split())
+
+
+def claims_in(text: str) -> list[str]:
+    """Every sentence in the README that claims a baseline was beaten."""
+    return [
+        sentence.strip()
+        for sentence in SENTENCE_END.split(flattened(text))
+        if CLAIM.search(sentence)
+    ]
+
+
+def metrics_named(sentence: str) -> set[str]:
+    lowered = sentence.lower()
+    return {
+        metric
+        for metric, words in METRIC_WORDS.items()
+        if any(word in lowered for word in words)
+    }
+
+
+def test_reflagging_at_the_shipped_threshold_reproduces_the_warehouse(
+    engine, population
+) -> None:
+    """The middle point of the sweep is the shipped pipeline, not a copy of it.
+
+    The sweep re-derives ``is_anomaly`` in Python rather than rebuilding the
+    mart, because rebuilding writes a threshold nobody chose into the warehouse
+    every other model reads. That is only sound if the transcription is exact,
+    and "exact" is checkable: at 2.5 it has to reproduce dbt's own column row
+    for row, nulls included. If it does not, every point of the sweep is
+    measuring a second implementation of the flag rather than the flag.
+    """
+    from machine_learning.features import gold_frame
+
+    gold = gold_frame(engine)
+    rebuilt = reflag(gold, ANOMALY_THRESHOLD)["is_anomaly"]
+    # Compared as nullable booleans on both sides. The warehouse column arrives
+    # as `object` holding None and reflag builds a `boolean` holding pd.NA;
+    # those are the same three states spelled two ways, and normalising here
+    # keeps the assertion about the flag rather than about the driver.
+    assert rebuilt.equals(gold["is_anomaly"].astype("boolean")), (
+        "reflag() disagrees with fact_weather_anomalies at the shipped "
+        "threshold, so the sweep is not a sweep of this pipeline"
+    )
+    assert rebuilt.isna().sum() == gold["is_anomaly"].isna().sum()
+
+    # And the claim that actually matters: the whole population built through
+    # the sweep's path is the population built through the shipped one, label
+    # included. The dtype above is a detail; this is the guarantee.
+    swept = evaluation_frame(engine, threshold=ANOMALY_THRESHOLD)
+    assert len(swept) == len(population)
+    assert swept[LABEL].equals(population[LABEL])
+
+
+def test_a_higher_threshold_flags_a_subset(engine, population) -> None:
+    """Monotone, and null-preserving. An unscored day is not a quiet day."""
+    from machine_learning.features import gold_frame
+
+    gold = gold_frame(engine)
+    loose = reflag(gold, 2.0)["is_anomaly"]
+    tight = reflag(gold, 3.0)["is_anomaly"]
+
+    assert tight.isna().equals(loose.isna())
+    both = loose.notna()
+    assert not (tight[both].fillna(False) & ~loose[both].fillna(False)).any(), (
+        "a day flagged at |Z| > 3.0 was not flagged at 2.0"
+    )
+    assert tight[both].sum() < loose[both].sum(), "the sweep is not moving anything"
+
+
+def test_the_threshold_moves_the_features_and_not_only_the_label() -> None:
+    """The sweep is a refit, not a rescore, and this is where that is shown.
+
+    ``anomaly_days_trailing30`` counts flagged days, so it moves with the
+    threshold; so does the persistence signal. Re-scoring one fixed feature
+    matrix against three answer keys would be a much weaker experiment wearing
+    the same name, and it would flatter the model, because the baseline built
+    from the same flag would not have moved with it.
+    """
+    gold = spanning(days=2000)
+    loose = scored_population(reflag(gold, 1.0))
+    tight = scored_population(reflag(gold, 3.0))
+
+    counts = f"anomaly_days_trailing{ANOMALY_COUNT_WINDOW}"
+    assert counts in feature_columns()
+    assert loose[counts].sum() > tight[counts].sum(), (
+        "the trailing-anomaly feature did not move with the threshold"
+    )
+    assert (
+        loose[PERSISTENCE_FLAG].fillna(False).sum()
+        > tight[PERSISTENCE_FLAG].fillna(False).sum()
+    )
+
+
+def test_lift_over_reads_the_same_way_round_on_both_metrics() -> None:
+    """Above one is better, for a score and for a loss.
+
+    Brier is a loss, so its ratio is inverted. Getting that wrong produces a
+    number that is still a number, still near one, and still plausible, while
+    ranking every predictor backwards on calibration.
+    """
+    better = Score(rows=10, positives=2, base_rate=0.2, pr_auc=0.4,
+                   brier=0.05, lift=2.0)
+    worse = Score(rows=10, positives=2, base_rate=0.2, pr_auc=0.2,
+                  brier=0.10, lift=1.0)
+
+    against = lift_over(better, worse)
+    assert against["pr_auc"] == pytest.approx(2.0)
+    assert against["brier"] == pytest.approx(2.0)
+
+    reversed_ = lift_over(worse, better)
+    assert reversed_["pr_auc"] == pytest.approx(0.5)
+    assert reversed_["brier"] == pytest.approx(0.5)
+
+    # A reference that scores zero is not a comparison; inf says so, where a
+    # nan would be dropped silently by every aggregation downstream.
+    empty = Score(rows=10, positives=0, base_rate=0.0, pr_auc=0.0,
+                  brier=0.0, lift=0.0)
+    assert lift_over(better, empty)["pr_auc"] == float("inf")
+
+
+def test_every_committed_score_is_reported_against_persistence() -> None:
+    """The reporting shape ML-09 exists to fix, asserted on the committed file.
+
+    Not "the baselines carry it" but "every scored entry carries it". A block
+    that reported lift over chance for a new method and lift over persistence
+    only for the old ones would be the exact failure this ticket names.
+    """
+    path = metrics_path()
+    if not path.exists():
+        pytest.skip("no metrics.json; run baselines.py --write first")
+    payload = json.loads(path.read_text())
+
+    for name, entry in payload["baselines"].items():
+        assert entry["reference"] == "persistence", name
+        for split in ("train", "validation", "test"):
+            against = entry[split]["lift_over_persistence"]
+            assert set(against) == {"pr_auc", "brier"}, name
+            if name == "persistence":
+                assert against["pr_auc"] == pytest.approx(1.0)
+                assert against["brier"] == pytest.approx(1.0)
+
+    evaluation = payload.get("evaluation")
+    if evaluation is None:
+        pytest.skip("run evaluate.py --write first")
+    for row in evaluation["summary"]:
+        assert "lift_over_persistence" in row, row["predictor"]
+        assert "lift" in row, "the base-rate lift is still reported beside it"
+    for row in evaluation["per_city"]:
+        if "model_unweighted_pr_auc" not in row:
+            continue
+        assert "model_unweighted_vs_persistence" in row, row["city_id"]
+        assert "persistence_vs_persistence" in row
+
+
+def test_the_threshold_sweep_records_every_point_and_what_survives() -> None:
+    path = metrics_path()
+    if not path.exists():
+        pytest.skip("no metrics.json; run baselines.py --write first")
+    block = json.loads(path.read_text()).get("threshold_sensitivity")
+    if block is None:
+        pytest.skip("run `evaluate.py --thresholds --write` first")
+
+    assert block["thresholds"] == list(ANOMALY_THRESHOLDS)
+    assert block["shipped_threshold"] == ANOMALY_THRESHOLD
+    shipped = [point for point in block["points"] if point["is_shipped"]]
+    assert len(shipped) == 1, "the sweep does not contain the shipped threshold"
+
+    # The base rate has to move with the threshold, or the sweep swept nothing.
+    rates = [point["base_rate"]["test"] for point in block["points"]]
+    assert rates == sorted(rates, reverse=True), rates
+    assert rates[0] > rates[-1]
+
+    holds = block["holds_at_every_threshold"]
+    for metric in ("pr_auc", "brier", "f1"):
+        expected = all(
+            point["verdict"][f"model_{point['recommended_variant']}"][
+                "beats_every_baseline"
+            ][metric]
+            for point in block["points"]
+        )
+        assert holds[metric] is expected, metric
+
+
+def test_the_readme_claims_are_true_at_every_threshold_or_are_qualified() -> None:
+    """The acceptance's third bullet, enforced rather than reviewed.
+
+    Every README sentence claiming a baseline was beaten is checked against the
+    sweep. A sentence that names its metrics has to hold for those metrics at
+    all three thresholds; a sentence that names none is claiming all of them
+    and has to hold for all of them; a sentence that names a threshold has
+    scoped itself and is left alone.
+
+    The failure this prevents is the ordinary one: a true sentence written at
+    2.5, left in place while a re-run moves the answer, and read by everyone
+    afterwards as though it had been checked.
+    """
+    path = metrics_path()
+    if not path.exists():
+        pytest.skip("no metrics.json; run baselines.py --write first")
+    block = json.loads(path.read_text()).get("threshold_sensitivity")
+    if block is None:
+        pytest.skip("run `evaluate.py --thresholds --write` first")
+    holds = block["holds_at_every_threshold"]
+
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    sentences = claims_in(readme)
+    assert sentences, "no claim of the form 'beats the baselines' found at all"
+
+    unsupported = []
+    for sentence in sentences:
+        if any(word in sentence.lower() for word in QUALIFIERS):
+            continue
+        named = metrics_named(sentence) or set(METRIC_WORDS)
+        failing = sorted(name for name in named if not holds[name])
+        if failing:
+            unsupported.append(f"{failing}: {sentence}")
+    assert not unsupported, (
+        "the README claims a baseline is beaten on a metric that does not "
+        "survive every threshold in the sweep, and does not say so: "
+        + " | ".join(unsupported)
+    )
+
+
+def test_the_readme_carries_the_sweeps_own_verdict() -> None:
+    """Generated, not typed, so it cannot outlive the run that justified it."""
+    path = metrics_path()
+    if not path.exists():
+        pytest.skip("no metrics.json; run baselines.py --write first")
+    block = json.loads(path.read_text()).get("threshold_sensitivity")
+    if block is None:
+        pytest.skip("run `evaluate.py --thresholds --write` first")
+
+    readme = flattened((REPO_ROOT / "README.md").read_text(encoding="utf-8"))
+    assert flattened(block["statement"]) in readme, (
+        "the README's threshold verdict no longer matches metrics.json, which "
+        f"now says: {block['statement']}"
+    )
+
+
+def test_the_claim_scanner_would_notice_an_unqualified_boast() -> None:
+    """A scanner that finds nothing passes everything."""
+    planted = (
+        "The model beats every baseline. It also beats persistence on F1. "
+        "At |Z| > 2.0 it beats the climatology baseline."
+    )
+    found = claims_in(planted)
+    assert len(found) == 3
+    assert metrics_named(found[0]) == set()
+    assert metrics_named(found[1]) == {"f1"}
+    assert any(word in found[2].lower() for word in QUALIFIERS)

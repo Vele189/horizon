@@ -3,41 +3,54 @@
     "base_rate": {
       "fitted_on": "train",
       "params": {
-        "rate": 0.054325355384582594
+        "rate": 0.0501671544173549
       },
+      "reference": "persistence",
       "test": {
-        "base_rate": 0.13578650364448624,
-        "brier": 0.1239844477483142,
+        "base_rate": 0.11497237569060774,
+        "brier": 0.10595344522294077,
         "lift": 1.0,
-        "positives": 1155,
-        "pr_auc": 0.13578650364448624,
-        "rows": 8506
+        "lift_over_persistence": {
+          "brier": 0.9365783997994485,
+          "pr_auc": 0.6005056706080432
+        },
+        "positives": 2081,
+        "pr_auc": 0.11497237569060774,
+        "rows": 18100
       },
       "train": {
-        "base_rate": 0.054325355384582594,
-        "brier": 0.051374111146921406,
+        "base_rate": 0.0501671544173549,
+        "brier": 0.04765041103502018,
         "lift": 1.0,
-        "positives": 2549,
-        "pr_auc": 0.054325355384582594,
-        "rows": 46921
+        "lift_over_persistence": {
+          "brier": 0.9763575487588944,
+          "pr_auc": 0.6364198416202805
+        },
+        "positives": 4817,
+        "pr_auc": 0.0501671544173549,
+        "rows": 96019
       },
       "validation": {
-        "base_rate": 0.08627953837699212,
-        "brier": 0.07985644944515766,
+        "base_rate": 0.07079129492203785,
+        "brier": 0.06620524265685584,
         "lift": 1.0,
-        "positives": 471,
-        "pr_auc": 0.08627953837699212,
-        "rows": 5459
+        "lift_over_persistence": {
+          "brier": 0.9765124802247794,
+          "pr_auc": 0.7122122282843629
+        },
+        "positives": 849,
+        "pr_auc": 0.07079129492203785,
+        "rows": 11993
       }
     },
     "climatology": {
       "fitted_on": "train",
       "params": {
-        "cells": 322,
+        "cells": 583,
         "collapsed_to_city_rate": true,
         "median_rows_per_cell": 168.0,
-        "min_rows_per_cell": 6,
-        "overall_rate": 0.054325355384582594,
+        "min_rows_per_cell": 28,
+        "overall_rate": 0.0501671544173549,
         "smoothing": "inf",
         "smoothing_grid": [
           0.0,
@@ -54,288 +67,469 @@
         "smoothing_search": [
           {
             "smoothing": 0.0,
-            "validation_brier": 0.08210690107949686,
-            "validation_pr_auc": 0.08013742412001436
+            "validation_brier": 0.0678655917520312,
+            "validation_pr_auc": 0.0665843106054978
           },
           {
             "smoothing": 1.0,
-            "validation_brier": 0.08208817606108094,
-            "validation_pr_auc": 0.07934662396893609
+            "validation_brier": 0.06784856121694832,
+            "validation_pr_auc": 0.06615110940707693
           },
           {
             "smoothing": 5.0,
-            "validation_brier": 0.08201662151405532,
-            "validation_pr_auc": 0.07933358395863883
+            "validation_brier": 0.06778429033247285,
+            "validation_pr_auc": 0.06610653995668278
           },
           {
             "smoothing": 10.0,
-            "validation_brier": 0.08193363107672916,
-            "validation_pr_auc": 0.07919006693653034
+            "validation_brier": 0.06771110756165373,
+            "validation_pr_auc": 0.0659931602277182
           },
           {
             "smoothing": 20.0,
-            "validation_brier": 0.08178520710260549,
-            "validation_pr_auc": 0.07891610712101607
+            "validation_brier": 0.06758300701206883,
+            "validation_pr_auc": 0.0658550435632116
           },
           {
             "smoothing": 50.0,
-            "validation_brier": 0.08144307642708204,
-            "validation_pr_auc": 0.07911678097537801
+            "validation_brier": 0.06729707258967225,
+            "validation_pr_auc": 0.0657372643962829
           },
           {
             "smoothing": 100.0,
-            "validation_brier": 0.08108376262290075,
-            "validation_pr_auc": 0.0792308458440976
+            "validation_brier": 0.06700737651238468,
+            "validation_pr_auc": 0.06552682675387345
           },
           {
             "smoothing": 500.0,
-            "validation_brier": 0.08037101418109285,
-            "validation_pr_auc": 0.08260947514596031
+            "validation_brier": 0.06647260914623905,
+            "validation_pr_auc": 0.06660170525508607
           },
           {
             "smoothing": 2000.0,
-            "validation_brier": 0.08015490781110574,
-            "validation_pr_auc": 0.0879698291319509
+            "validation_brier": 0.06633338290129209,
+            "validation_pr_auc": 0.06907318578961116
           },
           {
             "smoothing": "inf",
-            "validation_brier": 0.08008219126510303,
-            "validation_pr_auc": 0.10008078585028152
+            "validation_brier": 0.06629348489067266,
+            "validation_pr_auc": 0.07336407100792056
           }
         ]
       },
+      "reference": "persistence",
       "test": {
-        "base_rate": 0.13578650364448624,
-        "brier": 0.12453788639471097,
-        "lift": 1.1150999306033376,
-        "positives": 1155,
-        "pr_auc": 0.15141552079083645,
-        "rows": 8506
+        "base_rate": 0.11497237569060774,
+        "brier": 0.10617748361898428,
+        "lift": 0.9954680783044257,
+        "lift_over_persistence": {
+          "brier": 0.9346021849249931,
+          "pr_auc": 0.5977842259310993
+        },
+        "positives": 2081,
+        "pr_auc": 0.11445132988682376,
+        "rows": 18100
       },
       "train": {
-        "base_rate": 0.054325355384582594,
-        "brier": 0.05072373918838902,
-        "lift": 1.3965784508929584,
-        "positives": 2549,
-        "pr_auc": 0.0758696206672098,
-        "rows": 46921
+        "base_rate": 0.0501671544173549,
+        "brier": 0.04752804758298525,
+        "lift": 1.197745324246383,
+        "lift_over_persistence": {
+          "brier": 0.978871232492229,
+          "pr_auc": 0.7622688895583146
+        },
+        "positives": 4817,
+        "pr_auc": 0.06008747463413311,
+        "rows": 96019
       },
       "validation": {
-        "base_rate": 0.08627953837699212,
-        "brier": 0.08008219126510303,
-        "lift": 1.1599596814367024,
-        "positives": 471,
-        "pr_auc": 0.10008078585028152,
-        "rows": 5459
+        "base_rate": 0.07079129492203785,
+        "brier": 0.06629348489067266,
+        "lift": 1.0363431137785528,
+        "lift_over_persistence": {
+          "brier": 0.9752126595448568,
+          "pr_auc": 0.7380962383313782
+        },
+        "positives": 849,
+        "pr_auc": 0.07336407100792056,
+        "rows": 11993
       }
     },
     "persistence": {
       "fitted_on": "train",
       "params": {
-        "after_anomaly": 0.20023510971786834,
-        "after_quiet": 0.04593297121864365,
+        "after_anomaly": 0.1961028192371476,
+        "after_quiet": 0.04244750260430945,
         "train_rows_per_cell": {
-          "after_anomaly": 2552,
-          "after_quiet": 44369,
+          "after_anomaly": 4824,
+          "after_quiet": 91195,
           "when_unknown": 0
         },
-        "when_unknown": 0.054325355384582594,
+        "when_unknown": 0.0501671544173549,
         "window_days": 7
       },
+      "reference": "persistence",
       "test": {
-        "base_rate": 0.13578650364448624,
-        "brier": 0.11466271929351604,
-        "lift": 1.6888273852986966,
-        "positives": 1155,
-        "pr_auc": 0.22931996590876963,
-        "rows": 8506
+        "base_rate": 0.11497237569060774,
+        "brier": 0.09923370818014038,
+        "lift": 1.665263208901005,
+        "lift_over_persistence": {
+          "brier": 1.0,
+          "pr_auc": 1.0
+        },
+        "positives": 2081,
+        "pr_auc": 0.19145926727751336,
+        "rows": 18100
       },
       "train": {
-        "base_rate": 0.054325355384582594,
-        "brier": 0.05014958043499869,
-        "lift": 1.5384344200011422,
-        "positives": 2549,
-        "pr_auc": 0.08357599660243625,
-        "rows": 46921
+        "base_rate": 0.0501671544173549,
+        "brier": 0.04652383851550607,
+        "lift": 1.5712897911134727,
+        "lift_over_persistence": {
+          "brier": 1.0,
+          "pr_auc": 1.0
+        },
+        "positives": 4817,
+        "pr_auc": 0.0788271375852029,
+        "rows": 96019
       },
       "validation": {
-        "base_rate": 0.08627953837699212,
-        "brier": 0.07830049501973707,
-        "lift": 1.2797278048188896,
-        "positives": 471,
-        "pr_auc": 0.11041432424797527,
-        "rows": 5459
+        "base_rate": 0.07079129492203785,
+        "brier": 0.06465024571072966,
+        "lift": 1.4040758643092728,
+        "lift_over_persistence": {
+          "brier": 1.0,
+          "pr_auc": 1.0
+        },
+        "positives": 849,
+        "pr_auc": 0.09939634860323293,
+        "rows": 11993
       }
     }
   },
   "evaluation": {
-    "accuracy_note": "Accuracy is excluded: at this base rate, always answering \"no anomaly\" scores 86.4% and predicts nothing.",
+    "accuracy_note": "Accuracy is excluded: at this base rate, always answering \"no anomaly\" scores 88.5% and predicts nothing.",
     "accuracy_reported": false,
     "calibration_bins": 10,
     "cities_ingested_but_not_scored": [
       "auckland",
       "buenos_aires",
       "johannesburg",
-      "london",
-      "moscow",
-      "portland",
-      "reykjavik",
-      "sao_paulo",
-      "sydney",
-      "tokyo"
+      "sydney"
     ],
     "cities_not_ingested": [],
     "cities_scored": [
       "cairo",
       "delhi",
       "lagos",
+      "london",
+      "moscow",
       "phoenix",
-      "singapore"
+      "portland",
+      "reykjavik",
+      "sao_paulo",
+      "singapore",
+      "tokyo"
     ],
     "per_city": [
       {
-        "base_rate": 0.177751618599176,
+        "base_rate": 0.1776470588235294,
         "base_rate_lift": 1.0,
-        "base_rate_pr_auc": 0.177751618599176,
+        "base_rate_pr_auc": 0.1776470588235294,
+        "base_rate_vs_persistence": 0.7340582056957161,
         "city_id": "cairo",
         "climatology_lift": 1.0,
-        "climatology_pr_auc": 0.177751618599176,
-        "model_unweighted_lift": 2.0802305628692546,
-        "model_unweighted_pr_auc": 0.3697643496094849,
-        "model_weighted_lift": 2.038806642688067,
-        "model_weighted_pr_auc": 0.36240118074855576,
-        "persistence_lift": 1.3618663175862797,
-        "persistence_pr_auc": 0.24207394226666068,
-        "rows": 1699
+        "climatology_pr_auc": 0.1776470588235294,
+        "climatology_vs_persistence": 0.7340582056957161,
+        "model_unweighted_lift": 2.186289373661086,
+        "model_unweighted_pr_auc": 0.38838787696802823,
+        "model_unweighted_vs_persistence": 1.6048636547612678,
+        "model_weighted_lift": 2.209585389662939,
+        "model_weighted_pr_auc": 0.39252634569306327,
+        "model_weighted_vs_persistence": 1.6219642864674466,
+        "persistence_lift": 1.3622897915189613,
+        "persistence_pr_auc": 0.24200677472866255,
+        "persistence_vs_persistence": 1.0,
+        "rows": 1700
       },
       {
-        "base_rate": 0.05179517363154797,
+        "base_rate": 0.05176470588235294,
         "base_rate_lift": 1.0,
-        "base_rate_pr_auc": 0.05179517363154797,
+        "base_rate_pr_auc": 0.05176470588235294,
+        "base_rate_vs_persistence": 0.43955386191185075,
         "city_id": "delhi",
         "climatology_lift": 1.0,
-        "climatology_pr_auc": 0.05179517363154797,
-        "model_unweighted_lift": 6.350090678822164,
-        "model_unweighted_pr_auc": 0.32890404928566824,
-        "model_weighted_lift": 4.848270964634627,
-        "model_weighted_pr_auc": 0.25111703642604305,
-        "persistence_lift": 2.274116911626597,
-        "persistence_pr_auc": 0.11778828029613922,
-        "rows": 1699
+        "climatology_pr_auc": 0.05176470588235294,
+        "climatology_vs_persistence": 0.43955386191185075,
+        "model_unweighted_lift": 5.784669826870394,
+        "model_unweighted_pr_auc": 0.29944173221446746,
+        "model_unweighted_vs_persistence": 2.5426739622858388,
+        "model_weighted_lift": 5.150812425731915,
+        "model_weighted_pr_auc": 0.26663029027318147,
+        "model_weighted_vs_persistence": 2.264059493714011,
+        "persistence_lift": 2.275034043951916,
+        "persistence_pr_auc": 0.11776646815751096,
+        "persistence_vs_persistence": 1.0,
+        "rows": 1700
       },
       {
-        "base_rate": 0.15551643192488263,
+        "base_rate": 0.15650644783118406,
         "base_rate_lift": 1.0,
-        "base_rate_pr_auc": 0.15551643192488263,
+        "base_rate_pr_auc": 0.15650644783118406,
+        "base_rate_vs_persistence": 0.46043985771807877,
         "city_id": "lagos",
         "climatology_lift": 1.0,
-        "climatology_pr_auc": 0.15551643192488263,
-        "model_unweighted_lift": 2.9347526640552304,
-        "model_unweighted_pr_auc": 0.4564022628959132,
-        "model_weighted_lift": 2.409447333144023,
-        "model_weighted_pr_auc": 0.37470865216148247,
-        "persistence_lift": 2.161761116676464,
-        "persistence_pr_auc": 0.33618937553947353,
-        "rows": 1704
+        "climatology_pr_auc": 0.15650644783118406,
+        "climatology_vs_persistence": 0.46043985771807877,
+        "model_unweighted_lift": 3.1037309625320706,
+        "model_unweighted_pr_auc": 0.4857539079695562,
+        "model_unweighted_vs_persistence": 1.4290814427834622,
+        "model_weighted_lift": 2.5922519410142058,
+        "model_weighted_pr_auc": 0.4057041431716254,
+        "model_weighted_vs_persistence": 1.1935761148899944,
+        "persistence_lift": 2.171836306604644,
+        "persistence_pr_auc": 0.3399063856174912,
+        "persistence_vs_persistence": 1.0,
+        "rows": 1706
       },
       {
-        "base_rate": 0.05650382577987051,
+        "base_rate": 0.10352941176470588,
         "base_rate_lift": 1.0,
-        "base_rate_pr_auc": 0.05650382577987051,
+        "base_rate_pr_auc": 0.10352941176470588,
+        "base_rate_vs_persistence": 0.40044270863173126,
+        "city_id": "london",
+        "climatology_lift": 1.0,
+        "climatology_pr_auc": 0.10352941176470588,
+        "climatology_vs_persistence": 0.40044270863173126,
+        "model_unweighted_lift": 4.238264981159212,
+        "model_unweighted_pr_auc": 0.43878508040236547,
+        "model_unweighted_vs_persistence": 1.6971823089544082,
+        "model_weighted_lift": 4.016136573780401,
+        "model_weighted_pr_auc": 0.4157882570502063,
+        "model_weighted_vs_persistence": 1.6082326078395848,
+        "persistence_lift": 2.4972361300244175,
+        "persistence_pr_auc": 0.2585373875789985,
+        "persistence_vs_persistence": 1.0,
+        "rows": 1700
+      },
+      {
+        "base_rate": 0.05411764705882353,
+        "base_rate_lift": 1.0,
+        "base_rate_pr_auc": 0.05411764705882353,
+        "base_rate_vs_persistence": 0.4154119293932875,
+        "city_id": "moscow",
+        "climatology_lift": 1.0,
+        "climatology_pr_auc": 0.05411764705882353,
+        "climatology_vs_persistence": 0.4154119293932875,
+        "model_unweighted_lift": 3.805441228550769,
+        "model_unweighted_pr_auc": 0.2059415253098063,
+        "model_unweighted_vs_persistence": 1.5808256829450373,
+        "model_weighted_lift": 2.8794237218393985,
+        "model_weighted_pr_auc": 0.15582763671130861,
+        "model_weighted_vs_persistence": 1.1961469638301054,
+        "persistence_lift": 2.407249116462563,
+        "persistence_pr_auc": 0.13027465806738575,
+        "persistence_vs_persistence": 1.0,
+        "rows": 1700
+      },
+      {
+        "base_rate": 0.05647058823529412,
+        "base_rate_lift": 1.0,
+        "base_rate_pr_auc": 0.05647058823529412,
+        "base_rate_vs_persistence": 0.8682871678914642,
         "city_id": "phoenix",
         "climatology_lift": 1.0,
-        "climatology_pr_auc": 0.05650382577987051,
-        "model_unweighted_lift": 3.9577873967785213,
-        "model_unweighted_pr_auc": 0.22363012954134082,
-        "model_weighted_lift": 2.4167842849371652,
-        "model_weighted_pr_auc": 0.1365575581836185,
-        "persistence_lift": 1.1515299479166667,
-        "persistence_pr_auc": 0.0650658475573867,
-        "rows": 1699
+        "climatology_pr_auc": 0.05647058823529412,
+        "climatology_vs_persistence": 0.8682871678914642,
+        "model_unweighted_lift": 3.2797610242323376,
+        "model_unweighted_pr_auc": 0.18521003430959085,
+        "model_unweighted_vs_persistence": 2.8477744110915046,
+        "model_weighted_lift": 3.557129246624688,
+        "model_weighted_pr_auc": 0.20087318098586474,
+        "model_weighted_vs_persistence": 3.0886096793756477,
+        "persistence_lift": 1.1516927083333333,
+        "persistence_pr_auc": 0.06503676470588235,
+        "persistence_vs_persistence": 1.0,
+        "rows": 1700
+      },
+      {
+        "base_rate": 0.10764705882352942,
+        "base_rate_lift": 1.0,
+        "base_rate_pr_auc": 0.10764705882352942,
+        "base_rate_vs_persistence": 0.9721660273057325,
+        "city_id": "portland",
+        "climatology_lift": 1.0,
+        "climatology_pr_auc": 0.10764705882352942,
+        "climatology_vs_persistence": 0.9721660273057325,
+        "model_unweighted_lift": 1.7153633223054428,
+        "model_unweighted_pr_auc": 0.18465381645993884,
+        "model_unweighted_vs_persistence": 1.6676179464316452,
+        "model_weighted_lift": 1.5519906970830688,
+        "model_weighted_pr_auc": 0.16706723386247152,
+        "model_weighted_vs_persistence": 1.5087926303987016,
+        "persistence_lift": 1.0286308839359535,
+        "persistence_pr_auc": 0.11072908927075265,
+        "persistence_vs_persistence": 1.0,
+        "rows": 1700
+      },
+      {
+        "base_rate": 0.042352941176470586,
+        "base_rate_lift": 1.0,
+        "base_rate_pr_auc": 0.042352941176470586,
+        "base_rate_vs_persistence": 0.8039078855547802,
+        "city_id": "reykjavik",
+        "climatology_lift": 1.0,
+        "climatology_pr_auc": 0.042352941176470586,
+        "climatology_vs_persistence": 0.8039078855547802,
+        "model_unweighted_lift": 2.8797270251981892,
+        "model_unweighted_pr_auc": 0.12196490930251154,
+        "model_unweighted_vs_persistence": 2.3150352638020335,
+        "model_weighted_lift": 3.0678756008545354,
+        "model_weighted_pr_auc": 0.1299335548597215,
+        "model_weighted_vs_persistence": 2.4662893874280702,
+        "persistence_lift": 1.2439236111111112,
+        "persistence_pr_auc": 0.05268382352941176,
+        "persistence_vs_persistence": 1.0,
+        "rows": 1700
+      },
+      {
+        "base_rate": 0.10927456382001836,
+        "base_rate_lift": 1.0,
+        "base_rate_pr_auc": 0.10927456382001836,
+        "base_rate_vs_persistence": 0.6843093533622814,
+        "city_id": "sao_paulo",
+        "climatology_lift": 1.0,
+        "climatology_pr_auc": 0.10927456382001836,
+        "climatology_vs_persistence": 0.6843093533622814,
+        "model_unweighted_lift": 2.4881852696984095,
+        "model_unweighted_pr_auc": 0.27189536004968845,
+        "model_unweighted_vs_persistence": 1.7026884529528723,
+        "model_weighted_lift": 2.5410826182704156,
+        "model_weighted_pr_auc": 0.2776756947421299,
+        "model_weighted_vs_persistence": 1.738886603348761,
+        "persistence_lift": 1.4613273880980964,
+        "persistence_pr_auc": 0.15968591293266618,
+        "persistence_vs_persistence": 1.0,
+        "rows": 1089
       },
       {
         "base_rate": 0.23695014662756597,
         "base_rate_lift": 1.0,
         "base_rate_pr_auc": 0.23695014662756597,
+        "base_rate_vs_persistence": 0.7863763182551667,
         "city_id": "singapore",
         "climatology_lift": 1.0,
         "climatology_pr_auc": 0.23695014662756597,
-        "model_unweighted_lift": 1.7837339551457523,
-        "model_unweighted_pr_auc": 0.4226560222163542,
-        "model_weighted_lift": 1.623086598843775,
-        "model_weighted_pr_auc": 0.38459060758526986,
+        "climatology_vs_persistence": 0.7863763182551667,
+        "model_unweighted_lift": 1.7821418518084178,
+        "model_unweighted_pr_auc": 0.4222787730971265,
+        "model_unweighted_vs_persistence": 1.4014341480335486,
+        "model_weighted_lift": 1.6977266462748855,
+        "model_weighted_pr_auc": 0.40227657776835996,
+        "model_weighted_vs_persistence": 1.3350520295013364,
         "persistence_lift": 1.2716557922532907,
         "persistence_pr_auc": 0.3013190264342108,
+        "persistence_vs_persistence": 1.0,
         "rows": 1705
+      },
+      {
+        "base_rate": 0.16588235294117648,
+        "base_rate_lift": 1.0,
+        "base_rate_pr_auc": 0.16588235294117648,
+        "base_rate_vs_persistence": 0.76285827778063,
+        "city_id": "tokyo",
+        "climatology_lift": 1.0,
+        "climatology_pr_auc": 0.16588235294117648,
+        "climatology_vs_persistence": 0.76285827778063,
+        "model_unweighted_lift": 2.2421949686546947,
+        "model_unweighted_pr_auc": 0.3719405771533082,
+        "model_unweighted_vs_persistence": 1.710476992236314,
+        "model_weighted_lift": 2.082040806008642,
+        "model_weighted_pr_auc": 0.3453738278202571,
+        "model_weighted_vs_persistence": 1.5883020635407474,
+        "persistence_lift": 1.3108594730193952,
+        "persistence_pr_auc": 0.2174484537596879,
+        "persistence_vs_persistence": 1.0,
+        "rows": 1700
       }
     ],
-    "recorded_at": "2026-09-08T12:28:24+00:00",
+    "recorded_at": "2026-09-08T13:49:22+00:00",
     "scored_on": "test",
     "summary": [
       {
-        "base_rate": 0.13578650364448624,
-        "brier": 0.1239844477483142,
-        "f1": 0.2391056826415485,
-        "flagged": 8506,
+        "base_rate": 0.11497237569060774,
+        "brier": 0.10595344522294077,
+        "brier_over_persistence": 0.9365783997994485,
+        "f1": 0.20623358604628114,
+        "flagged": 18100,
         "lift": 1.0,
-        "mean_predicted": 0.05432535538458261,
-        "pr_auc": 0.13578650364448624,
-        "precision": 0.13578650364448624,
+        "lift_over_persistence": 0.6005056706080432,
+        "mean_predicted": 0.050167154417354906,
+        "pr_auc": 0.11497237569060774,
+        "precision": 0.11497237569060774,
         "predictor": "base_rate",
         "recall": 1.0,
-        "threshold": 0.054325355384582594
+        "threshold": 0.0501671544173549
       },
       {
-        "base_rate": 0.13578650364448624,
-        "brier": 0.11466271929351604,
-        "f1": 0.3806620209059233,
-        "flagged": 1141,
-        "lift": 1.6888273852986966,
-        "mean_predicted": 0.06663115368133059,
-        "pr_auc": 0.22931996590876963,
-        "precision": 0.38299737072743206,
+        "base_rate": 0.11497237569060774,
+        "brier": 0.09923370818014038,
+        "brier_over_persistence": 1.0,
+        "f1": 0.3397590361445783,
+        "flagged": 2069,
+        "lift": 1.665263208901005,
+        "lift_over_persistence": 1.0,
+        "mean_predicted": 0.06001174846692503,
+        "pr_auc": 0.19145926727751336,
+        "precision": 0.3407443209279845,
         "predictor": "persistence",
-        "recall": 0.37835497835497833,
-        "threshold": 0.20023510971786834
+        "recall": 0.3387794329649207,
+        "threshold": 0.1961028192371476
       },
       {
-        "base_rate": 0.13578650364448624,
-        "brier": 0.12453788639471097,
-        "f1": 0.21163279607568325,
-        "flagged": 1699,
-        "lift": 1.1150999306033376,
-        "mean_predicted": 0.05179986971923641,
-        "pr_auc": 0.15141552079083645,
-        "precision": 0.177751618599176,
+        "base_rate": 0.11497237569060774,
+        "brier": 0.10617748361898428,
+        "brier_over_persistence": 0.9346021849249931,
+        "f1": 0.20615767545046262,
+        "flagged": 16400,
+        "lift": 0.9954680783044257,
+        "lift_over_persistence": 0.5977842259310993,
+        "mean_predicted": 0.05059247482038977,
+        "pr_auc": 0.11445132988682376,
+        "precision": 0.11615853658536586,
         "predictor": "climatology",
-        "recall": 0.26147186147186147,
-        "threshold": 0.06472677282621148
+        "recall": 0.9154252763094666,
+        "threshold": 0.037003093137816474
       },
       {
-        "base_rate": 0.13578650364448624,
-        "brier": 0.21993267244042214,
-        "f1": 0.3705482192877151,
-        "flagged": 1344,
-        "lift": 2.361005739482625,
-        "mean_predicted": 0.46949073672294617,
-        "pr_auc": 0.3205927144489104,
-        "precision": 0.3444940476190476,
+        "base_rate": 0.11497237569060774,
+        "brier": 0.2077191333661987,
+        "brier_over_persistence": 0.4777302243274633,
+        "f1": 0.34606866002214837,
+        "flagged": 1531,
+        "lift": 2.632009840496692,
+        "lift_over_persistence": 1.5805368343144346,
+        "mean_predicted": 0.44373056292533875,
+        "pr_auc": 0.3026084242029622,
+        "precision": 0.4082299150881777,
         "predictor": "model_weighted",
-        "recall": 0.40086580086580087,
-        "threshold": 0.5383832454681396
+        "recall": 0.30033637674195096,
+        "threshold": 0.7084817290306091
       },
       {
-        "base_rate": 0.13578650364448624,
-        "brier": 0.10870226779702824,
-        "f1": 0.3796698523023458,
-        "flagged": 1147,
-        "lift": 2.660017414860988,
-        "mean_predicted": 0.07186920195817947,
-        "pr_auc": 0.3611944643974184,
-        "precision": 0.38099389712292936,
+        "base_rate": 0.11497237569060774,
+        "brier": 0.09335911926767024,
+        "brier_over_persistence": 1.062924639376975,
+        "f1": 0.35777126099706746,
+        "flagged": 2011,
+        "lift": 2.881340846793443,
+        "lift_over_persistence": 1.7302615174540437,
+        "mean_predicted": 0.06576455384492874,
+        "pr_auc": 0.3312746023302296,
+        "precision": 0.3639980109398309,
         "predictor": "model_unweighted",
-        "recall": 0.37835497835497833,
-        "threshold": 0.11317568272352219
+        "recall": 0.351753964440173,
+        "threshold": 0.10750503093004227
       }
     ],
     "threshold_chosen_on": "validation",
@@ -344,7 +538,7 @@
       "model_unweighted": {
         "beats_every_baseline": {
           "brier": true,
-          "f1": false,
+          "f1": true,
           "pr_auc": true
         },
         "detail": {
@@ -356,7 +550,7 @@
           "f1": {
             "base_rate": true,
             "climatology": true,
-            "persistence": false
+            "persistence": true
           },
           "pr_auc": {
             "base_rate": true,
@@ -368,7 +562,7 @@
       "model_weighted": {
         "beats_every_baseline": {
           "brier": false,
-          "f1": false,
+          "f1": true,
           "pr_auc": true
         },
         "detail": {
@@ -380,7 +574,7 @@
           "f1": {
             "base_rate": true,
             "climatology": true,
-            "persistence": false
+            "persistence": true
           },
           "pr_auc": {
             "base_rate": true,
@@ -394,226 +588,227 @@
   "explainability": {
     "cases": {
       "false_positive": {
-        "base_value": -2.8672685623168945,
-        "city_id": "singapore",
+        "base_value": -2.947755813598633,
+        "city_id": "lagos",
         "contributions": [
           {
             "feature": "z_temperature_2m_mean",
-            "shap": 2.2846531867980957,
-            "value": 3.184236903900411
+            "shap": 2.309046506881714,
+            "value": 2.6505223399863205
           },
           {
             "feature": "anomaly_days_trailing30",
-            "shap": 0.8850181102752686,
-            "value": 5.0
+            "shap": 1.0651346445083618,
+            "value": 8.0
           },
           {
             "feature": "temperature_2m_mean_roll7_var",
-            "shap": 0.21254532039165497,
-            "value": 0.03238095238050504
-          },
-          {
-            "feature": "day_of_year_sin",
-            "shap": 0.11567173898220062,
-            "value": 0.9984354211555643
-          },
-          {
-            "feature": "temperature_2m_mean_roll30_var",
-            "shap": 0.08845417201519012,
-            "value": 0.6078160919535547
-          },
-          {
-            "feature": "temperature_2m_mean_lag14",
-            "shap": -0.0735447034239769,
-            "value": 26.9
-          },
-          {
-            "feature": "latitude",
-            "shap": -0.06319878995418549,
-            "value": 1.3521
-          },
-          {
-            "feature": "day_of_year_cos",
-            "shap": 0.06087730452418327,
-            "value": 0.055916990100603484
-          }
-        ],
-        "date_key": "2024-03-29",
-        "label": false,
-        "margin": 0.5785913467407227,
-        "predicted": 0.6407430768013
-      },
-      "true_positive": {
-        "base_value": -2.8672685623168945,
-        "city_id": "cairo",
-        "contributions": [
-          {
-            "feature": "z_temperature_2m_mean",
-            "shap": 2.1594858169555664,
-            "value": 2.696693839814244
-          },
-          {
-            "feature": "anomaly_days_trailing30",
-            "shap": 0.9689084887504578,
-            "value": 9.0
-          },
-          {
-            "feature": "temperature_2m_mean_roll30_mean",
-            "shap": 0.11657848209142685,
-            "value": 18.40333333333333
-          },
-          {
-            "feature": "temperature_2m_mean_lag14",
-            "shap": 0.07948797941207886,
-            "value": 21.3
-          },
-          {
-            "feature": "elevation_m",
-            "shap": 0.06411197781562805,
-            "value": 23.0
+            "shap": 0.08436049520969391,
+            "value": 0.061428571429121614
           },
           {
             "feature": "pressure_msl_mean_roll30_var",
-            "shap": 0.05246616154909134,
-            "value": 9.901160919563829
+            "shap": 0.07876981794834137,
+            "value": 1.0577126436879642
+          },
+          {
+            "feature": "temperature_2m_mean_roll30_var",
+            "shap": 0.06822440028190613,
+            "value": 0.5690689655169429
+          },
+          {
+            "feature": "day_of_year_cos",
+            "shap": 0.05754344165325165,
+            "value": -0.99167731989929
+          },
+          {
+            "feature": "temperature_2m_mean",
+            "shap": 0.05588945746421814,
+            "value": 26.6
+          },
+          {
+            "feature": "pressure_msl_mean_roll30_mean",
+            "shap": -0.05233807489275932,
+            "value": 1013.6566666666665
+          }
+        ],
+        "date_key": "2026-07-09",
+        "label": false,
+        "margin": 0.9143426418304443,
+        "predicted": 0.7138879895210266
+      },
+      "true_positive": {
+        "base_value": -2.947755813598633,
+        "city_id": "moscow",
+        "contributions": [
+          {
+            "feature": "z_temperature_2m_mean",
+            "shap": 2.4715704917907715,
+            "value": -2.9324367303939303
+          },
+          {
+            "feature": "temperature_2m_mean",
+            "shap": 0.39123135805130005,
+            "value": -27.3
+          },
+          {
+            "feature": "anomaly_days_trailing30",
+            "shap": 0.3664502799510956,
+            "value": 2.0
+          },
+          {
+            "feature": "temperature_2m_mean_roll7_mean",
+            "shap": 0.14644141495227814,
+            "value": -14.085714285714285
+          },
+          {
+            "feature": "temperature_2m_mean_z_trailing30",
+            "shap": 0.13875459134578705,
+            "value": -2.722726362827298
+          },
+          {
+            "feature": "day_of_year_cos",
+            "shap": 0.09866323322057724,
+            "value": 0.9976303053065857
           },
           {
             "feature": "temperature_2m_mean_roll7_var",
-            "shap": -0.04624081030488014,
-            "value": 1.6190476190488852
+            "shap": 0.09446775168180466,
+            "value": 151.3480952380903
           },
           {
-            "feature": "pressure_tendency_72h",
-            "shap": 0.043798044323921204,
-            "value": 3.0
+            "feature": "pressure_msl_mean_roll7_mean",
+            "shap": 0.07520557194948196,
+            "value": 1009.6
           }
         ],
-        "date_key": "2026-02-15",
+        "date_key": "2024-01-04",
         "label": true,
-        "margin": 0.814948320388794,
-        "predicted": 0.6931628584861755
+        "margin": 0.9896371364593506,
+        "predicted": 0.7290160059928894
       }
     },
     "explained_variant": "unweighted",
     "implementation": "xgboost pred_contribs (TreeSHAP)",
-    "note": "SHAP values are in log-odds. The base value is -2.8673, which is 0.0538 as a probability.",
-    "recorded_at": "2026-09-08T12:28:44+00:00",
-    "rows_explained": 8506,
+    "note": "SHAP values are in log-odds. The base value is -2.9478, which is 0.0498 as a probability.",
+    "recorded_at": "2026-09-08T13:50:31+00:00",
+    "rows_explained": 18100,
     "space": "log-odds",
-    "static_city_share": 0.12433258362761282,
+    "static_city_share": 0.10372071636643793,
     "tail_response": [
       {
         "band": "(-inf, -2.5]",
-        "mean_shap": 1.9287750720977783,
-        "rows": 61
+        "mean_shap": 2.074275255203247,
+        "rows": 103
       },
       {
         "band": "(-2.5, -1.5]",
-        "mean_shap": 0.7212894558906555,
-        "rows": 368
+        "mean_shap": 0.6129183769226074,
+        "rows": 758
       },
       {
         "band": "(-1.5, -0.5]",
-        "mean_shap": -0.14883849024772644,
-        "rows": 1272
+        "mean_shap": -0.13817545771598816,
+        "rows": 3124
       },
       {
         "band": "(-0.5, 0.5]",
-        "mean_shap": -0.3286038041114807,
-        "rows": 2785
+        "mean_shap": -0.2641890347003937,
+        "rows": 6271
       },
       {
         "band": "(0.5, 1.5]",
-        "mean_shap": -0.19836044311523438,
-        "rows": 2691
+        "mean_shap": -0.18364115059375763,
+        "rows": 5399
       },
       {
         "band": "(1.5, 2.5]",
-        "mean_shap": 0.838161051273346,
-        "rows": 1100
+        "mean_shap": 0.7308231592178345,
+        "rows": 2020
       },
       {
         "band": "(2.5, inf]",
-        "mean_shap": 1.94387686252594,
-        "rows": 229
+        "mean_shap": 1.9356731176376343,
+        "rows": 425
       }
     ],
-    "threshold": 0.11317568272352219,
+    "threshold": 0.10750503093004227,
     "top_features": [
       {
-        "correlation": 0.3362199889928892,
+        "correlation": 0.32664723644826826,
         "feature": "z_temperature_2m_mean",
-        "mean_abs": 0.42102792859077454,
-        "mean_signed": 0.013160422444343567,
+        "mean_abs": 0.3485156297683716,
+        "mean_signed": -0.005674124229699373,
         "static_per_city": false
       },
       {
-        "correlation": 0.8784259219595121,
+        "correlation": 0.8922157915079965,
         "feature": "anomaly_days_trailing30",
-        "mean_abs": 0.24804627895355225,
-        "mean_signed": 0.07589178532361984,
+        "mean_abs": 0.20916959643363953,
+        "mean_signed": 0.0637371763586998,
         "static_per_city": false
       },
       {
-        "correlation": -0.8206570577700396,
+        "correlation": -0.556714463965313,
         "feature": "elevation_m",
-        "mean_abs": 0.11283154040575027,
-        "mean_signed": -0.0254973117262125,
+        "mean_abs": 0.07603926211595535,
+        "mean_signed": -0.007336832117289305,
         "static_per_city": true
       },
       {
-        "correlation": -0.5609710032463336,
-        "feature": "temperature_2m_mean_roll30_mean",
-        "mean_abs": 0.10338380932807922,
-        "mean_signed": -0.04503892734646797,
-        "static_per_city": false
-      },
-      {
-        "correlation": 0.7509333933572786,
-        "feature": "latitude",
-        "mean_abs": 0.05775606259703636,
-        "mean_signed": -0.00998648814857006,
-        "static_per_city": true
-      },
-      {
-        "correlation": 0.32508895552492084,
+        "correlation": 0.5218361716769877,
         "feature": "day_of_year_cos",
-        "mean_abs": 0.057709209620952606,
-        "mean_signed": -0.005518963560461998,
+        "mean_abs": 0.05175008624792099,
+        "mean_signed": -0.0022628107108175755,
         "static_per_city": false
       },
       {
-        "correlation": 0.4937454465414249,
-        "feature": "pressure_msl_mean_roll30_var",
-        "mean_abs": 0.0400858111679554,
-        "mean_signed": -0.02688465267419815,
-        "static_per_city": false
+        "correlation": -0.124656831923014,
+        "feature": "latitude",
+        "mean_abs": 0.03928864002227783,
+        "mean_signed": -0.013456111773848534,
+        "static_per_city": true
       },
       {
-        "correlation": 0.5241397238036676,
-        "feature": "temperature_2m_mean_roll7_var",
-        "mean_abs": 0.03792065382003784,
-        "mean_signed": -0.005121482536196709,
-        "static_per_city": false
-      },
-      {
-        "correlation": -0.3378753459825692,
+        "correlation": -0.5349052977585499,
         "feature": "temperature_2m_mean_roll30_var",
-        "mean_abs": 0.032152097672224045,
-        "mean_signed": 0.0037028982769697905,
+        "mean_abs": 0.03799843788146973,
+        "mean_signed": 0.0005406585405580699,
         "static_per_city": false
       },
       {
-        "correlation": 0.3765669690521211,
+        "correlation": 0.4949132694609585,
+        "feature": "pressure_msl_mean_roll30_mean",
+        "mean_abs": 0.03761358559131622,
+        "mean_signed": -0.004257112741470337,
+        "static_per_city": false
+      },
+      {
+        "correlation": -0.26971713451995954,
+        "feature": "temperature_2m_mean",
+        "mean_abs": 0.034694649279117584,
+        "mean_signed": -0.001113876816816628,
+        "static_per_city": false
+      },
+      {
+        "correlation": -0.1359579906370792,
+        "feature": "temperature_2m_mean_roll30_mean",
+        "mean_abs": 0.029181433841586113,
+        "mean_signed": -0.0048205056227743626,
+        "static_per_city": false
+      },
+      {
+        "correlation": 0.3925635824325167,
         "feature": "day_of_year_sin",
-        "mean_abs": 0.03019215352833271,
-        "mean_signed": -0.002665560692548752,
+        "mean_abs": 0.027467817068099976,
+        "mean_signed": -0.0012804714497178793,
         "static_per_city": false
       }
     ]
   },
-  "generated_at": "2026-09-08T12:27:02+00:00",
+  "generated_at": "2026-09-08T13:43:07+00:00",
   "label": {
+    "anomaly_z_threshold": 2.5,
     "horizon_days": 7,
     "window": "t+1 .. t+7 inclusive"
   },
@@ -622,56 +817,59 @@
       "cairo",
       "delhi",
       "lagos",
+      "london",
+      "moscow",
       "phoenix",
-      "singapore"
+      "portland",
+      "reykjavik",
+      "sao_paulo",
+      "singapore",
+      "tokyo"
     ],
     "cities_not_held_out": {
       "auckland": "no labelled rows past the feature warm-up",
       "buenos_aires": "no labelled rows past the feature warm-up",
       "johannesburg": "no labelled rows past the feature warm-up",
-      "london": "no rows in the test split; its record ends 1998-09-05",
-      "moscow": "no labelled rows past the feature warm-up",
-      "portland": "no labelled rows past the feature warm-up",
-      "reykjavik": "no rows in the test split; its record ends 2003-09-07",
-      "sao_paulo": "no labelled rows past the feature warm-up",
-      "sydney": "no rows in the test split; its record ends 2021-09-07",
-      "tokyo": "no rows in the test split; its record ends 2003-12-24"
+      "sydney": "no rows in the test split; its record ends 2021-09-07"
     },
     "folds": [
       {
-        "base_rate": 0.177751618599176,
+        "base_rate": 0.1776470588235294,
         "city_id": "cairo",
         "fold_recommended_variant": "unweighted",
         "persistence": {
           "available": true,
-          "brier": 0.15036055762071143,
+          "brier": 0.151271488622469,
           "fitted_on": "the other cities' training split",
-          "lift_over_base_rate": 1.3618663175862797,
-          "pr_auc": 0.24207394226666068,
-          "train_rows": 38192
+          "lift_over_base_rate": 1.3622897915189613,
+          "pr_auc": 0.24200677472866255,
+          "train_rows": 87290
         },
         "persistence_fits_agree_on_ranking": true,
         "persistence_own": {
           "available": true,
-          "brier": 0.1520638021792963,
+          "brier": 0.15197638630609953,
           "fitted_on": "this city's own training split",
-          "lift_over_base_rate": 1.3618663175862797,
-          "pr_auc": 0.24207394226666068,
+          "lift_over_base_rate": 1.3622897915189613,
+          "pr_auc": 0.24200677472866255,
           "train_rows": 8729
         },
         "positives": 302,
-        "rows": 1699,
+        "rows": 1700,
         "train_cities": [
           "delhi",
           "lagos",
           "london",
+          "moscow",
           "phoenix",
+          "portland",
           "reykjavik",
+          "sao_paulo",
           "singapore",
           "tokyo"
         ],
-        "train_rows": 38192,
-        "validation_rows": 4370,
+        "train_rows": 87290,
+        "validation_rows": 10904,
         "variants": {
           "unweighted": {
             "beats_base_rate": true,
@@ -679,25 +877,25 @@
               "brier": true,
               "pr_auc": true
             },
-            "brier_ratio_to_persistence": 1.053167653831508,
+            "brier_ratio_to_persistence": 1.051257186768814,
             "held_out": {
-              "base_rate": 0.177751618599176,
-              "brier": 0.1443870798975605,
-              "lift": 2.129426582847499,
+              "base_rate": 0.1776470588235294,
+              "brier": 0.14456632327358465,
+              "lift": 2.192056557439718,
               "positives": 302,
-              "pr_auc": 0.37850902178925533,
-              "rows": 1699
+              "pr_auc": 0.3894124002039969,
+              "rows": 1700
             },
             "in_sample": {
-              "base_rate": 0.177751618599176,
-              "brier": 0.1400859207938665,
-              "lift": 2.0802305628692546,
+              "base_rate": 0.1776470588235294,
+              "brier": 0.13823172158870342,
+              "lift": 2.186289373661086,
               "positives": 302,
-              "pr_auc": 0.3697643496094849,
-              "rows": 1699
+              "pr_auc": 0.38838787696802823,
+              "rows": 1700
             },
-            "lift_over_persistence": 1.5636091115180926,
-            "retained_of_in_sample": 1.0236493112140364
+            "lift_over_persistence": 1.6090971033377277,
+            "retained_of_in_sample": 1.002637886753744
           },
           "weighted": {
             "beats_base_rate": true,
@@ -705,62 +903,65 @@
               "brier": false,
               "pr_auc": true
             },
-            "brier_ratio_to_persistence": 0.6691616688796856,
+            "brier_ratio_to_persistence": 0.6361173287117662,
             "held_out": {
-              "base_rate": 0.177751618599176,
-              "brier": 0.2272452372143228,
-              "lift": 2.1178216215251346,
+              "base_rate": 0.1776470588235294,
+              "brier": 0.23891250787629809,
+              "lift": 2.1134469361143684,
               "positives": 302,
-              "pr_auc": 0.37644622113042414,
-              "rows": 1699
+              "pr_auc": 0.37544763218031724,
+              "rows": 1700
             },
             "in_sample": {
-              "base_rate": 0.177751618599176,
-              "brier": 0.2461815985246141,
-              "lift": 2.038806642688067,
+              "base_rate": 0.1776470588235294,
+              "brier": 0.26239722054456266,
+              "lift": 2.209585389662939,
               "positives": 302,
-              "pr_auc": 0.36240118074855576,
-              "rows": 1699
+              "pr_auc": 0.39252634569306327,
+              "rows": 1700
             },
-            "lift_over_persistence": 1.5550877455275356,
-            "retained_of_in_sample": 1.0387555039220835
+            "lift_over_persistence": 1.5513930657572221,
+            "retained_of_in_sample": 0.9564902746015913
           }
         }
       },
       {
-        "base_rate": 0.05179517363154797,
+        "base_rate": 0.05176470588235294,
         "city_id": "delhi",
         "fold_recommended_variant": "unweighted",
         "persistence": {
           "available": true,
-          "brier": 0.04671271682019536,
+          "brier": 0.04660812889300811,
           "fitted_on": "the other cities' training split",
-          "lift_over_base_rate": 2.274116911626597,
-          "pr_auc": 0.11778828029613922,
-          "train_rows": 38192
+          "lift_over_base_rate": 2.275034043951916,
+          "pr_auc": 0.11776646815751096,
+          "train_rows": 87290
         },
         "persistence_fits_agree_on_ranking": true,
         "persistence_own": {
           "available": true,
-          "brier": 0.04621562762609064,
+          "brier": 0.04618914342446414,
           "fitted_on": "this city's own training split",
-          "lift_over_base_rate": 2.274116911626597,
-          "pr_auc": 0.11778828029613922,
+          "lift_over_base_rate": 2.275034043951916,
+          "pr_auc": 0.11776646815751096,
           "train_rows": 8729
         },
         "positives": 88,
-        "rows": 1699,
+        "rows": 1700,
         "train_cities": [
           "cairo",
           "lagos",
           "london",
+          "moscow",
           "phoenix",
+          "portland",
           "reykjavik",
+          "sao_paulo",
           "singapore",
           "tokyo"
         ],
-        "train_rows": 38192,
-        "validation_rows": 4370,
+        "train_rows": 87290,
+        "validation_rows": 10904,
         "variants": {
           "unweighted": {
             "beats_base_rate": true,
@@ -768,25 +969,25 @@
               "brier": true,
               "pr_auc": true
             },
-            "brier_ratio_to_persistence": 1.091083900110409,
+            "brier_ratio_to_persistence": 1.0628783274381033,
             "held_out": {
-              "base_rate": 0.05179517363154797,
-              "brier": 0.042357537877164154,
-              "lift": 6.569229259700223,
+              "base_rate": 0.05176470588235294,
+              "brier": 0.043456661249077884,
+              "lift": 5.594019667686494,
               "positives": 88,
-              "pr_auc": 0.34025437013161836,
-              "rows": 1699
+              "pr_auc": 0.2895727827978891,
+              "rows": 1700
             },
             "in_sample": {
-              "base_rate": 0.05179517363154797,
-              "brier": 0.04223380278799795,
-              "lift": 6.350090678822164,
+              "base_rate": 0.05176470588235294,
+              "brier": 0.04306294130997783,
+              "lift": 5.784669826870394,
               "positives": 88,
-              "pr_auc": 0.32890404928566824,
-              "rows": 1699
+              "pr_auc": 0.29944173221446746,
+              "rows": 1700
             },
-            "lift_over_persistence": 2.888694607614294,
-            "retained_of_in_sample": 1.0345095199362895
+            "lift_over_persistence": 2.4588729485424463,
+            "retained_of_in_sample": 0.9670421709639658
           },
           "weighted": {
             "beats_base_rate": true,
@@ -794,62 +995,65 @@
               "brier": false,
               "pr_auc": true
             },
-            "brier_ratio_to_persistence": 0.19608562532093923,
+            "brier_ratio_to_persistence": 0.20159058294423526,
             "held_out": {
-              "base_rate": 0.05179517363154797,
-              "brier": 0.23569105359175685,
-              "lift": 4.409934782314228,
+              "base_rate": 0.05176470588235294,
+              "brier": 0.22912351732839203,
+              "lift": 5.631133987346248,
               "positives": 88,
-              "pr_auc": 0.22841333775376813,
-              "rows": 1699
+              "pr_auc": 0.29149399463909986,
+              "rows": 1700
             },
             "in_sample": {
-              "base_rate": 0.05179517363154797,
-              "brier": 0.2052228516902982,
-              "lift": 4.848270964634627,
+              "base_rate": 0.05176470588235294,
+              "brier": 0.18447909517529773,
+              "lift": 5.150812425731915,
               "positives": 88,
-              "pr_auc": 0.25111703642604305,
-              "rows": 1699
+              "pr_auc": 0.26663029027318147,
+              "rows": 1700
             },
-            "lift_over_persistence": 1.939185606407524,
-            "retained_of_in_sample": 0.9095891740544595
+            "lift_over_persistence": 2.475186691081122,
+            "retained_of_in_sample": 1.093251611962181
           }
         }
       },
       {
-        "base_rate": 0.15551643192488263,
+        "base_rate": 0.15650644783118406,
         "city_id": "lagos",
         "fold_recommended_variant": "unweighted",
         "persistence": {
           "available": true,
-          "brier": 0.1251565820212736,
+          "brier": 0.1264416904708469,
           "fitted_on": "the other cities' training split",
-          "lift_over_base_rate": 2.161761116676464,
-          "pr_auc": 0.33618937553947353,
-          "train_rows": 38192
+          "lift_over_base_rate": 2.171836306604644,
+          "pr_auc": 0.3399063856174912,
+          "train_rows": 87290
         },
         "persistence_fits_agree_on_ranking": true,
         "persistence_own": {
           "available": true,
-          "brier": 0.12439922570506146,
+          "brier": 0.12500091031475263,
           "fitted_on": "this city's own training split",
-          "lift_over_base_rate": 2.161761116676464,
-          "pr_auc": 0.33618937553947353,
+          "lift_over_base_rate": 2.171836306604644,
+          "pr_auc": 0.3399063856174912,
           "train_rows": 8729
         },
-        "positives": 265,
-        "rows": 1704,
+        "positives": 267,
+        "rows": 1706,
         "train_cities": [
           "cairo",
           "delhi",
           "london",
+          "moscow",
           "phoenix",
+          "portland",
           "reykjavik",
+          "sao_paulo",
           "singapore",
           "tokyo"
         ],
-        "train_rows": 38192,
-        "validation_rows": 4370,
+        "train_rows": 87290,
+        "validation_rows": 10904,
         "variants": {
           "unweighted": {
             "beats_base_rate": true,
@@ -857,25 +1061,25 @@
               "brier": true,
               "pr_auc": true
             },
-            "brier_ratio_to_persistence": 1.1599813468725695,
+            "brier_ratio_to_persistence": 1.1627946017860697,
             "held_out": {
-              "base_rate": 0.15551643192488263,
-              "brier": 0.10724243630335499,
-              "lift": 3.1907839430156826,
-              "positives": 265,
-              "pr_auc": 0.496219333861007,
-              "rows": 1704
+              "base_rate": 0.15650644783118406,
+              "brier": 0.10750042193414847,
+              "lift": 3.2092496343900017,
+              "positives": 267,
+              "pr_auc": 0.5022682604819053,
+              "rows": 1706
             },
             "in_sample": {
-              "base_rate": 0.15551643192488263,
-              "brier": 0.11997475125261771,
-              "lift": 2.9347526640552304,
-              "positives": 265,
-              "pr_auc": 0.4564022628959132,
-              "rows": 1704
+              "base_rate": 0.15650644783118406,
+              "brier": 0.11534785431199183,
+              "lift": 3.1037309625320706,
+              "positives": 267,
+              "pr_auc": 0.4857539079695562,
+              "rows": 1706
             },
-            "lift_over_persistence": 1.4760113494507014,
-            "retained_of_in_sample": 1.0872411777988367
+            "lift_over_persistence": 1.4776664450403287,
+            "retained_of_in_sample": 1.033997364182573
           },
           "weighted": {
             "beats_base_rate": true,
@@ -883,88 +1087,183 @@
               "brier": false,
               "pr_auc": true
             },
-            "brier_ratio_to_persistence": 0.5811127946636503,
+            "brier_ratio_to_persistence": 0.6351250640538797,
             "held_out": {
-              "base_rate": 0.15551643192488263,
-              "brier": 0.21407070511511295,
-              "lift": 3.1650825256629926,
-              "positives": 265,
-              "pr_auc": 0.49222234113890434,
-              "rows": 1704
+              "base_rate": 0.15650644783118406,
+              "brier": 0.1968130646850813,
+              "lift": 3.228865813450946,
+              "positives": 267,
+              "pr_auc": 0.5053383189867542,
+              "rows": 1706
             },
             "in_sample": {
-              "base_rate": 0.15551643192488263,
-              "brier": 0.2140933288027486,
-              "lift": 2.409447333144023,
-              "positives": 265,
-              "pr_auc": 0.37470865216148247,
-              "rows": 1704
+              "base_rate": 0.15650644783118406,
+              "brier": 0.18906194553581376,
+              "lift": 2.5922519410142058,
+              "positives": 267,
+              "pr_auc": 0.4057041431716254,
+              "rows": 1706
             },
-            "lift_over_persistence": 1.464122238690765,
-            "retained_of_in_sample": 1.313613492241377
+            "lift_over_persistence": 1.4866985157361223,
+            "retained_of_in_sample": 1.2455833333035016
           }
         }
       },
       {
-        "base_rate": 0.05650382577987051,
-        "city_id": "phoenix",
+        "base_rate": 0.10352941176470588,
+        "city_id": "london",
         "fold_recommended_variant": "unweighted",
         "persistence": {
           "available": true,
-          "brier": 0.053410722765061716,
+          "brier": 0.0860333694057717,
           "fitted_on": "the other cities' training split",
-          "lift_over_base_rate": 1.1515299479166667,
-          "pr_auc": 0.0650658475573867,
-          "train_rows": 38192
+          "lift_over_base_rate": 2.4972361300244175,
+          "pr_auc": 0.2585373875789985,
+          "train_rows": 87290
         },
         "persistence_fits_agree_on_ranking": true,
         "persistence_own": {
           "available": true,
-          "brier": 0.05330790459531373,
+          "brier": 0.0863137116301191,
           "fitted_on": "this city's own training split",
-          "lift_over_base_rate": 1.1515299479166667,
-          "pr_auc": 0.0650658475573867,
+          "lift_over_base_rate": 2.4972361300244175,
+          "pr_auc": 0.2585373875789985,
           "train_rows": 8729
         },
-        "positives": 96,
-        "rows": 1699,
+        "positives": 176,
+        "rows": 1700,
+        "train_cities": [
+          "cairo",
+          "delhi",
+          "lagos",
+          "moscow",
+          "phoenix",
+          "portland",
+          "reykjavik",
+          "sao_paulo",
+          "singapore",
+          "tokyo"
+        ],
+        "train_rows": 87290,
+        "validation_rows": 10904,
+        "variants": {
+          "unweighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": false,
+              "pr_auc": true
+            },
+            "brier_ratio_to_persistence": 0.9915480393328697,
+            "held_out": {
+              "base_rate": 0.10352941176470588,
+              "brier": 0.08704945015895793,
+              "lift": 3.6789281374766407,
+              "positives": 176,
+              "pr_auc": 0.38087726599758165,
+              "rows": 1700
+            },
+            "in_sample": {
+              "base_rate": 0.10352941176470588,
+              "brier": 0.07957440556789469,
+              "lift": 4.238264981159212,
+              "positives": 176,
+              "pr_auc": 0.43878508040236547,
+              "rows": 1700
+            },
+            "lift_over_persistence": 1.4731999482326363,
+            "retained_of_in_sample": 0.8680269293758065
+          },
+          "weighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": false,
+              "pr_auc": true
+            },
+            "brier_ratio_to_persistence": 0.3618672424235524,
+            "held_out": {
+              "base_rate": 0.10352941176470588,
+              "brier": 0.2385231419457748,
+              "lift": 3.5659845100085747,
+              "positives": 176,
+              "pr_auc": 0.36918427868324066,
+              "rows": 1700
+            },
+            "in_sample": {
+              "base_rate": 0.10352941176470588,
+              "brier": 0.1623255997911624,
+              "lift": 4.016136573780401,
+              "positives": 176,
+              "pr_auc": 0.4157882570502063,
+              "rows": 1700
+            },
+            "lift_over_persistence": 1.4279724961266307,
+            "retained_of_in_sample": 0.8879141544362129
+          }
+        }
+      },
+      {
+        "base_rate": 0.05411764705882353,
+        "city_id": "moscow",
+        "fold_recommended_variant": "unweighted",
+        "persistence": {
+          "available": true,
+          "brier": 0.04838977033201853,
+          "fitted_on": "the other cities' training split",
+          "lift_over_base_rate": 2.407249116462563,
+          "pr_auc": 0.13027465806738575,
+          "train_rows": 87290
+        },
+        "persistence_fits_agree_on_ranking": true,
+        "persistence_own": {
+          "available": true,
+          "brier": 0.04762399981722494,
+          "fitted_on": "this city's own training split",
+          "lift_over_base_rate": 2.407249116462563,
+          "pr_auc": 0.13027465806738575,
+          "train_rows": 8729
+        },
+        "positives": 92,
+        "rows": 1700,
         "train_cities": [
           "cairo",
           "delhi",
           "lagos",
           "london",
+          "phoenix",
+          "portland",
           "reykjavik",
+          "sao_paulo",
           "singapore",
           "tokyo"
         ],
-        "train_rows": 38192,
-        "validation_rows": 4370,
+        "train_rows": 87290,
+        "validation_rows": 10904,
         "variants": {
           "unweighted": {
             "beats_base_rate": true,
             "beats_own_persistence": {
-              "brier": true,
+              "brier": false,
               "pr_auc": true
             },
-            "brier_ratio_to_persistence": 1.0967666929333817,
+            "brier_ratio_to_persistence": 0.9933422129640703,
             "held_out": {
-              "base_rate": 0.05650382577987051,
-              "brier": 0.048604598351485215,
-              "lift": 4.868689629727966,
-              "positives": 96,
-              "pr_auc": 0.27509959061441125,
-              "rows": 1699
+              "base_rate": 0.05411764705882353,
+              "brier": 0.04794319540203364,
+              "lift": 3.5472133607171865,
+              "positives": 92,
+              "pr_auc": 0.19196684069763598,
+              "rows": 1700
             },
             "in_sample": {
-              "base_rate": 0.05650382577987051,
-              "brier": 0.04945980467807432,
-              "lift": 3.9577873967785213,
-              "positives": 96,
-              "pr_auc": 0.22363012954134082,
-              "rows": 1699
+              "base_rate": 0.05411764705882353,
+              "brier": 0.047585935897784384,
+              "lift": 3.805441228550769,
+              "positives": 92,
+              "pr_auc": 0.2059415253098063,
+              "rows": 1700
             },
-            "lift_over_persistence": 4.228018245236554,
-            "retained_of_in_sample": 1.2301544124605788
+            "lift_over_persistence": 1.4735547461451741,
+            "retained_of_in_sample": 0.9321424632980277
           },
           "weighted": {
             "beats_base_rate": true,
@@ -972,25 +1271,393 @@
               "brier": false,
               "pr_auc": true
             },
-            "brier_ratio_to_persistence": 0.23212052930259305,
+            "brier_ratio_to_persistence": 0.19534321856173537,
             "held_out": {
-              "base_rate": 0.05650382577987051,
-              "brier": 0.22965613922851855,
-              "lift": 4.156572584259236,
-              "positives": 96,
-              "pr_auc": 0.23486225314237003,
-              "rows": 1699
+              "base_rate": 0.05411764705882353,
+              "brier": 0.24379653498016915,
+              "lift": 3.9923098404003774,
+              "positives": 92,
+              "pr_auc": 0.21605441489225571,
+              "rows": 1700
             },
             "in_sample": {
-              "base_rate": 0.05650382577987051,
-              "brier": 0.21021126699036313,
-              "lift": 2.4167842849371652,
-              "positives": 96,
-              "pr_auc": 0.1365575581836185,
-              "rows": 1699
+              "base_rate": 0.05411764705882353,
+              "brier": 0.15730862300406362,
+              "lift": 2.8794237218393985,
+              "positives": 92,
+              "pr_auc": 0.15582763671130861,
+              "rows": 1700
             },
-            "lift_over_persistence": 3.609608757270494,
-            "retained_of_in_sample": 1.7198773635551443
+            "lift_over_persistence": 1.6584531335365287,
+            "retained_of_in_sample": 1.386496127721716
+          }
+        }
+      },
+      {
+        "base_rate": 0.05647058823529412,
+        "city_id": "phoenix",
+        "fold_recommended_variant": "unweighted",
+        "persistence": {
+          "available": true,
+          "brier": 0.05339006950877515,
+          "fitted_on": "the other cities' training split",
+          "lift_over_base_rate": 1.1516927083333333,
+          "pr_auc": 0.06503676470588235,
+          "train_rows": 87290
+        },
+        "persistence_fits_agree_on_ranking": true,
+        "persistence_own": {
+          "available": true,
+          "brier": 0.05327766354781584,
+          "fitted_on": "this city's own training split",
+          "lift_over_base_rate": 1.1516927083333333,
+          "pr_auc": 0.06503676470588235,
+          "train_rows": 8729
+        },
+        "positives": 96,
+        "rows": 1700,
+        "train_cities": [
+          "cairo",
+          "delhi",
+          "lagos",
+          "london",
+          "moscow",
+          "portland",
+          "reykjavik",
+          "sao_paulo",
+          "singapore",
+          "tokyo"
+        ],
+        "train_rows": 87290,
+        "validation_rows": 10904,
+        "variants": {
+          "unweighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": true,
+              "pr_auc": true
+            },
+            "brier_ratio_to_persistence": 1.0776623500907359,
+            "held_out": {
+              "base_rate": 0.05647058823529412,
+              "brier": 0.04943817842697207,
+              "lift": 3.913324488379755,
+              "positives": 96,
+              "pr_auc": 0.2209877358143862,
+              "rows": 1700
+            },
+            "in_sample": {
+              "base_rate": 0.05647058823529412,
+              "brier": 0.05030550760308485,
+              "lift": 3.2797610242323376,
+              "positives": 96,
+              "pr_auc": 0.18521003430959085,
+              "rows": 1700
+            },
+            "lift_over_persistence": 3.3978894370555706,
+            "retained_of_in_sample": 1.193173667064877
+          },
+          "weighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": false,
+              "pr_auc": true
+            },
+            "brier_ratio_to_persistence": 0.23796187438862448,
+            "held_out": {
+              "base_rate": 0.05647058823529412,
+              "brier": 0.22389159475524253,
+              "lift": 4.245999544584743,
+              "positives": 96,
+              "pr_auc": 0.2397740919294914,
+              "rows": 1700
+            },
+            "in_sample": {
+              "base_rate": 0.05647058823529412,
+              "brier": 0.19759648301987653,
+              "lift": 3.557129246624688,
+              "positives": 96,
+              "pr_auc": 0.20087318098586474,
+              "rows": 1700
+            },
+            "lift_over_persistence": 3.6867469194359335,
+            "retained_of_in_sample": 1.1936590576835844
+          }
+        }
+      },
+      {
+        "base_rate": 0.10764705882352942,
+        "city_id": "portland",
+        "fold_recommended_variant": "unweighted",
+        "persistence": {
+          "available": true,
+          "brier": 0.09993079533718785,
+          "fitted_on": "the other cities' training split",
+          "lift_over_base_rate": 1.0286308839359535,
+          "pr_auc": 0.11072908927075265,
+          "train_rows": 87290
+        },
+        "persistence_fits_agree_on_ranking": true,
+        "persistence_own": {
+          "available": true,
+          "brier": 0.09979626443626433,
+          "fitted_on": "this city's own training split",
+          "lift_over_base_rate": 1.0286308839359535,
+          "pr_auc": 0.11072908927075265,
+          "train_rows": 8729
+        },
+        "positives": 183,
+        "rows": 1700,
+        "train_cities": [
+          "cairo",
+          "delhi",
+          "lagos",
+          "london",
+          "moscow",
+          "phoenix",
+          "reykjavik",
+          "sao_paulo",
+          "singapore",
+          "tokyo"
+        ],
+        "train_rows": 87290,
+        "validation_rows": 10904,
+        "variants": {
+          "unweighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": true,
+              "pr_auc": true
+            },
+            "brier_ratio_to_persistence": 1.0412234866907382,
+            "held_out": {
+              "base_rate": 0.10764705882352942,
+              "brier": 0.09584519146167281,
+              "lift": 1.6946010674991843,
+              "positives": 183,
+              "pr_auc": 0.18241882079550042,
+              "rows": 1700
+            },
+            "in_sample": {
+              "base_rate": 0.10764705882352942,
+              "brier": 0.09531444327800648,
+              "lift": 1.7153633223054428,
+              "positives": 183,
+              "pr_auc": 0.18465381645993884,
+              "rows": 1700
+            },
+            "lift_over_persistence": 1.6474335876587354,
+            "retained_of_in_sample": 0.9878962931431028
+          },
+          "weighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": false,
+              "pr_auc": true
+            },
+            "brier_ratio_to_persistence": 0.4090194229519902,
+            "held_out": {
+              "base_rate": 0.10764705882352942,
+              "brier": 0.2439890597762107,
+              "lift": 1.512269946011411,
+              "positives": 183,
+              "pr_auc": 0.162791411835346,
+              "rows": 1700
+            },
+            "in_sample": {
+              "base_rate": 0.10764705882352942,
+              "brier": 0.25483110011223487,
+              "lift": 1.5519906970830688,
+              "positives": 183,
+              "pr_auc": 0.16706723386247152,
+              "rows": 1700
+            },
+            "lift_over_persistence": 1.4701774656277682,
+            "retained_of_in_sample": 0.9744065791461818
+          }
+        }
+      },
+      {
+        "base_rate": 0.042352941176470586,
+        "city_id": "reykjavik",
+        "fold_recommended_variant": "unweighted",
+        "persistence": {
+          "available": true,
+          "brier": 0.04044875147649556,
+          "fitted_on": "the other cities' training split",
+          "lift_over_base_rate": 1.2439236111111112,
+          "pr_auc": 0.05268382352941176,
+          "train_rows": 87290
+        },
+        "persistence_fits_agree_on_ranking": true,
+        "persistence_own": {
+          "available": true,
+          "brier": 0.04100608415278777,
+          "fitted_on": "this city's own training split",
+          "lift_over_base_rate": 1.2439236111111112,
+          "pr_auc": 0.05268382352941176,
+          "train_rows": 8729
+        },
+        "positives": 72,
+        "rows": 1700,
+        "train_cities": [
+          "cairo",
+          "delhi",
+          "lagos",
+          "london",
+          "moscow",
+          "phoenix",
+          "portland",
+          "sao_paulo",
+          "singapore",
+          "tokyo"
+        ],
+        "train_rows": 87290,
+        "validation_rows": 10904,
+        "variants": {
+          "unweighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": true,
+              "pr_auc": true
+            },
+            "brier_ratio_to_persistence": 1.0443475789493601,
+            "held_out": {
+              "base_rate": 0.042352941176470586,
+              "brier": 0.03926478595760323,
+              "lift": 2.929865432595937,
+              "positives": 72,
+              "pr_auc": 0.12408841832171026,
+              "rows": 1700
+            },
+            "in_sample": {
+              "base_rate": 0.042352941176470586,
+              "brier": 0.0398956192950127,
+              "lift": 2.8797270251981892,
+              "positives": 72,
+              "pr_auc": 0.12196490930251154,
+              "rows": 1700
+            },
+            "lift_over_persistence": 2.355341924878241,
+            "retained_of_in_sample": 1.0174108194835922
+          },
+          "weighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": false,
+              "pr_auc": true
+            },
+            "brier_ratio_to_persistence": 0.3221466528209163,
+            "held_out": {
+              "base_rate": 0.042352941176470586,
+              "brier": 0.12729011397049453,
+              "lift": 2.6805709229782178,
+              "positives": 72,
+              "pr_auc": 0.11353006262025392,
+              "rows": 1700
+            },
+            "in_sample": {
+              "base_rate": 0.042352941176470586,
+              "brier": 0.20151812387449639,
+              "lift": 3.0678756008545354,
+              "positives": 72,
+              "pr_auc": 0.1299335548597215,
+              "rows": 1700
+            },
+            "lift_over_persistence": 2.1549321027710446,
+            "retained_of_in_sample": 0.8737547644472817
+          }
+        }
+      },
+      {
+        "base_rate": 0.10927456382001836,
+        "city_id": "sao_paulo",
+        "fold_recommended_variant": "unweighted",
+        "persistence": {
+          "available": true,
+          "brier": 0.09602279850136944,
+          "fitted_on": "the other cities' training split",
+          "lift_over_base_rate": 1.4613273880980964,
+          "pr_auc": 0.15968591293266618,
+          "train_rows": 87290
+        },
+        "persistence_fits_agree_on_ranking": true,
+        "persistence_own": {
+          "available": true,
+          "brier": 0.09960382081514653,
+          "fitted_on": "this city's own training split",
+          "lift_over_base_rate": 1.4613273880980964,
+          "pr_auc": 0.15968591293266618,
+          "train_rows": 8729
+        },
+        "positives": 119,
+        "rows": 1089,
+        "train_cities": [
+          "cairo",
+          "delhi",
+          "lagos",
+          "london",
+          "moscow",
+          "phoenix",
+          "portland",
+          "reykjavik",
+          "singapore",
+          "tokyo"
+        ],
+        "train_rows": 87290,
+        "validation_rows": 10904,
+        "variants": {
+          "unweighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": true,
+              "pr_auc": true
+            },
+            "brier_ratio_to_persistence": 1.0590831394725495,
+            "held_out": {
+              "base_rate": 0.10927456382001836,
+              "brier": 0.09404721603324909,
+              "lift": 2.307089188456083,
+              "positives": 119,
+              "pr_auc": 0.25210616476241865,
+              "rows": 1089
+            },
+            "in_sample": {
+              "base_rate": 0.10927456382001836,
+              "brier": 0.0935733091274639,
+              "lift": 2.4881852696984095,
+              "positives": 119,
+              "pr_auc": 0.27189536004968845,
+              "rows": 1089
+            },
+            "lift_over_persistence": 1.578762710701493,
+            "retained_of_in_sample": 0.9272176057596079
+          },
+          "weighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": false,
+              "pr_auc": true
+            },
+            "brier_ratio_to_persistence": 0.4533711063279806,
+            "held_out": {
+              "base_rate": 0.10927456382001836,
+              "brier": 0.2196960049392528,
+              "lift": 2.590619052407659,
+              "positives": 119,
+              "pr_auc": 0.2830887669756762,
+              "rows": 1089
+            },
+            "in_sample": {
+              "base_rate": 0.10927456382001836,
+              "brier": 0.18432312210760102,
+              "lift": 2.5410826182704156,
+              "positives": 119,
+              "pr_auc": 0.2776756947421299,
+              "rows": 1089
+            },
+            "lift_over_persistence": 1.772784848561091,
+            "retained_of_in_sample": 1.0194942241472496
           }
         }
       },
@@ -1000,11 +1667,11 @@
         "fold_recommended_variant": "unweighted",
         "persistence": {
           "available": true,
-          "brier": 0.19633451875773036,
+          "brier": 0.19814229095243124,
           "fitted_on": "the other cities' training split",
           "lift_over_base_rate": 1.2716557922532907,
           "pr_auc": 0.3013190264342108,
-          "train_rows": 38192
+          "train_rows": 87290
         },
         "persistence_fits_agree_on_ranking": true,
         "persistence_own": {
@@ -1022,12 +1689,15 @@
           "delhi",
           "lagos",
           "london",
+          "moscow",
           "phoenix",
+          "portland",
           "reykjavik",
+          "sao_paulo",
           "tokyo"
         ],
-        "train_rows": 38192,
-        "validation_rows": 4370,
+        "train_rows": 87290,
+        "validation_rows": 10904,
         "variants": {
           "unweighted": {
             "beats_base_rate": true,
@@ -1035,51 +1705,143 @@
               "brier": true,
               "pr_auc": true
             },
-            "brier_ratio_to_persistence": 1.0025248575456265,
+            "brier_ratio_to_persistence": 1.0455011225484878,
             "held_out": {
               "base_rate": 0.23695014662756597,
-              "brier": 0.20232655661887067,
-              "lift": 1.419317360309578,
+              "brier": 0.194009741335905,
+              "lift": 1.630359882611608,
               "positives": 404,
-              "pr_auc": 0.3363074566364044,
+              "pr_auc": 0.3863140132405217,
               "rows": 1705
             },
             "in_sample": {
               "base_rate": 0.23695014662756597,
-              "brier": 0.19143172740963374,
-              "lift": 1.7837339551457523,
+              "brier": 0.18892088448829822,
+              "lift": 1.7821418518084178,
               "positives": 404,
-              "pr_auc": 0.4226560222163542,
+              "pr_auc": 0.4222787730971265,
               "rows": 1705
             },
-            "lift_over_persistence": 1.116117560235888,
-            "retained_of_in_sample": 0.7957001413888558
+            "lift_over_persistence": 1.282076401919042,
+            "retained_of_in_sample": 0.9148317127265767
           },
           "weighted": {
             "beats_base_rate": true,
             "beats_own_persistence": {
               "brier": false,
-              "pr_auc": false
+              "pr_auc": true
             },
-            "brier_ratio_to_persistence": 0.8516275627592792,
+            "brier_ratio_to_persistence": 0.8284873357247116,
             "held_out": {
               "base_rate": 0.23695014662756597,
-              "brier": 0.23817618313671746,
-              "lift": 1.2139718094908252,
+              "brier": 0.24482860944953408,
+              "lift": 1.5564645803678059,
               "positives": 404,
-              "pr_auc": 0.2876507982605826,
+              "pr_auc": 0.36880451053876456,
               "rows": 1705
             },
             "in_sample": {
               "base_rate": 0.23695014662756597,
-              "brier": 0.22395728795694086,
-              "lift": 1.623086598843775,
+              "brier": 0.22769084351744834,
+              "lift": 1.6977266462748855,
               "positives": 404,
-              "pr_auc": 0.38459060758526986,
+              "pr_auc": 0.40227657776835996,
               "rows": 1705
             },
-            "lift_over_persistence": 0.9546386820129578,
-            "retained_of_in_sample": 0.7479402579970855
+            "lift_over_persistence": 1.2239668862042083,
+            "retained_of_in_sample": 0.9167933976785758
+          }
+        }
+      },
+      {
+        "base_rate": 0.16588235294117648,
+        "city_id": "tokyo",
+        "fold_recommended_variant": "unweighted",
+        "persistence": {
+          "available": true,
+          "brier": 0.14280124756814067,
+          "fitted_on": "the other cities' training split",
+          "lift_over_base_rate": 1.3108594730193952,
+          "pr_auc": 0.2174484537596879,
+          "train_rows": 87290
+        },
+        "persistence_fits_agree_on_ranking": true,
+        "persistence_own": {
+          "available": true,
+          "brier": 0.14749677734482336,
+          "fitted_on": "this city's own training split",
+          "lift_over_base_rate": 1.3108594730193952,
+          "pr_auc": 0.2174484537596879,
+          "train_rows": 8729
+        },
+        "positives": 282,
+        "rows": 1700,
+        "train_cities": [
+          "cairo",
+          "delhi",
+          "lagos",
+          "london",
+          "moscow",
+          "phoenix",
+          "portland",
+          "reykjavik",
+          "sao_paulo",
+          "singapore"
+        ],
+        "train_rows": 87290,
+        "validation_rows": 10904,
+        "variants": {
+          "unweighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": true,
+              "pr_auc": true
+            },
+            "brier_ratio_to_persistence": 1.114111291249597,
+            "held_out": {
+              "base_rate": 0.16588235294117648,
+              "brier": 0.13238962615609945,
+              "lift": 2.194170765842542,
+              "positives": 282,
+              "pr_auc": 0.3639742093927041,
+              "rows": 1700
+            },
+            "in_sample": {
+              "base_rate": 0.16588235294117648,
+              "brier": 0.1348560005161337,
+              "lift": 2.2421949686546947,
+              "positives": 282,
+              "pr_auc": 0.3719405771533082,
+              "rows": 1700
+            },
+            "lift_over_persistence": 1.6738413315872478,
+            "retained_of_in_sample": 0.9785816115531797
+          },
+          "weighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": false,
+              "pr_auc": true
+            },
+            "brier_ratio_to_persistence": 0.5777684468942249,
+            "held_out": {
+              "base_rate": 0.16588235294117648,
+              "brier": 0.25528700665065285,
+              "lift": 2.0549611487542436,
+              "positives": 282,
+              "pr_auc": 0.3408817905580569,
+              "rows": 1700
+            },
+            "in_sample": {
+              "base_rate": 0.16588235294117648,
+              "brier": 0.2549766172263478,
+              "lift": 2.082040806008642,
+              "positives": 282,
+              "pr_auc": 0.3453738278202571,
+              "rows": 1700
+            },
+            "lift_over_persistence": 1.5676441228447673,
+            "retained_of_in_sample": 0.9869936952358243
           }
         }
       }
@@ -1087,7 +1849,7 @@
     "min_held_out_positives": 20,
     "min_held_out_rows": 200,
     "min_training_cities": 2,
-    "recorded_at": "2026-09-08T12:28:24+00:00",
+    "recorded_at": "2026-09-08T13:49:22+00:00",
     "scored_on": "test",
     "trained_on": "every other city's train and validation splits",
     "verdict": {
@@ -1095,21 +1857,33 @@
         "cairo": true,
         "delhi": true,
         "lagos": true,
+        "london": true,
+        "moscow": true,
         "phoenix": true,
-        "singapore": true
+        "portland": true,
+        "reykjavik": true,
+        "sao_paulo": true,
+        "singapore": true,
+        "tokyo": true
       },
       "beats_own_persistence": {
         "cairo": true,
         "delhi": true,
         "lagos": true,
+        "london": true,
+        "moscow": true,
         "phoenix": true,
-        "singapore": true
+        "portland": true,
+        "reykjavik": true,
+        "sao_paulo": true,
+        "singapore": true,
+        "tokyo": true
       },
-      "cities": 5,
-      "cities_beating_own_persistence": 5,
-      "median_lift_over_persistence": 1.5636091115180926,
-      "median_retained_of_in_sample": 1.0345095199362895,
-      "statement": "Held out of training entirely, each of the 5 scored cities is still ranked better by the model than by its own persistence baseline (5 of 5, median PR-AUC 1.56x persistence and 103% of the same city's in-sample score), so the model transfers to a city it has never seen.",
+      "cities": 11,
+      "cities_beating_own_persistence": 11,
+      "median_lift_over_persistence": 1.6090971033377277,
+      "median_retained_of_in_sample": 0.9785816115531797,
+      "statement": "Held out of training entirely, each of the 11 scored cities is still ranked better by the model than by its own persistence baseline (11 of 11, median PR-AUC 1.61x persistence and 98% of the same city's in-sample score), so the model transfers to a city it has never seen.",
       "transfers": true,
       "variant": "unweighted"
     },
@@ -1122,31 +1896,31 @@
           "base_rate": {
             "beaten_on_brier": true,
             "beaten_on_pr_auc": true,
-            "brier": 0.1239844477483142,
-            "brier_delta": 0.01528217995128596,
-            "pr_auc": 0.13578650364448624,
-            "pr_auc_delta": 0.22540796075293218
+            "brier": 0.10595344522294077,
+            "brier_delta": 0.012594325955270533,
+            "pr_auc": 0.11497237569060774,
+            "pr_auc_delta": 0.21630222663962184
           },
           "climatology": {
             "beaten_on_brier": true,
             "beaten_on_pr_auc": true,
-            "brier": 0.12453788639471097,
-            "brier_delta": 0.015835618597682732,
-            "pr_auc": 0.15141552079083645,
-            "pr_auc_delta": 0.20977894360658197
+            "brier": 0.10617748361898428,
+            "brier_delta": 0.012818364351314046,
+            "pr_auc": 0.11445132988682376,
+            "pr_auc_delta": 0.21682327244340582
           },
           "persistence": {
             "beaten_on_brier": true,
             "beaten_on_pr_auc": true,
-            "brier": 0.11466271929351604,
-            "brier_delta": 0.005960451496487801,
-            "pr_auc": 0.22931996590876963,
-            "pr_auc_delta": 0.1318744984886488
+            "brier": 0.09923370818014038,
+            "brier_delta": 0.005874588912470141,
+            "pr_auc": 0.19145926727751336,
+            "pr_auc_delta": 0.13981533505271623
           }
         },
-        "bytes": 362288,
+        "bytes": 415801,
         "committable": true,
-        "created_at": "2026-09-08T12:27:18+00:00",
+        "created_at": "2026-09-08T13:43:35+00:00",
         "feature_count": 27,
         "features": [
           "temperature_2m_mean",
@@ -1177,21 +1951,21 @@
           "latitude",
           "elevation_m"
         ],
-        "filename": "model-unweighted-v1-ac7ba867991e.joblib",
-        "fingerprint": "ac7ba867991e",
+        "filename": "model-unweighted-v1-2df05d793378.joblib",
+        "fingerprint": "2df05d793378",
         "format_version": 1,
         "git": {
           "branch": "phase-two",
-          "commit": "343c61a64369d35e27137697fbdb5c3c04b9bd0b",
+          "commit": "e55f1e472f8f79ef36c7f1d7eab128ea89f85703",
           "dirty": true,
-          "short_commit": "343c61a64369"
+          "short_commit": "e55f1e472f8f"
         },
         "hyperparameters": {
           "early_stopping_rounds": 50,
           "learning_rate": 0.03,
           "max_depth": 6,
           "min_child_weight": 10,
-          "n_estimators": 91,
+          "n_estimators": 82,
           "n_jobs": 1,
           "scale_pos_weight": 1.0,
           "seed": 42
@@ -1205,50 +1979,53 @@
         },
         "metrics": {
           "test": {
-            "base_rate": 0.13578650364448624,
-            "brier": 0.10870226779702824,
-            "lift": 2.660017414860988,
-            "mean_predicted": 0.07186920195817947,
-            "positives": 1155,
-            "pr_auc": 0.3611944643974184,
-            "rows": 8506
+            "base_rate": 0.11497237569060774,
+            "brier": 0.09335911926767024,
+            "lift": 2.881340846793443,
+            "mean_predicted": 0.06576455384492874,
+            "positives": 2081,
+            "pr_auc": 0.3312746023302296,
+            "rows": 18100
           },
           "train": {
-            "base_rate": 0.054325355384582594,
-            "brier": 0.043303932434106206,
-            "lift": 6.793017835628577,
-            "mean_predicted": 0.054252248257398605,
-            "positives": 2549,
-            "pr_auc": 0.3690331080543305,
-            "rows": 46921
+            "base_rate": 0.0501671544173549,
+            "brier": 0.04130247378325366,
+            "lift": 6.323457842091558,
+            "mean_predicted": 0.05020589008927345,
+            "positives": 4817,
+            "pr_auc": 0.31722988601584096,
+            "rows": 96019
           },
           "validation": {
-            "base_rate": 0.08627953837699212,
-            "brier": 0.0728795220778394,
-            "lift": 3.218839143897861,
-            "mean_predicted": 0.05693458765745163,
-            "positives": 471,
-            "pr_auc": 0.2777199554453,
-            "rows": 5459
+            "base_rate": 0.07079129492203785,
+            "brier": 0.06083589703057356,
+            "lift": 3.4144276117749603,
+            "mean_predicted": 0.05261223018169403,
+            "positives": 849,
+            "pr_auc": 0.24171175205511058,
+            "rows": 11993
           }
         },
         "recommended": true,
-        "sha256": "436ebf81ba7d5f5eb2f3b607ac28cb3da857545e88b5e0cc5978d94cb446f46c",
+        "sha256": "ddcf07203de8f48954c4ba9b53f112a67c6860f239bcceeaf09d8653e0c2a901",
         "training_window": {
           "cities": [
             "cairo",
             "delhi",
             "lagos",
             "london",
+            "moscow",
             "phoenix",
+            "portland",
             "reykjavik",
+            "sao_paulo",
             "singapore",
             "tokyo"
           ],
           "end": "2018-12-24",
-          "positive_rate": 0.054325355384582594,
-          "positives": 2549,
-          "rows": 46921,
+          "positive_rate": 0.0501671544173549,
+          "positives": 4817,
+          "rows": 96019,
           "start": "1995-01-31"
         },
         "variant": "unweighted"
@@ -1258,31 +2035,31 @@
           "base_rate": {
             "beaten_on_brier": false,
             "beaten_on_pr_auc": true,
-            "brier": 0.1239844477483142,
-            "brier_delta": -0.09594822469210794,
-            "pr_auc": 0.13578650364448624,
-            "pr_auc_delta": 0.18480621080442416
+            "brier": 0.10595344522294077,
+            "brier_delta": -0.10176568814325794,
+            "pr_auc": 0.11497237569060774,
+            "pr_auc_delta": 0.18763604851235444
           },
           "climatology": {
             "beaten_on_brier": false,
             "beaten_on_pr_auc": true,
-            "brier": 0.12453788639471097,
-            "brier_delta": -0.09539478604571117,
-            "pr_auc": 0.15141552079083645,
-            "pr_auc_delta": 0.16917719365807396
+            "brier": 0.10617748361898428,
+            "brier_delta": -0.10154164974721443,
+            "pr_auc": 0.11445132988682376,
+            "pr_auc_delta": 0.18815709431613842
           },
           "persistence": {
             "beaten_on_brier": false,
             "beaten_on_pr_auc": true,
-            "brier": 0.11466271929351604,
-            "brier_delta": -0.1052699531469061,
-            "pr_auc": 0.22931996590876963,
-            "pr_auc_delta": 0.09127274854014078
+            "brier": 0.09923370818014038,
+            "brier_delta": -0.10848542518605833,
+            "pr_auc": 0.19145926727751336,
+            "pr_auc_delta": 0.11114915692544883
           }
         },
-        "bytes": 291486,
+        "bytes": 213167,
         "committable": true,
-        "created_at": "2026-09-08T12:27:18+00:00",
+        "created_at": "2026-09-08T13:43:35+00:00",
         "feature_count": 27,
         "features": [
           "temperature_2m_mean",
@@ -1313,23 +2090,23 @@
           "latitude",
           "elevation_m"
         ],
-        "filename": "model-weighted-v1-1d874fa943d9.joblib",
-        "fingerprint": "1d874fa943d9",
+        "filename": "model-weighted-v1-4da745d3e267.joblib",
+        "fingerprint": "4da745d3e267",
         "format_version": 1,
         "git": {
           "branch": "phase-two",
-          "commit": "343c61a64369d35e27137697fbdb5c3c04b9bd0b",
+          "commit": "e55f1e472f8f79ef36c7f1d7eab128ea89f85703",
           "dirty": true,
-          "short_commit": "343c61a64369"
+          "short_commit": "e55f1e472f8f"
         },
         "hyperparameters": {
           "early_stopping_rounds": 50,
-          "learning_rate": 0.03,
-          "max_depth": 6,
-          "min_child_weight": 10,
-          "n_estimators": 23,
+          "learning_rate": 0.1,
+          "max_depth": 4,
+          "min_child_weight": 1,
+          "n_estimators": 70,
           "n_jobs": 1,
-          "scale_pos_weight": 17.4076108277756,
+          "scale_pos_weight": 18.93336101307868,
           "seed": 42
         },
         "libraries": {
@@ -1341,50 +2118,53 @@
         },
         "metrics": {
           "test": {
-            "base_rate": 0.13578650364448624,
-            "brier": 0.21993267244042214,
-            "lift": 2.361005739482625,
-            "mean_predicted": 0.46949073672294617,
-            "positives": 1155,
-            "pr_auc": 0.3205927144489104,
-            "rows": 8506
+            "base_rate": 0.11497237569060774,
+            "brier": 0.2077191333661987,
+            "lift": 2.632009840496692,
+            "mean_predicted": 0.44373056292533875,
+            "positives": 2081,
+            "pr_auc": 0.3026084242029622,
+            "rows": 18100
           },
           "train": {
-            "base_rate": 0.054325355384582594,
-            "brier": 0.20552839281915836,
-            "lift": 6.078785518026612,
-            "mean_predicted": 0.4542660117149353,
-            "positives": 2549,
-            "pr_auc": 0.3302321835734497,
-            "rows": 46921
+            "base_rate": 0.0501671544173549,
+            "brier": 0.177036673550979,
+            "lift": 5.671741991477819,
+            "mean_predicted": 0.4095379114151001,
+            "positives": 4817,
+            "pr_auc": 0.2845351563018637,
+            "rows": 96019
           },
           "validation": {
-            "base_rate": 0.08627953837699212,
-            "brier": 0.2110861869495933,
-            "lift": 2.9584993190682463,
-            "mean_predicted": 0.45597681403160095,
-            "positives": 471,
-            "pr_auc": 0.2552579555378538,
-            "rows": 5459
+            "base_rate": 0.07079129492203785,
+            "brier": 0.18855815798204775,
+            "lift": 3.2165563071208565,
+            "mean_predicted": 0.41502586007118225,
+            "positives": 849,
+            "pr_auc": 0.2277041861707335,
+            "rows": 11993
           }
         },
         "recommended": false,
-        "sha256": "7d33bf3c139faf1ea935af73dd947ca868e9c6c2055d4e5d6f5a9aecd7ee9726",
+        "sha256": "9a63c5a013d92e44dfce74c0bfb13c38790a3df0f0bd79d94d1e4032e76fbc1b",
         "training_window": {
           "cities": [
             "cairo",
             "delhi",
             "lagos",
             "london",
+            "moscow",
             "phoenix",
+            "portland",
             "reykjavik",
+            "sao_paulo",
             "singapore",
             "tokyo"
           ],
           "end": "2018-12-24",
-          "positive_rate": 0.054325355384582594,
-          "positives": 2549,
-          "rows": 46921,
+          "positive_rate": 0.0501671544173549,
+          "positives": 4817,
+          "rows": 96019,
           "start": "1995-01-31"
         },
         "variant": "weighted"
@@ -1393,9 +2173,9 @@
     "estimator": "xgboost.XGBClassifier",
     "fitted_on": "train",
     "recommended_variant": "unweighted",
-    "recorded_at": "2026-09-08T12:27:18+00:00",
+    "recorded_at": "2026-09-08T13:43:35+00:00",
     "resampling": "none",
-    "scale_pos_weight_observed": 17.4076108277756,
+    "scale_pos_weight_observed": 18.93336101307868,
     "specified_variant": "weighted",
     "tuned_on": "validation",
     "variants": {
@@ -1432,7 +2212,7 @@
           "elevation_m"
         ],
         "max_rounds": 2000,
-        "n_estimators": 91,
+        "n_estimators": 82,
         "n_jobs": 1,
         "params": {
           "learning_rate": 0.03,
@@ -1442,170 +2222,170 @@
         "scale_pos_weight": 1.0,
         "seed": 42,
         "test": {
-          "base_rate": 0.13578650364448624,
-          "brier": 0.10870226779702824,
-          "lift": 2.660017414860988,
-          "mean_predicted": 0.07186920195817947,
-          "positives": 1155,
-          "pr_auc": 0.3611944643974184,
-          "rows": 8506
+          "base_rate": 0.11497237569060774,
+          "brier": 0.09335911926767024,
+          "lift": 2.881340846793443,
+          "mean_predicted": 0.06576455384492874,
+          "positives": 2081,
+          "pr_auc": 0.3312746023302296,
+          "rows": 18100
         },
         "top_importances": [
           {
             "feature": "z_temperature_2m_mean",
-            "gain": 0.13839435577392578
+            "gain": 0.18944965302944183
           },
           {
             "feature": "anomaly_days_trailing30",
-            "gain": 0.10552331060171127
+            "gain": 0.08863495290279388
+          },
+          {
+            "feature": "temperature_2m_mean",
+            "gain": 0.058099839836359024
           },
           {
             "feature": "elevation_m",
-            "gain": 0.049501921981573105
-          },
-          {
-            "feature": "temperature_2m_mean_roll30_mean",
-            "gain": 0.042733822017908096
-          },
-          {
-            "feature": "latitude",
-            "gain": 0.039483897387981415
-          },
-          {
-            "feature": "day_of_year_cos",
-            "gain": 0.036741264164447784
-          },
-          {
-            "feature": "pressure_msl_mean",
-            "gain": 0.03595782071352005
+            "gain": 0.046031124889850616
           },
           {
             "feature": "pressure_msl_mean_roll30_var",
-            "gain": 0.03582704812288284
+            "gain": 0.03423594683408737
           },
           {
-            "feature": "day_of_year_sin",
-            "gain": 0.03509297966957092
+            "feature": "latitude",
+            "gain": 0.0338384285569191
+          },
+          {
+            "feature": "temperature_2m_mean_roll30_mean",
+            "gain": 0.03379783034324646
+          },
+          {
+            "feature": "temperature_2m_mean_roll7_mean",
+            "gain": 0.03165287896990776
           },
           {
             "feature": "temperature_2m_mean_roll30_var",
-            "gain": 0.03431959077715874
+            "gain": 0.03159302845597267
+          },
+          {
+            "feature": "day_of_year_cos",
+            "gain": 0.031197428703308105
           }
         ],
         "train": {
-          "base_rate": 0.054325355384582594,
-          "brier": 0.043303932434106206,
-          "lift": 6.793017835628577,
-          "mean_predicted": 0.054252248257398605,
-          "positives": 2549,
-          "pr_auc": 0.3690331080543305,
-          "rows": 46921
+          "base_rate": 0.0501671544173549,
+          "brier": 0.04130247378325366,
+          "lift": 6.323457842091558,
+          "mean_predicted": 0.05020589008927345,
+          "positives": 4817,
+          "pr_auc": 0.31722988601584096,
+          "rows": 96019
         },
         "validation": {
-          "base_rate": 0.08627953837699212,
-          "brier": 0.0728795220778394,
-          "lift": 3.218839143897861,
-          "mean_predicted": 0.05693458765745163,
-          "positives": 471,
-          "pr_auc": 0.2777199554453,
-          "rows": 5459
+          "base_rate": 0.07079129492203785,
+          "brier": 0.06083589703057356,
+          "lift": 3.4144276117749603,
+          "mean_predicted": 0.05261223018169403,
+          "positives": 849,
+          "pr_auc": 0.24171175205511058,
+          "rows": 11993
         },
         "validation_search": [
           {
             "learning_rate": 0.03,
             "max_depth": 3,
             "min_child_weight": 1,
-            "n_estimators": 131,
-            "validation_brier": 0.07257701075603322,
-            "validation_pr_auc": 0.27343886200744877
+            "n_estimators": 22,
+            "validation_brier": 0.06297431868735463,
+            "validation_pr_auc": 0.22356044660729546
           },
           {
             "learning_rate": 0.03,
             "max_depth": 3,
             "min_child_weight": 10,
-            "n_estimators": 126,
-            "validation_brier": 0.07269859608060507,
-            "validation_pr_auc": 0.2714403888871512
+            "n_estimators": 46,
+            "validation_brier": 0.061938411428706645,
+            "validation_pr_auc": 0.22677788351866582
           },
           {
             "learning_rate": 0.1,
             "max_depth": 3,
             "min_child_weight": 1,
-            "n_estimators": 10,
-            "validation_brier": 0.07407915360033719,
-            "validation_pr_auc": 0.25281311360785846
+            "n_estimators": 7,
+            "validation_brier": 0.062437316515727995,
+            "validation_pr_auc": 0.21966513311858588
           },
           {
             "learning_rate": 0.1,
             "max_depth": 3,
             "min_child_weight": 10,
+            "n_estimators": 7,
+            "validation_brier": 0.062395960574928265,
+            "validation_pr_auc": 0.2195016592984576
+          },
+          {
+            "learning_rate": 0.03,
+            "max_depth": 4,
+            "min_child_weight": 1,
+            "n_estimators": 31,
+            "validation_brier": 0.06221326744575393,
+            "validation_pr_auc": 0.23336586733947057
+          },
+          {
+            "learning_rate": 0.03,
+            "max_depth": 4,
+            "min_child_weight": 10,
+            "n_estimators": 40,
+            "validation_brier": 0.06173070914101272,
+            "validation_pr_auc": 0.23298235152495284
+          },
+          {
+            "learning_rate": 0.1,
+            "max_depth": 4,
+            "min_child_weight": 1,
+            "n_estimators": 14,
+            "validation_brier": 0.06123834548125967,
+            "validation_pr_auc": 0.23785202401067015
+          },
+          {
+            "learning_rate": 0.1,
+            "max_depth": 4,
+            "min_child_weight": 10,
+            "n_estimators": 14,
+            "validation_brier": 0.06121946502384707,
+            "validation_pr_auc": 0.23521968645571673
+          },
+          {
+            "learning_rate": 0.03,
+            "max_depth": 6,
+            "min_child_weight": 1,
+            "n_estimators": 89,
+            "validation_brier": 0.06130199398352794,
+            "validation_pr_auc": 0.2307763336533057
+          },
+          {
+            "learning_rate": 0.03,
+            "max_depth": 6,
+            "min_child_weight": 10,
+            "n_estimators": 82,
+            "validation_brier": 0.06083589703057356,
+            "validation_pr_auc": 0.24171175205511058
+          },
+          {
+            "learning_rate": 0.1,
+            "max_depth": 6,
+            "min_child_weight": 1,
             "n_estimators": 32,
-            "validation_brier": 0.07280668619630082,
-            "validation_pr_auc": 0.26780487693523713
-          },
-          {
-            "learning_rate": 0.03,
-            "max_depth": 4,
-            "min_child_weight": 1,
-            "n_estimators": 78,
-            "validation_brier": 0.07332685462689438,
-            "validation_pr_auc": 0.2664782632447431
-          },
-          {
-            "learning_rate": 0.03,
-            "max_depth": 4,
-            "min_child_weight": 10,
-            "n_estimators": 20,
-            "validation_brier": 0.07528268936337251,
-            "validation_pr_auc": 0.2756264304890519
-          },
-          {
-            "learning_rate": 0.1,
-            "max_depth": 4,
-            "min_child_weight": 1,
-            "n_estimators": 9,
-            "validation_brier": 0.07375815346279294,
-            "validation_pr_auc": 0.2708121580955095
-          },
-          {
-            "learning_rate": 0.1,
-            "max_depth": 4,
-            "min_child_weight": 10,
-            "n_estimators": 6,
-            "validation_brier": 0.07451167730434172,
-            "validation_pr_auc": 0.26183011930402855
-          },
-          {
-            "learning_rate": 0.03,
-            "max_depth": 6,
-            "min_child_weight": 1,
-            "n_estimators": 48,
-            "validation_brier": 0.07431096594437892,
-            "validation_pr_auc": 0.2655242344527123
-          },
-          {
-            "learning_rate": 0.03,
-            "max_depth": 6,
-            "min_child_weight": 10,
-            "n_estimators": 91,
-            "validation_brier": 0.0728795220778394,
-            "validation_pr_auc": 0.2777199554453
-          },
-          {
-            "learning_rate": 0.1,
-            "max_depth": 6,
-            "min_child_weight": 1,
-            "n_estimators": 15,
-            "validation_brier": 0.07370665692108398,
-            "validation_pr_auc": 0.26607173398129613
+            "validation_brier": 0.06174559050892321,
+            "validation_pr_auc": 0.2165326765028533
           },
           {
             "learning_rate": 0.1,
             "max_depth": 6,
             "min_child_weight": 10,
-            "n_estimators": 11,
-            "validation_brier": 0.07343319754112956,
-            "validation_pr_auc": 0.2733900822057413
+            "n_estimators": 18,
+            "validation_brier": 0.06118372459808608,
+            "validation_pr_auc": 0.23446553913233487
           }
         ]
       },
@@ -1642,213 +2422,219 @@
           "elevation_m"
         ],
         "max_rounds": 2000,
-        "n_estimators": 23,
+        "n_estimators": 70,
         "n_jobs": 1,
         "params": {
-          "learning_rate": 0.03,
-          "max_depth": 6,
-          "min_child_weight": 10
+          "learning_rate": 0.1,
+          "max_depth": 4,
+          "min_child_weight": 1
         },
-        "scale_pos_weight": 17.4076108277756,
+        "scale_pos_weight": 18.93336101307868,
         "seed": 42,
         "test": {
-          "base_rate": 0.13578650364448624,
-          "brier": 0.21993267244042214,
-          "lift": 2.361005739482625,
-          "mean_predicted": 0.46949073672294617,
-          "positives": 1155,
-          "pr_auc": 0.3205927144489104,
-          "rows": 8506
+          "base_rate": 0.11497237569060774,
+          "brier": 0.2077191333661987,
+          "lift": 2.632009840496692,
+          "mean_predicted": 0.44373056292533875,
+          "positives": 2081,
+          "pr_auc": 0.3026084242029622,
+          "rows": 18100
         },
         "top_importances": [
           {
             "feature": "anomaly_days_trailing30",
-            "gain": 0.19968341290950775
+            "gain": 0.13514187932014465
           },
           {
             "feature": "z_temperature_2m_mean",
-            "gain": 0.1045624241232872
+            "gain": 0.12146511673927307
           },
           {
             "feature": "latitude",
-            "gain": 0.06210508197546005
+            "gain": 0.05117058753967285
           },
           {
             "feature": "elevation_m",
-            "gain": 0.049898408353328705
+            "gain": 0.049621812999248505
+          },
+          {
+            "feature": "temperature_2m_mean",
+            "gain": 0.04960062727332115
           },
           {
             "feature": "temperature_2m_mean_roll30_mean",
-            "gain": 0.04530000686645508
+            "gain": 0.040102869272232056
           },
           {
             "feature": "day_of_year_cos",
-            "gain": 0.04093421250581741
-          },
-          {
-            "feature": "temperature_2m_mean_roll7_mean",
-            "gain": 0.03967003896832466
-          },
-          {
-            "feature": "pressure_msl_mean_roll30_var",
-            "gain": 0.03558727353811264
+            "gain": 0.035728875547647476
           },
           {
             "feature": "pressure_msl_mean_roll30_mean",
-            "gain": 0.035228364169597626
+            "gain": 0.034730926156044006
           },
           {
-            "feature": "pressure_msl_mean_roll7_mean",
-            "gain": 0.032705243676900864
+            "feature": "temperature_2m_mean_roll7_mean",
+            "gain": 0.03414576128125191
+          },
+          {
+            "feature": "temperature_2m_mean_lag1",
+            "gain": 0.033165477216243744
           }
         ],
         "train": {
-          "base_rate": 0.054325355384582594,
-          "brier": 0.20552839281915836,
-          "lift": 6.078785518026612,
-          "mean_predicted": 0.4542660117149353,
-          "positives": 2549,
-          "pr_auc": 0.3302321835734497,
-          "rows": 46921
+          "base_rate": 0.0501671544173549,
+          "brier": 0.177036673550979,
+          "lift": 5.671741991477819,
+          "mean_predicted": 0.4095379114151001,
+          "positives": 4817,
+          "pr_auc": 0.2845351563018637,
+          "rows": 96019
         },
         "validation": {
-          "base_rate": 0.08627953837699212,
-          "brier": 0.2110861869495933,
-          "lift": 2.9584993190682463,
-          "mean_predicted": 0.45597681403160095,
-          "positives": 471,
-          "pr_auc": 0.2552579555378538,
-          "rows": 5459
+          "base_rate": 0.07079129492203785,
+          "brier": 0.18855815798204775,
+          "lift": 3.2165563071208565,
+          "mean_predicted": 0.41502586007118225,
+          "positives": 849,
+          "pr_auc": 0.2277041861707335,
+          "rows": 11993
         },
         "validation_search": [
           {
             "learning_rate": 0.03,
             "max_depth": 3,
             "min_child_weight": 1,
-            "n_estimators": 8,
-            "validation_brier": 0.24202981100240253,
-            "validation_pr_auc": 0.23602328533642253
+            "n_estimators": 18,
+            "validation_brier": 0.23390413250190537,
+            "validation_pr_auc": 0.21631486817880283
           },
           {
             "learning_rate": 0.03,
             "max_depth": 3,
+            "min_child_weight": 10,
+            "n_estimators": 18,
+            "validation_brier": 0.23390413250190537,
+            "validation_pr_auc": 0.21631486817880283
+          },
+          {
+            "learning_rate": 0.1,
+            "max_depth": 3,
+            "min_child_weight": 1,
+            "n_estimators": 24,
+            "validation_brier": 0.2160885676051381,
+            "validation_pr_auc": 0.22048609194805985
+          },
+          {
+            "learning_rate": 0.1,
+            "max_depth": 3,
+            "min_child_weight": 10,
+            "n_estimators": 24,
+            "validation_brier": 0.21613921273240555,
+            "validation_pr_auc": 0.22274100278398162
+          },
+          {
+            "learning_rate": 0.03,
+            "max_depth": 4,
+            "min_child_weight": 1,
+            "n_estimators": 44,
+            "validation_brier": 0.2197012504558015,
+            "validation_pr_auc": 0.22689333518506566
+          },
+          {
+            "learning_rate": 0.03,
+            "max_depth": 4,
+            "min_child_weight": 10,
+            "n_estimators": 14,
+            "validation_brier": 0.23483872495413965,
+            "validation_pr_auc": 0.22283426283719798
+          },
+          {
+            "learning_rate": 0.1,
+            "max_depth": 4,
+            "min_child_weight": 1,
+            "n_estimators": 70,
+            "validation_brier": 0.18855815798204775,
+            "validation_pr_auc": 0.2277041861707335
+          },
+          {
+            "learning_rate": 0.1,
+            "max_depth": 4,
             "min_child_weight": 10,
             "n_estimators": 15,
-            "validation_brier": 0.23772760480767455,
-            "validation_pr_auc": 0.24750647707648168
-          },
-          {
-            "learning_rate": 0.1,
-            "max_depth": 3,
-            "min_child_weight": 1,
-            "n_estimators": 15,
-            "validation_brier": 0.22439632242171298,
-            "validation_pr_auc": 0.24305536267333727
-          },
-          {
-            "learning_rate": 0.1,
-            "max_depth": 3,
-            "min_child_weight": 10,
-            "n_estimators": 10,
-            "validation_brier": 0.2301539444936236,
-            "validation_pr_auc": 0.24144404029520686
-          },
-          {
-            "learning_rate": 0.03,
-            "max_depth": 4,
-            "min_child_weight": 1,
-            "n_estimators": 5,
-            "validation_brier": 0.24257846126457178,
-            "validation_pr_auc": 0.23157052898716707
-          },
-          {
-            "learning_rate": 0.03,
-            "max_depth": 4,
-            "min_child_weight": 10,
-            "n_estimators": 20,
-            "validation_brier": 0.22765747460762117,
-            "validation_pr_auc": 0.24937024432514
-          },
-          {
-            "learning_rate": 0.1,
-            "max_depth": 4,
-            "min_child_weight": 1,
-            "n_estimators": 11,
-            "validation_brier": 0.2184707310889968,
-            "validation_pr_auc": 0.23973138974311106
-          },
-          {
-            "learning_rate": 0.1,
-            "max_depth": 4,
-            "min_child_weight": 10,
-            "n_estimators": 7,
-            "validation_brier": 0.22554425316579318,
-            "validation_pr_auc": 0.24787259810301526
+            "validation_brier": 0.21702584569903044,
+            "validation_pr_auc": 0.2274944548767391
           },
           {
             "learning_rate": 0.03,
             "max_depth": 6,
             "min_child_weight": 1,
-            "n_estimators": 11,
-            "validation_brier": 0.22655047600723222,
-            "validation_pr_auc": 0.2183146039346585
+            "n_estimators": 105,
+            "validation_brier": 0.18332785362616247,
+            "validation_pr_auc": 0.2141582433799898
           },
           {
             "learning_rate": 0.03,
             "max_depth": 6,
             "min_child_weight": 10,
-            "n_estimators": 23,
-            "validation_brier": 0.2110861869495933,
-            "validation_pr_auc": 0.2552579555378538
+            "n_estimators": 92,
+            "validation_brier": 0.18793092717731114,
+            "validation_pr_auc": 0.22576512038516713
           },
           {
             "learning_rate": 0.1,
             "max_depth": 6,
             "min_child_weight": 1,
-            "n_estimators": 11,
-            "validation_brier": 0.19880283702163715,
-            "validation_pr_auc": 0.22519695645240917
+            "n_estimators": 32,
+            "validation_brier": 0.18286249464701906,
+            "validation_pr_auc": 0.22066664556357615
           },
           {
             "learning_rate": 0.1,
             "max_depth": 6,
             "min_child_weight": 10,
-            "n_estimators": 10,
-            "validation_brier": 0.20347191214943117,
-            "validation_pr_auc": 0.25086718653921786
+            "n_estimators": 18,
+            "validation_brier": 0.19816885758342334,
+            "validation_pr_auc": 0.21778603395724985
           }
         ]
       }
     },
     "xgboost_version": "3.4.1"
   },
-  "schema_version": 6,
+  "schema_version": 7,
   "snapshot": {
-    "cities": 9,
+    "cities": 12,
     "first_date": "1995-01-31",
-    "last_date": "2026-09-01",
+    "last_date": "2026-09-02",
     "last_date_by_city": {
-      "cairo": "2026-08-26",
-      "delhi": "2026-08-26",
-      "lagos": "2026-08-31",
-      "london": "1998-09-05",
-      "phoenix": "2026-08-26",
-      "reykjavik": "2003-09-07",
+      "cairo": "2026-08-27",
+      "delhi": "2026-08-27",
+      "lagos": "2026-09-02",
+      "london": "2026-08-27",
+      "moscow": "2026-08-27",
+      "phoenix": "2026-08-27",
+      "portland": "2026-08-27",
+      "reykjavik": "2026-08-27",
+      "sao_paulo": "2024-12-24",
       "singapore": "2026-09-01",
       "sydney": "2021-09-07",
-      "tokyo": "2003-12-24"
+      "tokyo": "2026-08-27"
     },
-    "rows": 60956,
+    "rows": 126266,
     "rows_by_city": {
-      "cairo": 11531,
-      "delhi": 11531,
-      "lagos": 11536,
-      "london": 12,
-      "phoenix": 11531,
-      "reykjavik": 14,
+      "cairo": 11532,
+      "delhi": 11532,
+      "lagos": 11538,
+      "london": 11532,
+      "moscow": 11532,
+      "phoenix": 11532,
+      "portland": 11532,
+      "reykjavik": 11532,
+      "sao_paulo": 10921,
       "singapore": 11537,
       "sydney": 14,
-      "tokyo": 3250
+      "tokyo": 11532
     }
   },
   "split": {
@@ -1873,29 +2659,537 @@
     "purge_days": 7,
     "summary": [
       {
-        "base_rate": 0.054325355384582594,
+        "base_rate": 0.0501671544173549,
         "end": "2018-12-24",
-        "positives": 2549,
-        "rows": 46921,
+        "positives": 4817,
+        "rows": 96019,
         "split": "train",
         "start": "1995-01-31"
       },
       {
-        "base_rate": 0.08627953837699212,
+        "base_rate": 0.07079129492203785,
         "end": "2021-12-24",
-        "positives": 471,
-        "rows": 5459,
+        "positives": 849,
+        "rows": 11993,
         "split": "validation",
         "start": "2019-01-01"
       },
       {
-        "base_rate": 0.13578650364448624,
-        "end": "2026-09-01",
-        "positives": 1155,
-        "rows": 8506,
+        "base_rate": 0.11497237569060774,
+        "end": "2026-09-02",
+        "positives": 2081,
+        "rows": 18100,
         "split": "test",
         "start": "2022-01-01"
       }
+    ]
+  },
+  "threshold_sensitivity": {
+    "holds_at_every_threshold": {
+      "brier": true,
+      "every_city_on_persistence": false,
+      "f1": true,
+      "pr_auc": true
+    },
+    "points": [
+      {
+        "base_rate": {
+          "test": 0.26674766664825755,
+          "train": 0.15631281308907613,
+          "validation": 0.20136746435420663
+        },
+        "beats_persistence_in_every_city": true,
+        "brier": 0.18157547619811912,
+        "cities_beaten_on_persistence": 11,
+        "cities_scored": [
+          "cairo",
+          "delhi",
+          "lagos",
+          "london",
+          "moscow",
+          "phoenix",
+          "portland",
+          "reykjavik",
+          "sao_paulo",
+          "singapore",
+          "tokyo"
+        ],
+        "f1": 0.4642559881623971,
+        "is_shipped": false,
+        "lift_over_persistence": 1.4277283053354481,
+        "persistence_f1": 0.4211535946287657,
+        "persistence_pr_auc": 0.3397768274564546,
+        "pr_auc": 0.48510899405665886,
+        "recommended_variant": "unweighted",
+        "rows": {
+          "test": 18107,
+          "train": 96019,
+          "validation": 11993
+        },
+        "summary": [
+          {
+            "base_rate": 0.26674766664825755,
+            "brier": 0.20778920586660551,
+            "brier_over_persistence": 0.9385033181252248,
+            "f1": 0.4211535946287657,
+            "flagged": 18107,
+            "lift": 1.0,
+            "lift_over_persistence": 0.7850672709057642,
+            "mean_predicted": 0.1563128130890761,
+            "pr_auc": 0.26674766664825755,
+            "precision": 0.26674766664825755,
+            "predictor": "base_rate",
+            "recall": 1.0,
+            "threshold": 0.15631281308907613
+          },
+          {
+            "base_rate": 0.26674766664825755,
+            "brier": 0.1950108591764147,
+            "brier_over_persistence": 1.0,
+            "f1": 0.4211535946287657,
+            "flagged": 18107,
+            "lift": 1.2737761935308538,
+            "lift_over_persistence": 1.0,
+            "mean_predicted": 0.17358500349878314,
+            "pr_auc": 0.3397768274564546,
+            "precision": 0.26674766664825755,
+            "predictor": "persistence",
+            "recall": 1.0,
+            "threshold": 0.13166991777574755
+          },
+          {
+            "base_rate": 0.26674766664825755,
+            "brier": 0.20925708045789973,
+            "brier_over_persistence": 0.9319200036132053,
+            "f1": 0.40786442066458445,
+            "flagged": 14701,
+            "lift": 0.9473862299006252,
+            "lift_over_persistence": 0.7437619220017847,
+            "mean_predicted": 0.15566116144288425,
+            "pr_auc": 0.25271306624068146,
+            "precision": 0.27093395007142373,
+            "predictor": "climatology",
+            "recall": 0.8246376811594203,
+            "threshold": 0.13838927712223623
+          },
+          {
+            "base_rate": 0.26674766664825755,
+            "brier": 0.22136969549314736,
+            "brier_over_persistence": 0.8809284339574447,
+            "f1": 0.4613328241359557,
+            "flagged": 5644,
+            "lift": 1.815013415697319,
+            "lift_over_persistence": 1.4249076289188436,
+            "mean_predicted": 0.47530683875083923,
+            "pr_auc": 0.48415059357254375,
+            "precision": 0.42806520198440823,
+            "predictor": "model_weighted",
+            "recall": 0.5002070393374741,
+            "threshold": 0.5155420899391174
+          },
+          {
+            "base_rate": 0.26674766664825755,
+            "brier": 0.18157547619811912,
+            "brier_over_persistence": 1.0739933787293834,
+            "f1": 0.4642559881623971,
+            "flagged": 5983,
+            "lift": 1.8186063261664436,
+            "lift_over_persistence": 1.4277283053354481,
+            "mean_predicted": 0.18315742909908295,
+            "pr_auc": 0.48510899405665886,
+            "precision": 0.41952197894033094,
+            "predictor": "model_unweighted",
+            "recall": 0.5196687370600414,
+            "threshold": 0.16963523626327515
+          }
+        ],
+        "threshold": 2.0,
+        "verdict": {
+          "model_unweighted": {
+            "beats_every_baseline": {
+              "brier": true,
+              "f1": true,
+              "pr_auc": true
+            },
+            "detail": {
+              "brier": {
+                "base_rate": true,
+                "climatology": true,
+                "persistence": true
+              },
+              "f1": {
+                "base_rate": true,
+                "climatology": true,
+                "persistence": true
+              },
+              "pr_auc": {
+                "base_rate": true,
+                "climatology": true,
+                "persistence": true
+              }
+            }
+          },
+          "model_weighted": {
+            "beats_every_baseline": {
+              "brier": false,
+              "f1": true,
+              "pr_auc": true
+            },
+            "detail": {
+              "brier": {
+                "base_rate": false,
+                "climatology": false,
+                "persistence": false
+              },
+              "f1": {
+                "base_rate": true,
+                "climatology": true,
+                "persistence": true
+              },
+              "pr_auc": {
+                "base_rate": true,
+                "climatology": true,
+                "persistence": true
+              }
+            }
+          }
+        }
+      },
+      {
+        "base_rate": {
+          "test": 0.11497237569060774,
+          "train": 0.0501671544173549,
+          "validation": 0.07079129492203785
+        },
+        "beats_persistence_in_every_city": true,
+        "brier": 0.09335911926767024,
+        "cities_beaten_on_persistence": 11,
+        "cities_scored": [
+          "cairo",
+          "delhi",
+          "lagos",
+          "london",
+          "moscow",
+          "phoenix",
+          "portland",
+          "reykjavik",
+          "sao_paulo",
+          "singapore",
+          "tokyo"
+        ],
+        "f1": 0.35777126099706746,
+        "is_shipped": true,
+        "lift_over_persistence": 1.7302615174540437,
+        "persistence_f1": 0.3397590361445783,
+        "persistence_pr_auc": 0.19145926727751336,
+        "pr_auc": 0.3312746023302296,
+        "recommended_variant": "unweighted",
+        "rows": {
+          "test": 18100,
+          "train": 96019,
+          "validation": 11993
+        },
+        "summary": [
+          {
+            "base_rate": 0.11497237569060774,
+            "brier": 0.10595344522294077,
+            "brier_over_persistence": 0.9365783997994485,
+            "f1": 0.20623358604628114,
+            "flagged": 18100,
+            "lift": 1.0,
+            "lift_over_persistence": 0.6005056706080432,
+            "mean_predicted": 0.050167154417354906,
+            "pr_auc": 0.11497237569060774,
+            "precision": 0.11497237569060774,
+            "predictor": "base_rate",
+            "recall": 1.0,
+            "threshold": 0.0501671544173549
+          },
+          {
+            "base_rate": 0.11497237569060774,
+            "brier": 0.09923370818014038,
+            "brier_over_persistence": 1.0,
+            "f1": 0.3397590361445783,
+            "flagged": 2069,
+            "lift": 1.665263208901005,
+            "lift_over_persistence": 1.0,
+            "mean_predicted": 0.06001174846692503,
+            "pr_auc": 0.19145926727751336,
+            "precision": 0.3407443209279845,
+            "predictor": "persistence",
+            "recall": 0.3387794329649207,
+            "threshold": 0.1961028192371476
+          },
+          {
+            "base_rate": 0.11497237569060774,
+            "brier": 0.10617748361898428,
+            "brier_over_persistence": 0.9346021849249931,
+            "f1": 0.20615767545046262,
+            "flagged": 16400,
+            "lift": 0.9954680783044257,
+            "lift_over_persistence": 0.5977842259310993,
+            "mean_predicted": 0.05059247482038977,
+            "pr_auc": 0.11445132988682376,
+            "precision": 0.11615853658536586,
+            "predictor": "climatology",
+            "recall": 0.9154252763094666,
+            "threshold": 0.037003093137816474
+          },
+          {
+            "base_rate": 0.11497237569060774,
+            "brier": 0.2077191333661987,
+            "brier_over_persistence": 0.4777302243274633,
+            "f1": 0.34606866002214837,
+            "flagged": 1531,
+            "lift": 2.632009840496692,
+            "lift_over_persistence": 1.5805368343144346,
+            "mean_predicted": 0.44373056292533875,
+            "pr_auc": 0.3026084242029622,
+            "precision": 0.4082299150881777,
+            "predictor": "model_weighted",
+            "recall": 0.30033637674195096,
+            "threshold": 0.7084817290306091
+          },
+          {
+            "base_rate": 0.11497237569060774,
+            "brier": 0.09335911926767024,
+            "brier_over_persistence": 1.062924639376975,
+            "f1": 0.35777126099706746,
+            "flagged": 2011,
+            "lift": 2.881340846793443,
+            "lift_over_persistence": 1.7302615174540437,
+            "mean_predicted": 0.06576455384492874,
+            "pr_auc": 0.3312746023302296,
+            "precision": 0.3639980109398309,
+            "predictor": "model_unweighted",
+            "recall": 0.351753964440173,
+            "threshold": 0.10750503093004227
+          }
+        ],
+        "threshold": 2.5,
+        "verdict": {
+          "model_unweighted": {
+            "beats_every_baseline": {
+              "brier": true,
+              "f1": true,
+              "pr_auc": true
+            },
+            "detail": {
+              "brier": {
+                "base_rate": true,
+                "climatology": true,
+                "persistence": true
+              },
+              "f1": {
+                "base_rate": true,
+                "climatology": true,
+                "persistence": true
+              },
+              "pr_auc": {
+                "base_rate": true,
+                "climatology": true,
+                "persistence": true
+              }
+            }
+          },
+          "model_weighted": {
+            "beats_every_baseline": {
+              "brier": false,
+              "f1": true,
+              "pr_auc": true
+            },
+            "detail": {
+              "brier": {
+                "base_rate": false,
+                "climatology": false,
+                "persistence": false
+              },
+              "f1": {
+                "base_rate": true,
+                "climatology": true,
+                "persistence": true
+              },
+              "pr_auc": {
+                "base_rate": true,
+                "climatology": true,
+                "persistence": true
+              }
+            }
+          }
+        }
+      },
+      {
+        "base_rate": {
+          "test": 0.04449234510584204,
+          "train": 0.016902904633457963,
+          "validation": 0.02284666055198866
+        },
+        "beats_persistence_in_every_city": false,
+        "brier": 0.0406759247851579,
+        "cities_beaten_on_persistence": 10,
+        "cities_scored": [
+          "cairo",
+          "delhi",
+          "lagos",
+          "london",
+          "moscow",
+          "phoenix",
+          "portland",
+          "reykjavik",
+          "sao_paulo",
+          "singapore",
+          "tokyo"
+        ],
+        "f1": 0.2736156351791531,
+        "is_shipped": false,
+        "lift_over_persistence": 1.946456343761226,
+        "persistence_f1": 0.257661038148843,
+        "persistence_pr_auc": 0.09949907894051523,
+        "pr_auc": 0.19367061340216485,
+        "recommended_variant": "unweighted",
+        "rows": {
+          "test": 18093,
+          "train": 96019,
+          "validation": 11993
+        },
+        "summary": [
+          {
+            "base_rate": 0.04449234510584204,
+            "brier": 0.043273953558403924,
+            "brier_over_persistence": 0.9513658223860879,
+            "f1": 0.08519420044449148,
+            "flagged": 18093,
+            "lift": 1.0,
+            "lift_over_persistence": 0.44716338663236727,
+            "mean_predicted": 0.01690290463345796,
+            "pr_auc": 0.04449234510584204,
+            "precision": 0.04449234510584204,
+            "predictor": "base_rate",
+            "recall": 1.0,
+            "threshold": 0.016902904633457963
+          },
+          {
+            "base_rate": 0.04449234510584204,
+            "brier": 0.041169360414988324,
+            "brier_over_persistence": 1.0,
+            "f1": 0.257661038148843,
+            "flagged": 794,
+            "lift": 2.2363190500257666,
+            "lift_over_persistence": 1.0,
+            "mean_predicted": 0.020987404685289094,
+            "pr_auc": 0.09949907894051523,
+            "precision": 0.2594458438287154,
+            "predictor": "persistence",
+            "recall": 0.25590062111801243,
+            "threshold": 0.16594960049170251
+          },
+          {
+            "base_rate": 0.04449234510584204,
+            "brier": 0.04338522870202025,
+            "brier_over_persistence": 0.9489257437767351,
+            "f1": 0.09580838323353293,
+            "flagged": 1700,
+            "lift": 1.0107343973634697,
+            "lift_over_persistence": 0.45196341611087393,
+            "mean_predicted": 0.017276954343090983,
+            "pr_auc": 0.04496994361784078,
+            "precision": 0.07058823529411765,
+            "predictor": "climatology",
+            "recall": 0.14906832298136646,
+            "threshold": 0.026348951769962194
+          },
+          {
+            "base_rate": 0.04449234510584204,
+            "brier": 0.14317060373511048,
+            "brier_over_persistence": 0.2875545631640872,
+            "f1": 0.1669595782073814,
+            "flagged": 333,
+            "lift": 3.2094017988928347,
+            "lift_over_persistence": 1.4351269774569315,
+            "mean_predicted": 0.32208436727523804,
+            "pr_auc": 0.14279381241965025,
+            "precision": 0.2852852852852853,
+            "predictor": "model_weighted",
+            "recall": 0.11801242236024845,
+            "threshold": 0.8304128646850586
+          },
+          {
+            "base_rate": 0.04449234510584204,
+            "brier": 0.0406759247851579,
+            "brier_over_persistence": 1.012130901323981,
+            "f1": 0.2736156351791531,
+            "flagged": 730,
+            "lift": 4.352897401596731,
+            "lift_over_persistence": 1.946456343761226,
+            "mean_predicted": 0.020852157846093178,
+            "pr_auc": 0.19367061340216485,
+            "precision": 0.2876712328767123,
+            "predictor": "model_unweighted",
+            "recall": 0.2608695652173913,
+            "threshold": 0.05772128701210022
+          }
+        ],
+        "threshold": 3.0,
+        "verdict": {
+          "model_unweighted": {
+            "beats_every_baseline": {
+              "brier": true,
+              "f1": true,
+              "pr_auc": true
+            },
+            "detail": {
+              "brier": {
+                "base_rate": true,
+                "climatology": true,
+                "persistence": true
+              },
+              "f1": {
+                "base_rate": true,
+                "climatology": true,
+                "persistence": true
+              },
+              "pr_auc": {
+                "base_rate": true,
+                "climatology": true,
+                "persistence": true
+              }
+            }
+          },
+          "model_weighted": {
+            "beats_every_baseline": {
+              "brier": false,
+              "f1": false,
+              "pr_auc": true
+            },
+            "detail": {
+              "brier": {
+                "base_rate": false,
+                "climatology": false,
+                "persistence": false
+              },
+              "f1": {
+                "base_rate": true,
+                "climatology": true,
+                "persistence": false
+              },
+              "pr_auc": {
+                "base_rate": true,
+                "climatology": true,
+                "persistence": true
+              }
+            }
+          }
+        }
+      }
+    ],
+    "recorded_at": "2026-09-08T13:49:22+00:00",
+    "reference": "persistence",
+    "shipped_threshold": 2.5,
+    "statement": "Re-run at |Z| thresholds 2, 2.5, 3, the recommended model beats every baseline on PR-AUC, Brier and F1 at all three.",
+    "thresholds": [
+      2.0,
+      2.5,
+      3.0
     ]
   }
 }

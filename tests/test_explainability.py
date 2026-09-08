@@ -299,11 +299,19 @@ def test_a_confident_mistake_is_a_spell_that_broke(explained) -> None:
     """What the false positive is *for*.
 
     The model's most confident error is not a hallucination: it is a city
-    eight days into a hot spell, with the same evidence as the most confident
+    several days into a spell, with the same evidence as the most confident
     correct call. The lesson is a limit of the target: at this horizon the
     model can say a spell is running, not when it will end, and it is only
     visible because the case was chosen for confidence rather than for
     marginality.
+
+    **On both tails.** This asserted the leading Z was above +2, which held
+    while the scored set was five hot cities and stopped holding the moment
+    Moscow, Reykjavik and Portland finished backfilling: the most confident
+    true positive is now a cold extreme at Z = -2.93. The flag is on ``abs(z)``
+    everywhere else in this project for exactly that reason, and a test that
+    assumed one tail was reproducing, in the suite, the mistake the mart is
+    written to avoid.
     """
     report, _ = explained
     cases = report["cases"]
@@ -315,8 +323,9 @@ def test_a_confident_mistake_is_a_spell_that_broke(explained) -> None:
         leading = case["contributions"][0]
         assert leading["feature"] == "z_temperature_2m_mean"
         assert leading["shap"] > 1.0
-        assert leading["value"] > 2.0, (
-            "the confident cases should be days that are already extreme"
+        assert abs(leading["value"]) > 2.0, (
+            "the confident cases should be days that are already extreme, in "
+            f"either direction; got Z = {leading['value']:+.2f}"
         )
     # Same evidence, opposite outcomes, which is the point of showing both.
     assert abs(hit["predicted"] - miss["predicted"]) < 0.1

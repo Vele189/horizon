@@ -3565,6 +3565,409 @@ forecasting uses instead.
 
 Cached render: **0.014 s**.
 
+## Phase two: a detrended climatology, and what it did not fix
+
+DBT-12. The label is not stationary: across the chronological split the
+seven-day label's base rate rises **2.29x** from the training period to the
+test one. Part of that is real warming. Part of it looked like ours.
+`fact_climatology` computes a leave-one-year-out mean over the entire record
+with no trend term, so a warming city is measured against a mean that includes
+its own cooler decades, and "anomalously hot" drifts towards meaning "recent".
+`corr(year, Z)` is positive in nine of the eleven complete cities, from +0.05
+in Delhi to +0.40 in Lagos.
+
+This ticket subtracts a per-city, per-`climatology_day` linear trend in year
+before standardising, and publishes the result as a second flag beside the
+first rather than in place of it. It exists to answer one question: how much of
+the drift is the trend?
+
+### The answer is almost none of it
+
+| | train | validation | test | drift |
+|---|---:|---:|---:|---:|
+| `is_anomaly` | 0.0502 | 0.0708 | 0.1150 | **2.29x** |
+| `is_anomaly_detrended` | 0.0499 | 0.0821 | 0.1109 | **2.22x** |
+
+Measured on the scored population, 126,266 city-days across twelve cities, cut
+on the same purged chronological split every metric in this project uses.
+Detrending removes **5% of the excess drift** and leaves the rest standing.
+
+It is not that the trend is absent or that the subtraction failed. Both are
+checked, and both work. The fitted slopes run from +0.11 °C/decade in London to
++0.60 in Moscow, with Portland the one city slightly negative at -0.01. And the
+correlation the trend was built to remove does come out:
+
+| | corr(year, Z) raw | detrended |
+|---|---:|---:|
+| pooled | +0.150 | +0.078 |
+| cairo | +0.283 | +0.121 |
+| lagos | +0.396 | +0.232 |
+| singapore | +0.149 | +0.022 |
+| moscow | +0.079 | +0.020 |
+| tokyo | +0.254 | +0.154 |
+
+So the trend is real, it is removed, and the year-correlation of the *centre*
+halves. The base rate barely moves.
+
+**The drift lives in the tail, and the trend lives in the centre.** A slope of
+0.3 °C/decade referenced across fifteen years shifts the baseline mean by about
+0.45 °C, which against a within-window sigma of three to four degrees is a
+tenth of a sigma. A tenth of a sigma is a large fraction of the correlation
+between year and Z, because that correlation is a statement about where the
+distribution sits. It is a small fraction of the probability of clearing 2.5
+sigma, because that is a statement about how far the distribution's tail
+reaches, and the tail is not moving in step with the mean.
+
+That is the finding, and it is worth more than the column it came with: the
+non-stationarity in this label is not a trend artefact that a detrended
+climatology fixes. Phase 1's remaining tickets, and ML-10's prior-shift
+correction in particular, are aimed at something that is really there.
+
+Validation moving the wrong way, +16%, is the same effect seen from the other
+side. Detrending a window to the year at its centre barely moves the mean and
+still changes sigma, and 2019-2021 sits near the centre of every city's record.
+
+### The trap, and how the frame closes it
+
+A trend fitted across 1995-2026 uses 2026 to decide what was normal in 2023.
+This codebase's credibility rests on features that cannot see forward; a
+*label* that can see forward would be a far worse defect than the one being
+fixed, and it would be invisible, because a forward-looking slope is a
+perfectly plausible slope.
+
+So the trend for year *t* is fitted on an expanding window ending at *t-1*,
+written as a window frame rather than as a predicate:
+
+```sql
+window prior_years as (
+    partition by city_id, target_day
+    order by for_year
+    rows between unbounded preceding and 1 preceding
+)
+```
+
+The regression needs no new pass over the observations.
+`int_climatology_contributions` already carries each source year's count and
+power sums, and the year is constant inside each of its groups, so the cross
+terms are that group's sums times its year. The same identity that makes the
+leave-one-year-out exclusion a subtraction makes the trend a window function:
+nine seconds to build, against thirty-one passes for a re-aggregation per
+excluded year.
+
+Three checks, because a boundary asserted once in a docstring is a comment:
+
+* A dbt test counts what the frame accumulated against the years that should
+  have been in it, straight from the contributions. Counting rather than
+  recomputing the slope is deliberate: a test that re-implements the algebra it
+  is checking passes whenever both copies are wrong the same way.
+* A pytest compares the slope against Postgres's own `regr_slope` over exactly
+  the years before each target year. 66,382 fits, agreeing to 7e-15, sharing no
+  code with the model.
+* The model is **compiled twice**, once over the whole record and once with the
+  last year excluded, and every trend both builds have an opinion about is
+  required to be identical. A companion test compares the same two builds on
+  the all-years baseline and requires it to *move*, so the first test cannot
+  pass by comparing a build against itself.
+
+The two builds are compiled and run as queries rather than materialised. The
+intermediate models are ephemeral, so a compiled `fact_climatology` is one
+self-contained SELECT and the variant never touches the warehouse. The
+alternative -- rebuilding into `gold_marts` with a non-default variable and
+putting it back afterwards -- would leave every committed number describing a
+mart nobody could reconstruct if the run were interrupted between the two.
+
+### Fifteen years, and why the floor is not a detail
+
+Below `climatology_trend_min_years` no trend is fitted and the detrended
+baseline is defined to be *identical* to the plain one. That is not a fallback,
+it is the honest content of an expanding window: in 1997 there is no trend to
+know yet, and asserting one would be the same mistake as looking forward, made
+in the opposite direction.
+
+The floor was swept rather than picked:
+
+| min years | rows with a trend | fits over 2 s.e. | drift, detrended |
+|---:|---:|---:|---:|
+| 5 | 83.9% | 48.2% | **2.46x** |
+| 10 | 68.1% | 50.6% | 2.29x |
+| **15** | 52.3% | 52.6% | **2.22x** |
+| 20 | 36.4% | 56.3% | 2.21x |
+
+At five years the detrended flag drifts **more** than the plain one. That is
+the whole argument in one row: the standard error of a slope fitted over K
+years falls only as K^-1.5, so a five-year slope is mostly noise, and
+subtracting noise from a baseline adds exceedances rather than removing them.
+Fifteen is the smallest floor at which that has stopped and at which more than
+half the fitted slopes are two standard errors from zero. Twenty buys another
+hundredth of drift and costs a third of the coverage.
+
+`trend_stderr_c_per_year` is published beside every slope for the same reason.
+Just over half of the fits are distinguishable from zero; a reader deciding
+whether to believe the difference between the two flags should be able to see
+which half they are looking at.
+
+### Nothing switches over
+
+Both flags are carried in `fact_weather_anomalies`, in full, side by side.
+Nothing downstream reads the second one. They are different products --
+*unusual for this era* against *unusual for the record* -- and DBT-13 is the
+ticket that answers in writing which question this project is asking. Letting a
+default settle it is exactly the failure this shape exists to prevent.
+
+One consequence of the floor is worth stating because it is what makes the
+table above a fair comparison: where no trend was fitted, the two flags are the
+same flag, bit for bit. Two dbt tests assert it, one on the baseline columns and
+one on the flag, using `is distinct from` rather than a tolerance. Getting that
+exactly true required writing the unfitted case as a branch rather than as a
+zero slope -- `0 * offset` is arithmetically nothing but it widens a Postgres
+numeric's scale, and the wider operand then divides and squares to a different
+scale inside `climatology_stddev` and lands a few bits away. Approximately the
+same baseline would have made the per-split comparison approximate for a reason
+that has nothing to do with climate.
+
+## The gate under both definitions, and the answer in writing
+
+DBT-13. DBT-12 left two climatologies in the warehouse and no statement of
+which one the product is. That is the state a default settles quietly: a second
+column lands beside a first, a query picks one, and six months later nobody can
+say whether it was chosen.
+
+The worry was specific and reasonable. The seven events in `config/cities.yml`
+are records **against the historical record** - Buenos Aires reached 41.1 °C,
+its highest since 1957 - and detrending measures a record-hot day against a
+baseline warmed to meet it. A gate built on those events should get *harder* to
+pass under the detrended definition, and if it started failing on real events
+that would not be a bug in the gate; it would be the strongest possible
+argument about which definition to ship.
+
+### Both verdicts, and they agree
+
+The gate now runs parametrised over both flags, so each verdict is a row in the
+report with its own name rather than one being checked and the other printed.
+
+| event | Z, record | Z, era | verdict |
+|---|---:|---:|---|
+| portland 2021-06-28 | +5.563 | +5.416 | flags under both |
+| london 2022-07-19 | +4.432 | +4.242 | flags under both |
+| moscow 2010-07-29 | +3.422 | +3.282 | flags under both |
+| sao_paulo 2021-07-30 | -4.081 | -4.143 | flags under both |
+| tokyo 2018-07-23 | +2.228 | +2.218 | **flags under neither** |
+| sydney 2020-01-04 | | | 2 reference years, not checkable |
+| buenos_aires 2022-01-11 | | | 1 reference year, not checkable |
+
+Every checkable event moves in exactly the direction the trend predicts - the
+four hot events towards zero, Sao Paulo's cold event away from it - by between
+0.01 and 0.19 sigma. **Not one changes verdict.** A test names any that ever
+does, with its Z under each, so the day this stops being true the failure says
+which event and by how much.
+
+So the gate produces no evidence for preferring either definition, which is
+itself the finding: the choice cannot be deferred to the data and has to be
+made on what the two definitions mean.
+
+### The decision
+
+**The product ships *unusual for the record*, uniformly across all four views.**
+Recorded in `docs/proposal.md` §5.3, in the model card, and on the Anomaly Map
+itself; a test asserts all three still say so.
+
+1. **Detrending does not fix what it was proposed to fix.** DBT-12's
+   measurement: 2.29x drift becomes 2.22x. Changing what every number in the
+   project means, to buy five per cent of a drift, is not a trade worth making.
+2. **No documented event changes verdict**, so the argument that would have
+   overridden the first point does not exist.
+3. **The Climate Matrix exists to draw anomaly counts moving across thirty
+   years.** Detrending removes that signal by construction. A product cannot
+   ship a flag that erases one of its own views.
+
+A per-view split would have been legitimate - the Risk Horizon is arguably
+asking an operational question about *now* - and was rejected for a specific
+reason rather than for tidiness: it would leave two flags with the same name
+meaning different things in different tabs, for a difference measured at five
+per cent, and every reader would have to carry which was which.
+
+The detrended flag stays in the mart in full, with its fitted slope and that
+slope's standard error, because the measurement is worth keeping and because a
+decision should be re-checkable rather than re-argued.
+
+### Two defects the gate had been hiding, and one it found
+
+Tokyo, London, Moscow, Portland and Sao Paulo finished backfilling during this
+work. The gate went from one checkable event to five, and running for the first
+time is what test code is worst at surviving.
+
+**The neighbourhood was not circular.** The ranking test compares an event
+against its own ±15 days across the whole record, and did it with
+`abs(a - b) <= 15` on day-of-year. Buenos Aires' event is 11 January, whose
+window reaches back to 27 December - 350 apart on that arithmetic, and dropped.
+It halves the comparison set for exactly the events at the year boundary, and
+halves it *silently*: the test still runs, still ranks, still passes. It now
+uses the same double-modulo the climatology window uses.
+
+**An event was being ranked against itself.** The test asked that a documented
+extreme rank in the top three of its season across thirty-two years. Moscow
+2010-07-29 came sixth and failed. The twelve most extreme days in Moscow's
+late-July neighbourhood across the whole record are *all of them from 2010*:
+the test had found an event that stood out so completely it filled every place
+above itself, and reported that it did not stand out. Ranked against other
+episodes - excluding the three weeks either side, which is one heat wave - it is
+**first of 992**. The old form punished precisely the longest and most severe
+events, which is the opposite of what a validation gate is for.
+
+Both were latent for as long as one city was checkable. Neither was introduced
+by DBT-12, and neither would have been found by reading.
+
+**And a third event does not flag.** Tokyo 2018-07-23, the Japanese heat wave
+that set the national record of 41.1 °C at Kumagaya, scores Z = +2.228 against
+the record climatology and +2.218 against the detrended one. It does not clear
+2.5 under either, and it ranks 21st of 992 comparable days.
+
+That is not a detrending artefact and not a threshold to lower. Kumagaya is
+45 km from the Tokyo grid cell; Tokyo's own daily mean that day was 31.7 °C
+against a normal of 26.1, a departure of +5.6 °C against a July sigma of about
+2.5. It joins Phoenix's July 2023 streak, which is a duration a single-day
+Z-score cannot express, and Delhi's 29 May 2024, which was the second-warmest
+such day in thirty-two years and proportionately scored. Three documented
+national records, none of them a 2.5-sigma day in its own grid cell, and in all
+three cases the honest response is to record it rather than to move the line.
+
+## Threshold sensitivity, and a yardstick that is not the floor
+
+ML-09. Two problems that share a fix.
+
+`|Z| > 2.5` is a choice, and everything in this project inherits it: the label,
+two of the twenty-seven features, all three baselines, both model variants,
+every per-city verdict and every sentence in the README. Nobody had shown which
+of those survive 2.0 or 3.0, and a finding that holds only at 2.5 is a finding
+about 2.5.
+
+And the reporting compared against the base rate too often. Average precision
+for a random ranker *is* the positive rate, so a lift over it says only that a
+predictor is not noise. Persistence is the number that has to be beaten, and it
+is far higher.
+
+### The sweep, and what survives it
+
+The whole evaluation is re-run at each threshold. Not the model rescored
+against a moved answer key, which would be a different and much weaker
+experiment: `anomaly_days_trailing30` and the persistence signal are both
+counts of flagged days, so moving the threshold moves two features and the
+strongest baseline at the same time as the target. Each point is a complete
+alternative version of the project, fitted and scored end to end.
+
+| \|Z\| | test base rate | model PR-AUC | persistence | vs persistence | model F1 | persistence F1 | PR-AUC | Brier | F1 | cities |
+|---:|---:|---:|---:|---:|---:|---:|:--:|:--:|:--:|---:|
+| 2.0 | 0.2667 | 0.4851 | 0.3398 | 1.43x | 0.4643 | 0.4212 | yes | yes | yes | 11/11 |
+| **2.5** | 0.1150 | 0.3313 | 0.1915 | 1.73x | 0.3578 | 0.3398 | yes | yes | yes | 11/11 |
+| 3.0 | 0.0445 | 0.1937 | 0.0995 | 1.95x | 0.2736 | 0.2577 | yes | yes | yes | 10/11 |
+
+Every verdict holds at every threshold, so every verdict is a property of the
+model rather than of the line. One qualification survives: at |Z| > 3.0 the
+model beats persistence in ten of eleven cities rather than all eleven, at a
+base rate of 4.5% where a single city's ranking rests on seventy-odd positives.
+
+The more interesting number is the fourth column. The advantage over
+persistence **grows** as the threshold rises, 1.43x to 1.73x to 1.95x. The
+model is not living on the easy half of the distribution; it gains on
+persistence precisely where the events get rare, which is the half a weather
+warning is for.
+
+The sweep runs in Python, re-deriving `is_anomaly` from the Z-score, rather than
+rebuilding the mart with a different `anomaly_z_threshold`. Rebuilding would
+write the sweep's intermediate states into the warehouse that every other
+model, every committed metric and the dashboard read from, and a run
+interrupted between two points would leave the project describing a threshold
+nobody chose — silently, because every number would still be a plausible
+number. A test asserts that re-flagging at 2.5 reproduces dbt's own column row
+for row, so the middle point of the sweep is the shipped pipeline rather than a
+second implementation that happens to agree.
+
+### Persistence, and the baseline that stopped being one
+
+`lift_over_persistence` now sits beside `lift` on every scored entry in
+`metrics.json`, for every baseline, both model variants and every city. Both
+figures read the same way round — above one is better — which for Brier means
+the ratio is inverted, since Brier is a loss.
+
+The climatology baseline is the case that shows why this is not pedantry:
+
+| test split | PR-AUC | vs base rate | vs persistence |
+|---|---:|---:|---:|
+| no-skill reference | 0.1150 | 1.00x | 0.60x |
+| climatology | 0.1145 | **1.00x** | 0.60x |
+| persistence | 0.1915 | 1.67x | 1.00x |
+| model, unweighted | 0.3313 | 2.88x | 1.73x |
+
+**The climatology baseline has no out-of-sample skill left at all.** Validation
+shrinks its week term away entirely — that was already recorded — and what
+survives is a per-city rate. On five cities that rate still carried a little
+signal across the split. On eleven it carries none: the Spearman correlation
+between each city's training-period anomaly rate and its test-period rate is
+**-0.06**. Reykjavík is the most anomalous city in training and the least in
+test; Singapore is the second least and the most.
+
+That is the same regime shift the label's base rate shows, seen from another
+angle, and it is the argument for the whole ticket. A reference predictor that
+has quietly become chance is worse than no reference, because it still produces
+a lift. Reported against the base rate, the climatology reads 1.00x and a
+reader has to know that 1.00x means nothing; reported against persistence it
+reads 0.60x, which is a number nobody can misread as skill.
+
+The per-city figures use *that city's own* persistence, not the pooled one.
+Lagos persistence is worth 2.17x its base rate and Phoenix's 1.15x, so a pooled
+reference would rank the cities by how persistent their weather is rather than
+the model by what it added.
+
+### The README is now checked against the sweep
+
+The acceptance asks that any claim of the form "the model beats the baselines"
+be true at every threshold or be qualified. That is enforced rather than
+reviewed. A test splits the README into sentences, finds every one claiming a
+baseline was beaten, works out which metrics it names, and requires those
+metrics to survive all three thresholds; a sentence naming no metric is
+claiming all of them and is held to all of them; a sentence naming a threshold
+has scoped itself and is left alone.
+
+Two details that decided whether it works. Sentences are split on a full stop
+**followed by whitespace**, not on every full stop: the qualifiers being looked
+for are thresholds, and "2.0" carries a period, so splitting naively truncates
+"at |Z| > 2.0 it beats the climatology" to "0 it beats the climatology" and
+reports a properly qualified sentence as a bare boast. And a planted-string
+test checks the scanner finds all three shapes, because a scanner that finds
+nothing passes everything.
+
+The sweep's own verdict is generated from the numbers and the README must carry
+it verbatim, the same arrangement ML-08's transfer verdict uses. A verdict
+written by hand outlives the run that justified it.
+
+### Re-run against a warehouse that doubled
+
+The daily backfill completed while this was in progress: London, Moscow,
+Portland, Reykjavík, São Paulo and Tokyo went from fragments to full thirty-one
+year records, and the scored population went from 60,956 rows across five
+cities to 126,266 across eleven. Every committed figure was rebuilt against it,
+and three earlier findings moved.
+
+The model's F1 tie with persistence is gone — 0.3578 against 0.3398, a clear
+win where the five-city snapshot had it losing by a thousandth. That tie was
+never a property of the model: it came from twenty-six spurious training rows
+contributed by London and Reykjavík while their baselines were eighteen
+observations long, and it vanished when their records completed.
+
+Leave-one-city-out is now eleven cities rather than five, and the result is
+both stronger and more believable. All eleven beat their own persistence
+baseline, median 1.61x, and the median retention is **98%** of in-sample rather
+than the 103% the five-city run reported. A held-out model outscoring the model
+that had seen the city was always the suspicious part of that finding; with
+eleven cities the retention spread is 87% to 119% around a median just under
+one, which is what a model with no city identifier should do.
+
+And the small-baseline defect has one instance left. Sydney, at five reference
+observations, flags 16.7% of its eighteen scored days with sd(Z) = 1.67, where
+every complete city now sits at 459 observations and within 0.02 of one. It is
+excluded from every per-city table for want of test rows, so it moves no
+headline, and DBT-14 still owns it.
+
 ## Publishing
 
 Community Cloud requires a public repository, which makes deployment the moment

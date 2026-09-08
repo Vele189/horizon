@@ -39,11 +39,26 @@ training run per city, which is why it is a flag rather than part of every run,
 and it is the experiment that decides whether this project ships one model or
 five.
 
+**The threshold is a choice, and ``--thresholds`` prices it.** |Z| > 2.5
+defines the label, two of the features, all three baselines and every verdict
+in this file. That mode re-runs the entire evaluation at 2.0, 2.5 and 3.0 --
+refitting, not rescoring, because moving the threshold moves the features too
+-- and records which verdicts hold at all three. A verdict that holds at every
+threshold is a property of the model; one that does not is a property of the
+line, and the README has to say which it is quoting.
+
+**Everything is reported against persistence as well as against the base rate.**
+The base rate is the floor a random ranker scores by construction. Persistence
+is the number that has to be beaten, and it is a much higher one: 1.67x the base
+rate pooled. A method from a later phase reported only against chance will look
+better than it is.
+
 Usage::
 
     python machine_learning/evaluate.py           # tables to the terminal
     python machine_learning/evaluate.py --write   # and figures + metrics.json
     python machine_learning/evaluate.py --leave-one-city-out --write
+    python machine_learning/evaluate.py --thresholds --write
 """
 
 from __future__ import annotations
@@ -71,11 +86,15 @@ from machine_learning.baselines import (  # noqa: E402
     metrics_path,
 )
 from machine_learning.evaluation import (  # noqa: E402
+    ANOMALY_THRESHOLD,
+    ANOMALY_THRESHOLDS,
     MIN_HELD_OUT_POSITIVES,
     MIN_HELD_OUT_ROWS,
+    Score,
     assert_city_is_held_out,
     evaluation_frame,
     hold_out_city,
+    lift_over,
     scorable_cities,
     score,
     split_frame,
@@ -101,6 +120,9 @@ __all__ = [
     "precision_recall_points",
     "render_figures",
     "summary_table",
+    "threshold_sensitivity",
+    "threshold_statement",
+    "threshold_table",
 ]
 
 log = logging.getLogger(__name__)
@@ -237,8 +259,17 @@ def _predictors(parts: Mapping[str, pd.DataFrame], fits) -> dict[str, Any]:
 def summary_table(
     parts: Mapping[str, pd.DataFrame], predictors: Mapping[str, Any]
 ) -> pd.DataFrame:
-    """One row per predictor: the test-split table the ticket asks for."""
+    """One row per predictor, with both references beside every score.
+
+    ``lift`` is over the base rate and ``lift_over_persistence`` is over the
+    strongest baseline in the file. Both, and in that order, because they
+    answer different questions and only the second one is hard: the base rate
+    is what a random ranker scores by construction, so a lift over it is a
+    statement that a predictor is not noise. Persistence is the number a new
+    method has to beat to be worth its complexity.
+    """
     rows = []
+    results: dict[str, Score] = {}
     for name, predict in predictors.items():
         validation_predictions = predict(parts["validation"])
         threshold, _ = best_threshold(
@@ -247,6 +278,7 @@ def summary_table(
 
         test_predictions = predict(parts["test"])
         result = score(parts["test"][LABEL], test_predictions)
+        results[name] = result
         classified = classification_at(
             parts["test"][LABEL], test_predictions, threshold
         )
@@ -265,6 +297,11 @@ def summary_table(
                 "base_rate": result.base_rate,
             }
         )
+    reference = results["persistence"]
+    for row in rows:
+        against = lift_over(results[row["predictor"]], reference)
+        row["lift_over_persistence"] = against["pr_auc"]
+        row["brier_over_persistence"] = against["brier"]
     return pd.DataFrame(rows)
 
 
@@ -288,11 +325,20 @@ def per_city_table(
             )})
             continue
         row: dict[str, Any] = {"city_id": city_id, "rows": len(group)}
+        results: dict[str, Score] = {}
         for name, predict in predictors.items():
             result = score(group[LABEL], predict(group))
+            results[name] = result
             row["base_rate"] = result.base_rate
             row[f"{name}_pr_auc"] = result.pr_auc
             row[f"{name}_lift"] = result.lift
+        # Against *this city's own* persistence, not the pooled figure. Lagos
+        # persistence is worth 2.16x its base rate and Phoenix's 1.15x, so a
+        # pooled reference would rank the cities by how persistent their
+        # weather is rather than the model by what it added.
+        for name in predictors:
+            against = lift_over(results[name], results["persistence"])
+            row[f"{name}_vs_persistence"] = against["pr_auc"]
         rows.append(row)
     return pd.DataFrame(rows)
 
@@ -417,6 +463,183 @@ def _verdict(summary: pd.DataFrame) -> dict[str, Any]:
             "detail": beaten,
         }
     return out
+
+
+# --------------------------------------------------------------------------
+# Threshold sensitivity (ML-09)
+# --------------------------------------------------------------------------
+#
+# |Z| > 2.5 is a choice, and every conclusion in this project inherits it: the
+# label, two of the twenty-seven features, all three baselines, both model
+# variants, every per-city verdict and every sentence in the README. Nobody had
+# shown which of those survive 2.0 or 3.0, and a finding that holds only at 2.5
+# is a finding about 2.5.
+#
+# The whole evaluation is therefore re-run at each threshold -- not the model
+# rescored against a moved answer key, which would be a different and much
+# weaker experiment. Moving the threshold moves the label *and* the features
+# built from it *and* the persistence baseline, so each point of the sweep is a
+# complete alternative version of the project, fitted and scored end to end.
+
+
+def threshold_sensitivity(
+    thresholds: Sequence[float] = ANOMALY_THRESHOLDS,
+    engine: Engine | None = None,
+    *,
+    roster: Sequence[str] | None = None,
+    ingested: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    """Re-run the evaluation at each threshold and record what survives.
+
+    Returns one entry per threshold plus a ``holds`` map saying which verdicts
+    are true at *every* one of them. That map is the deliverable: a verdict in
+    it is a property of the model, a verdict outside it is a property of the
+    line, and the README is required to distinguish them.
+    """
+    points: list[dict[str, Any]] = []
+    for value in thresholds:
+        population = evaluation_frame(engine, threshold=float(value))
+        report, _ = build_evaluation(
+            frame=population, roster=roster, ingested=ingested
+        )
+        summary = pd.DataFrame(report["summary"]).set_index("predictor")
+        variant = f"model_{_recommended_of(report)}"
+        cities = pd.DataFrame(report["per_city"])
+        beaten = (
+            cities[f"{variant}_vs_persistence"] > 1.0
+            if f"{variant}_vs_persistence" in cities
+            else pd.Series(dtype=bool)
+        )
+        parts = split_frame(population)
+        points.append(
+            {
+                "threshold": float(value),
+                "is_shipped": float(value) == ANOMALY_THRESHOLD,
+                "recommended_variant": _recommended_of(report),
+                "rows": {name: len(part) for name, part in parts.items()},
+                "base_rate": {
+                    name: float(positives(part[LABEL]).mean())
+                    for name, part in parts.items()
+                },
+                "summary": report["summary"],
+                "verdict": report["verdict"],
+                "cities_scored": report["cities_scored"],
+                "cities_beaten_on_persistence": int(beaten.sum()),
+                "beats_persistence_in_every_city": bool(
+                    len(beaten) > 0 and beaten.all()
+                ),
+                "pr_auc": float(summary.loc[variant, "pr_auc"]),
+                "lift_over_persistence": float(
+                    summary.loc[variant, "lift_over_persistence"]
+                ),
+                "brier": float(summary.loc[variant, "brier"]),
+                "f1": float(summary.loc[variant, "f1"]),
+                "persistence_pr_auc": float(summary.loc["persistence", "pr_auc"]),
+                "persistence_f1": float(summary.loc["persistence", "f1"]),
+            }
+        )
+        log.info(
+            "|Z| > %.1f: base rate %.4f, model PR-AUC %.4f (%.2fx persistence), "
+            "F1 %.4f against persistence %.4f",
+            value,
+            points[-1]["base_rate"]["test"],
+            points[-1]["pr_auc"],
+            points[-1]["lift_over_persistence"],
+            points[-1]["f1"],
+            points[-1]["persistence_f1"],
+        )
+
+    # A verdict "holds" only if it is true at every threshold in the sweep. Any
+    # is not enough and most is not enough: the whole point is to separate what
+    # the model does from what the line does.
+    metrics = ("pr_auc", "f1", "brier")
+    holds = {
+        metric: all(
+            point["verdict"][f"model_{point['recommended_variant']}"][
+                "beats_every_baseline"
+            ][metric]
+            for point in points
+        )
+        for metric in metrics
+    }
+    holds["every_city_on_persistence"] = all(
+        point["beats_persistence_in_every_city"] for point in points
+    )
+    block: dict[str, Any] = {
+        "thresholds": [float(value) for value in thresholds],
+        "shipped_threshold": ANOMALY_THRESHOLD,
+        "reference": "persistence",
+        "points": points,
+        "holds_at_every_threshold": holds,
+    }
+    block["statement"] = threshold_statement(block)
+    return block
+
+
+def _recommended_of(report: Mapping[str, Any]) -> str:
+    """Which variant the fit at this threshold recommended, from its verdict."""
+    named = [name for name in report["verdict"] if name.startswith("model_")]
+    return "unweighted" if "model_unweighted" in named else named[0].removeprefix("model_")
+
+
+def threshold_table(block: Mapping[str, Any]) -> pd.DataFrame:
+    """The sweep as a table: one row per threshold, one column per verdict."""
+    rows = []
+    for point in block["points"]:
+        verdict = point["verdict"][f"model_{point['recommended_variant']}"]
+        beats = verdict["beats_every_baseline"]
+        rows.append(
+            {
+                "threshold": point["threshold"],
+                "shipped": point["is_shipped"],
+                "test_base_rate": point["base_rate"]["test"],
+                "model_pr_auc": point["pr_auc"],
+                "persistence_pr_auc": point["persistence_pr_auc"],
+                "vs_persistence": point["lift_over_persistence"],
+                "model_f1": point["f1"],
+                "persistence_f1": point["persistence_f1"],
+                "beats_all_pr_auc": beats["pr_auc"],
+                "beats_all_brier": beats["brier"],
+                "beats_all_f1": beats["f1"],
+                "cities_beaten": (
+                    f"{point['cities_beaten_on_persistence']}"
+                    f"/{len(point['cities_scored'])}"
+                ),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def threshold_statement(block: Mapping[str, Any]) -> str:
+    """The sentence the README is required to carry, generated not typed.
+
+    The acceptance asks that any claim of the form "the model beats the
+    baselines" be true at every threshold or be qualified. A generated sentence
+    is how that is kept true: it says exactly which metrics survive the sweep
+    and which do not, and ``tests/test_baselines.py`` fails while the README
+    disagrees with it.
+    """
+    holds = block["holds_at_every_threshold"]
+    survives = [name for name in ("pr_auc", "brier", "f1") if holds[name]]
+    fails = [name for name in ("pr_auc", "brier", "f1") if not holds[name]]
+    label = {"pr_auc": "PR-AUC", "brier": "Brier", "f1": "F1"}
+    span = ", ".join(f"{value:g}" for value in block["thresholds"])
+    if not fails:
+        return (
+            f"Re-run at |Z| thresholds {span}, the recommended model beats "
+            f"every baseline on PR-AUC, Brier and F1 at all three."
+        )
+    if not survives:
+        return (
+            f"Re-run at |Z| thresholds {span}, the recommended model does not "
+            "beat every baseline on any metric at all three."
+        )
+    return (
+        f"Re-run at |Z| thresholds {span}, the recommended model beats every "
+        f"baseline on {' and '.join(label[name] for name in survives)} at all "
+        f"three, and on {' and '.join(label[name] for name in fails)} at some "
+        "but not all of them."
+    )
 
 
 # --------------------------------------------------------------------------
@@ -994,6 +1217,14 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--figures", help="Write figures somewhere other than docs/images."
     )
     parser.add_argument(
+        "--thresholds",
+        action="store_true",
+        help=(
+            "Also re-run the whole evaluation at |Z| 2.0, 2.5 and 3.0 and "
+            "record which verdicts hold at each. One full fit per threshold."
+        ),
+    )
+    parser.add_argument(
         "--leave-one-city-out",
         action="store_true",
         help=(
@@ -1085,6 +1316,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"  not held out: {city:<14} {why}")
         print(f"\n  {loco['verdict']['statement']}")
 
+    sweep = None
+    if args.thresholds:
+        print("\nthreshold sensitivity: the whole evaluation, once per |Z|")
+        sweep = threshold_sensitivity(roster=roster, ingested=ingested)
+        table = threshold_table(sweep)
+        shown = table.copy()
+        for column in ("test_base_rate", "model_pr_auc", "persistence_pr_auc",
+                       "model_f1", "persistence_f1"):
+            shown[column] = shown[column].map("{:.4f}".format)
+        shown["vs_persistence"] = shown["vs_persistence"].map("{:.2f}x".format)
+        print(shown.to_string(index=False))
+        print(f"\n  {sweep['statement']}")
+
     if args.write or args.figures:
         directory = Path(args.figures) if args.figures else FIGURE_DIR
         written = render_figures(plots, directory)
@@ -1099,6 +1343,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             if loco is not None:
                 payload["leave_one_city_out"] = dict(loco)
                 payload["leave_one_city_out"]["recorded_at"] = stamp
+            if sweep is not None:
+                payload["threshold_sensitivity"] = dict(sweep)
+                payload["threshold_sensitivity"]["recorded_at"] = stamp
             destination.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
             print(f"wrote {destination}")
             if loco is None and "leave_one_city_out" in payload:

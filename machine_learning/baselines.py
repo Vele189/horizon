@@ -61,6 +61,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import get_settings  # noqa: E402
 from machine_learning.evaluation import (  # noqa: E402
+    ANOMALY_THRESHOLD,
     EMBARGO_DAYS,
     PERSISTENCE_FLAG,
     PERSISTENCE_WINDOW,
@@ -68,14 +69,17 @@ from machine_learning.evaluation import (  # noqa: E402
     SPLITS,
     assert_splits_are_disjoint,
     evaluation_frame,
+    lift_over,
     score,
     split_frame,
     split_summary,
 )
+from machine_learning.evaluation import Score  # noqa: E402
 from machine_learning.labels import HORIZON_DAYS, LABEL, positives  # noqa: E402
 
 __all__ = [
     "METRICS_SCHEMA_VERSION",
+    "PERSISTENCE_REFERENCE",
     "PERSISTENCE_WINDOW",
     "SMOOTHING_GRID",
     "Baseline",
@@ -102,12 +106,30 @@ log = logging.getLogger(__name__)
 #: table, the per-city breakdown, and the per-metric verdict.
 #: 5. ML-07 added ``explainability``, written by ``explain.py``: the SHAP
 #: ranking, the both-tails response, and the two explained predictions.
+#: 7. ML-09 added ``lift_over_persistence`` beside ``lift`` on every scored
+#: entry, and a top-level ``threshold_sensitivity`` block written by
+#: ``evaluate.py --thresholds``: the whole evaluation re-run at |Z| 2.0, 2.5 and
+#: 3.0, with the verdicts that hold at each.
 #: 6. ML-08 added ``leave_one_city_out``, written by
 #: ``evaluate.py --leave-one-city-out``: one fold per scored city, each trained
 #: with that city removed entirely, scored against that city's own persistence
 #: baseline. A file may legitimately lack it, since it costs one training run
 #: per city and is not part of every evaluation.
-METRICS_SCHEMA_VERSION: Final[int] = 6
+METRICS_SCHEMA_VERSION: Final[int] = 7
+
+#: The baseline every other predictor is reported against, beside the base rate.
+#:
+#: ML-09's second half. The base rate is the floor -- it is what a random ranker
+#: scores, by construction -- and reporting a lift over it answers "better than
+#: guessing", which nothing arriving after ML-05 will fail. Persistence is the
+#: number that has to be beaten: pooled it is worth 1.69x the base rate, and in
+#: Lagos 2.16x, so a method reported at 1.8x over chance sounds like progress
+#: and is a regression against the cheapest rule in the file.
+#:
+#: This is not a weakness being covered up. The model clears persistence in
+#: every city on ranking. It is a reporting shape fixed now, while the honest
+#: answer is comfortable, rather than later when it is not.
+PERSISTENCE_REFERENCE: Final[str] = "persistence"
 
 #: Pseudo-counts tried for the climatology's shrinkage, chosen on **validation**
 #: Brier. A (city, week) cell holds around 130 training rows here, so a cell
@@ -476,18 +498,33 @@ def build_metrics(
         ClimatologyBaseline.tuned(train, validation),
     ]
 
+    # Scored first, annotated second. Every entry carries its lift over
+    # persistence as well as over the base rate, and persistence cannot be the
+    # reference for itself until it has been scored, so the two passes are not
+    # a stylistic choice.
+    results: dict[str, dict[str, Score]] = {}
     scored: dict[str, Any] = {}
     for baseline in baselines:
         entry: dict[str, Any] = {
             "fitted_on": "train",
             "params": baseline.params(),
         }
+        results[baseline.name] = {}
         for split_name in ("train", "validation", "test"):
             result = score(
                 parts[split_name][LABEL], baseline.predict(parts[split_name])
             )
+            results[baseline.name][split_name] = result
             entry[split_name] = result.as_dict()
         scored[baseline.name] = entry
+
+    reference = results[PERSISTENCE_REFERENCE]
+    for name, entry in scored.items():
+        for split_name in ("train", "validation", "test"):
+            entry[split_name]["lift_over_persistence"] = lift_over(
+                results[name][split_name], reference[split_name]
+            )
+        entry["reference"] = PERSISTENCE_REFERENCE
 
     summary = split_summary(parts)
     return {
@@ -496,6 +533,10 @@ def build_metrics(
         "label": {
             "window": f"t+1 .. t+{HORIZON_DAYS} inclusive",
             "horizon_days": HORIZON_DAYS,
+            # Recorded because every number in this file inherits it, and
+            # because ML-09's sweep needs a statement of which threshold the
+            # committed figures belong to rather than an assumption.
+            "anomaly_z_threshold": ANOMALY_THRESHOLD,
         },
         "split": {
             "purge_days": PURGE_DAYS,
@@ -566,11 +607,13 @@ def write_metrics(payload: Mapping[str, Any], path: Path | None = None) -> Path:
 
 
 def _format_row(name: str, split: str, result: Mapping[str, Any]) -> str:
+    over = result.get("lift_over_persistence", {}).get("pr_auc", float("nan"))
     return (
         f"  {name:<12} {split:<11} "
         f"PR-AUC {result['pr_auc']:.4f}  "
         f"base {result['base_rate']:.4f}  "
         f"lift {result['lift']:.2f}x  "
+        f"vs persistence {over:.2f}x  "
         f"Brier {result['brier']:.5f}"
     )
 

@@ -572,30 +572,32 @@ def warehouse_report(engine):
     return build_evaluation(frame=population, roster=roster, ingested=ingested)
 
 
-def test_the_recommended_model_beats_every_baseline_on_ranking_and_calibration(
+def test_the_recommended_model_beats_every_baseline_on_every_metric(
     warehouse_report,
 ) -> None:
-    """Two of the three, and the third is a tie the README has to state.
+    """All three, and the F1 leg is the one that has moved.
 
-    PR-AUC and Brier are properties of the model. F1 is a property of the model
-    *and* a threshold, and on this snapshot the recommended model and
-    persistence land within a thousandth of each other on it while the model
-    ranks 58% better. Asserting the tie rather than relaxing to "two out of
-    three" keeps the number under test: a real regression still fails here, and
-    the gap is exactly the quantity ML-09 exists to measure across thresholds.
+    On a five-city snapshot the model and persistence were level on F1 to a
+    thousandth, and this test asserted the tie. The tie was never a property of
+    the model: it came from twenty-six spurious training rows contributed by
+    London and Reykjavik while their baselines were eighteen observations long,
+    and it went when their records completed. The claim is back to the strong
+    one, and ML-09's sweep says it holds at |Z| 2.0 and 3.0 as well as at 2.5.
+
+    The margin is asserted beside the verdict, because "beats" is a boolean and
+    a win by a thousandth and a win by 73% are different findings.
     """
     report, _ = warehouse_report
     verdict = report["verdict"]["model_unweighted"]["beats_every_baseline"]
-    assert verdict["pr_auc"] is True
-    assert verdict["brier"] is True
+    assert verdict == {"pr_auc": True, "f1": True, "brier": True}, verdict
 
     summary = pd.DataFrame(report["summary"]).set_index("predictor")
     model, persistence = summary.loc["model_unweighted"], summary.loc["persistence"]
     assert model["pr_auc"] > 1.4 * persistence["pr_auc"]
-    assert abs(model["f1"] - persistence["f1"]) < 0.01, (
-        "the model and persistence have stopped tying on F1 at the "
-        "validation-chosen threshold; the README says they tie"
+    assert model["lift_over_persistence"] == pytest.approx(
+        model["pr_auc"] / persistence["pr_auc"]
     )
+    assert persistence["lift_over_persistence"] == pytest.approx(1.0)
 
 
 def test_the_specified_model_loses_on_calibration_and_the_report_says_so(
