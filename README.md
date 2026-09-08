@@ -36,6 +36,7 @@ docker compose up -d                       # local PostgreSQL 16
 python ingestion/backfill.py --grain daily  # then --grain hourly
 python dbt_analytics/dbt_env.py -- dbt build
 python machine_learning/train.py --write
+python machine_learning/evaluate.py --leave-one-city-out --write
 streamlit run dashboard/app.py
 ```
 
@@ -116,15 +117,48 @@ the model existed.
 
 | test split | PR-AUC | lift | Brier | mean predicted |
 |---|---:|---:|---:|---:|
-| no-skill reference | 0.1358 | 1.00x | 0.12386 | |
+| no-skill reference | 0.1358 | 1.00x | 0.12398 | |
 | climatology baseline | 0.1514 | 1.12x | 0.12454 | |
-| persistence baseline | 0.2293 | 1.69x | 0.11462 | |
-| model, weighted *(as specified)* | 0.3303 | 2.43x | 0.22529 | 0.478 |
-| **model, unweighted** *(recommended)* | **0.3494** | **2.57x** | **0.11019** | 0.070 |
+| persistence baseline | 0.2293 | 1.69x | 0.11466 | |
+| model, weighted *(as specified)* | 0.3206 | 2.36x | 0.21993 | 0.470 |
+| **model, unweighted** *(recommended)* | **0.3612** | **2.66x** | **0.10870** | 0.072 |
 
-Both variants beat both baselines. The recommended one beats persistence by 52%
-on PR-AUC, and beats it in every city individually, which a test asserts
-separately because a pooled win can be one city carrying the rest.
+Both variants beat both baselines on ranking. The recommended one beats
+persistence by 58% on PR-AUC, beats it on Brier, and beats it in every city
+individually, which a test asserts separately because a pooled win can be one
+city carrying the rest. On F1 at the validation-chosen threshold the two are
+level to a thousandth (0.3797 against 0.3807), which says more about F1 than
+about either predictor: it collapses the whole curve to one point, and that
+point is where persistence is strongest.
+
+### Does it work on a city it has never seen
+
+There is no city identifier among the twenty-seven features, so the model can
+in principle score a city it was not trained on. `evaluate.py
+--leave-one-city-out` refits once per scored city with that city removed from
+the training and validation splits altogether, then scores it against **its own
+persistence baseline** rather than its base rate, because the five cities differ
+fourfold in base rate and a raw PR-AUC would sort them by climate.
+
+| held out | base rate | in-sample PR-AUC | held-out PR-AUC | own persistence | lift |
+|---|---:|---:|---:|---:|---:|
+| cairo | 17.8% | 0.3698 | 0.3785 | 0.2421 | 1.56x |
+| delhi | 5.2% | 0.3289 | 0.3403 | 0.1178 | 2.89x |
+| lagos | 15.6% | 0.4564 | 0.4962 | 0.3362 | 1.48x |
+| phoenix | 5.7% | 0.2236 | 0.2751 | 0.0651 | 4.23x |
+| singapore | 23.7% | 0.4227 | 0.3363 | 0.3013 | 1.12x |
+
+Held out of training entirely, each of the 5 scored cities is still ranked
+better by the model than by its own persistence baseline (5 of 5, median PR-AUC
+1.56x persistence and 103% of the same city's in-sample score), so the model
+transfers to a city it has never seen.
+
+Singapore is the only city that loses anything by being unseen, at 80% of its
+in-sample score; the other four are at or above theirs, which is what a model
+with no city identifier and no per-city capacity to spare should do. Read it
+against the sample it rests on: five cities, all hot, and the ten still
+backfilling are named with a reason in the `leave_one_city_out` block of
+`metrics.json` rather than left out of the table.
 
 Full metrics, feature importances, and the intended use of the model are in the
 [model card](docs/model-card.md), which is generated from the run manifest and
@@ -140,12 +174,21 @@ free-tier allowance of 10 000 a day. A missing city skips with a reason and
 does not pass, and a separate test fails while any event is unverifiable, so
 the gate cannot close on a green suite that checked nothing.
 
-**The model is under-confident on the test period.** It predicts 0.070 where
-0.136 occurs. This is the non-stationary base rate: positives run at 5.51% in
+**The model is under-confident on the test period.** It predicts 0.072 where
+0.136 occurs. This is the non-stationary base rate: positives run at 5.43% in
 the training period and 13.58% in the test period, so a model fitted on the
 early record is calibrated to a world that has since warmed. Ranking is sound
 and observed risk rises monotonically across the deciles, but the level is not.
 The Risk Horizon view therefore shows rank bands rather than raw probabilities.
+
+**Twenty-six rows from two barely-backfilled cities move the headline by 3%.**
+London and Reykjavík have eighteen scored days each, and on a baseline that
+short they flag 56% and 89% of those days against 1.3-2.0% in every complete
+city. The twelve and fourteen rows that reach the training split are therefore
+almost all positives and almost all spurious, and removing them takes test
+PR-AUC from 0.3612 to 0.3722. The numbers above are the ones the pipeline
+actually produces and have not been improved by choosing the training set;
+DBT-14 is the ticket for a flag that knows how thin its own baseline is.
 
 **Two events do not flag, and the threshold was not lowered to make them.**
 Phoenix in July 2023 peaks at Z = +1.97 and Delhi on 29 May 2024 at Z = +2.22.

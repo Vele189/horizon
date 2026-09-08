@@ -102,7 +102,12 @@ log = logging.getLogger(__name__)
 #: table, the per-city breakdown, and the per-metric verdict.
 #: 5. ML-07 added ``explainability``, written by ``explain.py``: the SHAP
 #: ranking, the both-tails response, and the two explained predictions.
-METRICS_SCHEMA_VERSION: Final[int] = 5
+#: 6. ML-08 added ``leave_one_city_out``, written by
+#: ``evaluate.py --leave-one-city-out``: one fold per scored city, each trained
+#: with that city removed entirely, scored against that city's own persistence
+#: baseline. A file may legitimately lack it, since it costs one training run
+#: per city and is not part of every evaluation.
+METRICS_SCHEMA_VERSION: Final[int] = 6
 
 #: Pseudo-counts tried for the climatology's shrinkage, chosen on **validation**
 #: Brier. A (city, week) cell holds around 130 training rows here, so a cell
@@ -533,7 +538,12 @@ def write_metrics(payload: Mapping[str, Any], path: Path | None = None) -> Path:
     payload = dict(payload)
     if destination.exists():
         previous = json.loads(destination.read_text())
-        downstream = ("model", "evaluation", "explainability")
+        downstream = (
+            "model",
+            "evaluation",
+            "explainability",
+            "leave_one_city_out",
+        )
         carried = {key: previous[key] for key in downstream if key in previous}
         if carried:
             if previous.get("snapshot") == payload.get("snapshot"):
@@ -542,7 +552,8 @@ def write_metrics(payload: Mapping[str, Any], path: Path | None = None) -> Path:
                 log.warning(
                     "dropping %s: they describe %s rows to %s and the "
                     "baselines now describe %s rows to %s. Re-run train.py "
-                    "--write, evaluate.py --write and explain.py --write.",
+                    "--write, evaluate.py --leave-one-city-out --write and "
+                    "explain.py --write.",
                     " and ".join(sorted(carried)),
                     previous["snapshot"]["rows"],
                     previous["snapshot"]["last_date"],

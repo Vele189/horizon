@@ -338,16 +338,40 @@ def test_the_scored_population_has_no_missing_feature(population) -> None:
 
     A baseline ignores features, so nothing stops it scoring a row the model
     cannot use, and comparing the two would then be comparing different test
-    sets. Labelled and past the warm-up happens to leave a population with no
-    null feature at all; this is where a future city that breaks that shows up.
+    sets. This is where a city that breaks that shows up. It used to hold by
+    luck; ``evaluation_frame`` now enforces it, because the widening backfill
+    landed nineteen rows whose windows span a hole in a discontinuous record.
     """
     assert not population["has_missing_feature"].any()
     assert population[LABEL].notna().all()
     assert not population["is_warmup"].any()
-    # And the persistence signal is complete too: every row is thirty days into
-    # its city's record, so a seven-day window always closes. It does not close
-    # if the signal is computed after the trim, which is why it is not.
-    assert population[PERSISTENCE_FLAG].notna().all()
+
+
+def test_every_population_row_is_scorable_by_persistence(population) -> None:
+    """The rule has a cell for "could not be judged", and it is now in use.
+
+    The persistence signal is *not* a model input, so a null in it is not a
+    reason to drop a row the model can read perfectly well; it is a reason the
+    rule has three cells rather than two. Until the backfill widened, the third
+    cell was empty and this could be written as "the signal is complete". It no
+    longer is: a city whose record has holes has windows that span them. What
+    has to hold is the weaker and more useful thing -- that every row in the
+    population comes out of the baseline as a probability, so no row is scored
+    by the model and skipped by its yardstick.
+    """
+    fitted = PersistenceBaseline().fit(split_frame(population)["train"])
+    predicted = fitted.predict(population)
+    assert np.isfinite(predicted).all()
+    assert predicted.min() >= 0.0 and predicted.max() <= 1.0
+
+    unknown = population[PERSISTENCE_FLAG].isna()
+    if unknown.any():
+        # Confined to cities whose record is not continuous. A full city cannot
+        # produce one: the population starts thirty days into the record, so a
+        # seven-day window always closes.
+        assert set(population.loc[unknown, "city_id"]) < set(
+            population["city_id"]
+        )
 
 
 def test_the_no_skill_reference_scores_the_base_rate(population) -> None:

@@ -3,41 +3,41 @@
     "base_rate": {
       "fitted_on": "train",
       "params": {
-        "rate": 0.05509330138232488
+        "rate": 0.054325355384582594
       },
       "test": {
         "base_rate": 0.13578650364448624,
-        "brier": 0.12385992196381423,
+        "brier": 0.1239844477483142,
         "lift": 1.0,
         "positives": 1155,
         "pr_auc": 0.13578650364448624,
         "rows": 8506
       },
       "train": {
-        "base_rate": 0.05509330138232488,
-        "brier": 0.0520580295251212,
+        "base_rate": 0.054325355384582594,
+        "brier": 0.051374111146921406,
         "lift": 1.0,
-        "positives": 2483,
-        "pr_auc": 0.05509330138232488,
-        "rows": 45069
+        "positives": 2549,
+        "pr_auc": 0.054325355384582594,
+        "rows": 46921
       },
       "validation": {
-        "base_rate": 0.0852157943067034,
-        "brier": 0.07886142728736023,
+        "base_rate": 0.08627953837699212,
+        "brier": 0.07985644944515766,
         "lift": 1.0,
-        "positives": 464,
-        "pr_auc": 0.0852157943067034,
-        "rows": 5445
+        "positives": 471,
+        "pr_auc": 0.08627953837699212,
+        "rows": 5459
       }
     },
     "climatology": {
       "fitted_on": "train",
       "params": {
-        "cells": 317,
+        "cells": 322,
         "collapsed_to_city_rate": true,
         "median_rows_per_cell": 168.0,
-        "min_rows_per_cell": 21,
-        "overall_rate": 0.05509330138232488,
+        "min_rows_per_cell": 6,
+        "overall_rate": 0.054325355384582594,
         "smoothing": "inf",
         "smoothing_grid": [
           0.0,
@@ -54,53 +54,53 @@
         "smoothing_search": [
           {
             "smoothing": 0.0,
-            "validation_brier": 0.0811645198437154,
-            "validation_pr_auc": 0.07920343802269983
+            "validation_brier": 0.08210690107949686,
+            "validation_pr_auc": 0.08013742412001436
           },
           {
             "smoothing": 1.0,
-            "validation_brier": 0.08114574668016489,
-            "validation_pr_auc": 0.07836501799204709
+            "validation_brier": 0.08208817606108094,
+            "validation_pr_auc": 0.07934662396893609
           },
           {
             "smoothing": 5.0,
-            "validation_brier": 0.08107400815450595,
-            "validation_pr_auc": 0.07835151313375854
+            "validation_brier": 0.08201662151405532,
+            "validation_pr_auc": 0.07933358395863883
           },
           {
             "smoothing": 10.0,
-            "validation_brier": 0.08099080433497179,
-            "validation_pr_auc": 0.07820562877522767
+            "validation_brier": 0.08193363107672916,
+            "validation_pr_auc": 0.07919006693653034
           },
           {
             "smoothing": 20.0,
-            "validation_brier": 0.08084199873814146,
-            "validation_pr_auc": 0.07797961282159781
+            "validation_brier": 0.08178520710260549,
+            "validation_pr_auc": 0.07891610712101607
           },
           {
             "smoothing": 50.0,
-            "validation_brier": 0.08049898838778653,
-            "validation_pr_auc": 0.07818352836240022
+            "validation_brier": 0.08144307642708204,
+            "validation_pr_auc": 0.07911678097537801
           },
           {
             "smoothing": 100.0,
-            "validation_brier": 0.08013875072809405,
-            "validation_pr_auc": 0.07823994596363054
+            "validation_brier": 0.08108376262290075,
+            "validation_pr_auc": 0.0792308458440976
           },
           {
             "smoothing": 500.0,
-            "validation_brier": 0.0794241696915781,
-            "validation_pr_auc": 0.08162551624958576
+            "validation_brier": 0.08037101418109285,
+            "validation_pr_auc": 0.08260947514596031
           },
           {
             "smoothing": 2000.0,
-            "validation_brier": 0.07920750767619525,
-            "validation_pr_auc": 0.08704452469654504
+            "validation_brier": 0.08015490781110574,
+            "validation_pr_auc": 0.0879698291319509
           },
           {
             "smoothing": "inf",
-            "validation_brier": 0.07913460416386674,
-            "validation_pr_auc": 0.09936126547607739
+            "validation_brier": 0.08008219126510303,
+            "validation_pr_auc": 0.10008078585028152
           }
         ]
       },
@@ -113,58 +113,58 @@
         "rows": 8506
       },
       "train": {
-        "base_rate": 0.05509330138232488,
-        "brier": 0.0516212972700933,
-        "lift": 1.3581150579231467,
-        "positives": 2483,
-        "pr_auc": 0.07482304219803353,
-        "rows": 45069
+        "base_rate": 0.054325355384582594,
+        "brier": 0.05072373918838902,
+        "lift": 1.3965784508929584,
+        "positives": 2549,
+        "pr_auc": 0.0758696206672098,
+        "rows": 46921
       },
       "validation": {
-        "base_rate": 0.0852157943067034,
-        "brier": 0.07913460416386674,
-        "lift": 1.1659958847354341,
-        "positives": 464,
-        "pr_auc": 0.09936126547607739,
-        "rows": 5445
+        "base_rate": 0.08627953837699212,
+        "brier": 0.08008219126510303,
+        "lift": 1.1599596814367024,
+        "positives": 471,
+        "pr_auc": 0.10008078585028152,
+        "rows": 5459
       }
     },
     "persistence": {
       "fitted_on": "train",
       "params": {
-        "after_anomaly": 0.1999195494770716,
-        "after_quiet": 0.04663832984994012,
+        "after_anomaly": 0.20023510971786834,
+        "after_quiet": 0.04593297121864365,
         "train_rows_per_cell": {
-          "after_anomaly": 2486,
-          "after_quiet": 42583,
+          "after_anomaly": 2552,
+          "after_quiet": 44369,
           "when_unknown": 0
         },
-        "when_unknown": 0.05509330138232488,
+        "when_unknown": 0.054325355384582594,
         "window_days": 7
       },
       "test": {
         "base_rate": 0.13578650364448624,
-        "brier": 0.1146156621653148,
+        "brier": 0.11466271929351604,
         "lift": 1.6888273852986966,
         "positives": 1155,
         "pr_auc": 0.22931996590876963,
         "rows": 8506
       },
       "train": {
-        "base_rate": 0.05509330138232488,
-        "brier": 0.05083352772033802,
-        "lift": 1.5261725062953126,
-        "positives": 2483,
-        "pr_auc": 0.08408188185074578,
-        "rows": 45069
+        "base_rate": 0.054325355384582594,
+        "brier": 0.05014958043499869,
+        "lift": 1.5384344200011422,
+        "positives": 2549,
+        "pr_auc": 0.08357599660243625,
+        "rows": 46921
       },
       "validation": {
-        "base_rate": 0.0852157943067034,
-        "brier": 0.07729256420435957,
-        "lift": 1.2900750198388051,
-        "positives": 464,
-        "pr_auc": 0.10993476753079992,
-        "rows": 5445
+        "base_rate": 0.08627953837699212,
+        "brier": 0.07830049501973707,
+        "lift": 1.2797278048188896,
+        "positives": 471,
+        "pr_auc": 0.11041432424797527,
+        "rows": 5459
       }
     }
   },
@@ -173,19 +173,18 @@
     "accuracy_reported": false,
     "calibration_bins": 10,
     "cities_ingested_but_not_scored": [
-      "london",
-      "reykjavik",
-      "sydney",
-      "tokyo"
-    ],
-    "cities_not_ingested": [
       "auckland",
       "buenos_aires",
       "johannesburg",
+      "london",
       "moscow",
       "portland",
-      "sao_paulo"
+      "reykjavik",
+      "sao_paulo",
+      "sydney",
+      "tokyo"
     ],
+    "cities_not_ingested": [],
     "cities_scored": [
       "cairo",
       "delhi",
@@ -201,10 +200,10 @@
         "city_id": "cairo",
         "climatology_lift": 1.0,
         "climatology_pr_auc": 0.177751618599176,
-        "model_unweighted_lift": 2.030405605530958,
-        "model_unweighted_pr_auc": 0.36090788279596775,
-        "model_weighted_lift": 1.934436323564905,
-        "model_weighted_pr_auc": 0.34384918759070116,
+        "model_unweighted_lift": 2.0802305628692546,
+        "model_unweighted_pr_auc": 0.3697643496094849,
+        "model_weighted_lift": 2.038806642688067,
+        "model_weighted_pr_auc": 0.36240118074855576,
         "persistence_lift": 1.3618663175862797,
         "persistence_pr_auc": 0.24207394226666068,
         "rows": 1699
@@ -216,10 +215,10 @@
         "city_id": "delhi",
         "climatology_lift": 1.0,
         "climatology_pr_auc": 0.05179517363154797,
-        "model_unweighted_lift": 5.897505835079015,
-        "model_unweighted_pr_auc": 0.3054623387209848,
-        "model_weighted_lift": 6.159404103538805,
-        "model_weighted_pr_auc": 0.3190274050096615,
+        "model_unweighted_lift": 6.350090678822164,
+        "model_unweighted_pr_auc": 0.32890404928566824,
+        "model_weighted_lift": 4.848270964634627,
+        "model_weighted_pr_auc": 0.25111703642604305,
         "persistence_lift": 2.274116911626597,
         "persistence_pr_auc": 0.11778828029613922,
         "rows": 1699
@@ -231,10 +230,10 @@
         "city_id": "lagos",
         "climatology_lift": 1.0,
         "climatology_pr_auc": 0.15551643192488263,
-        "model_unweighted_lift": 2.842426072222666,
-        "model_unweighted_pr_auc": 0.44204396076232777,
-        "model_weighted_lift": 2.7210790054929763,
-        "model_weighted_pr_auc": 0.42317249791997574,
+        "model_unweighted_lift": 2.9347526640552304,
+        "model_unweighted_pr_auc": 0.4564022628959132,
+        "model_weighted_lift": 2.409447333144023,
+        "model_weighted_pr_auc": 0.37470865216148247,
         "persistence_lift": 2.161761116676464,
         "persistence_pr_auc": 0.33618937553947353,
         "rows": 1704
@@ -246,10 +245,10 @@
         "city_id": "phoenix",
         "climatology_lift": 1.0,
         "climatology_pr_auc": 0.05650382577987051,
-        "model_unweighted_lift": 3.97125948195055,
-        "model_unweighted_pr_auc": 0.2243913538947927,
-        "model_weighted_lift": 3.6915569166002196,
-        "model_weighted_pr_auc": 0.20858708887205477,
+        "model_unweighted_lift": 3.9577873967785213,
+        "model_unweighted_pr_auc": 0.22363012954134082,
+        "model_weighted_lift": 2.4167842849371652,
+        "model_weighted_pr_auc": 0.1365575581836185,
         "persistence_lift": 1.1515299479166667,
         "persistence_pr_auc": 0.0650658475573867,
         "rows": 1699
@@ -261,43 +260,43 @@
         "city_id": "singapore",
         "climatology_lift": 1.0,
         "climatology_pr_auc": 0.23695014662756597,
-        "model_unweighted_lift": 1.691657200921106,
-        "model_unweighted_pr_auc": 0.4008384218018339,
-        "model_weighted_lift": 1.5323074027185215,
-        "model_weighted_pr_auc": 0.36308046375265846,
+        "model_unweighted_lift": 1.7837339551457523,
+        "model_unweighted_pr_auc": 0.4226560222163542,
+        "model_weighted_lift": 1.623086598843775,
+        "model_weighted_pr_auc": 0.38459060758526986,
         "persistence_lift": 1.2716557922532907,
         "persistence_pr_auc": 0.3013190264342108,
         "rows": 1705
       }
     ],
-    "recorded_at": "2026-09-07T09:19:34+00:00",
+    "recorded_at": "2026-09-08T12:28:24+00:00",
     "scored_on": "test",
     "summary": [
       {
         "base_rate": 0.13578650364448624,
-        "brier": 0.12385992196381423,
+        "brier": 0.1239844477483142,
         "f1": 0.2391056826415485,
         "flagged": 8506,
         "lift": 1.0,
-        "mean_predicted": 0.055093301382324884,
+        "mean_predicted": 0.05432535538458261,
         "pr_auc": 0.13578650364448624,
         "precision": 0.13578650364448624,
         "predictor": "base_rate",
         "recall": 1.0,
-        "threshold": 0.05509330138232488
+        "threshold": 0.054325355384582594
       },
       {
         "base_rate": 0.13578650364448624,
-        "brier": 0.1146156621653148,
+        "brier": 0.11466271929351604,
         "f1": 0.3806620209059233,
         "flagged": 1141,
         "lift": 1.6888273852986966,
-        "mean_predicted": 0.06719956563580386,
+        "mean_predicted": 0.06663115368133059,
         "pr_auc": 0.22931996590876963,
         "precision": 0.38299737072743206,
         "predictor": "persistence",
         "recall": 0.37835497835497833,
-        "threshold": 0.1999195494770716
+        "threshold": 0.20023510971786834
       },
       {
         "base_rate": 0.13578650364448624,
@@ -314,29 +313,29 @@
       },
       {
         "base_rate": 0.13578650364448624,
-        "brier": 0.22529264338043653,
-        "f1": 0.37898518185900315,
-        "flagged": 1072,
-        "lift": 2.432765332745736,
-        "mean_predicted": 0.4777618944644928,
-        "pr_auc": 0.3303366987210587,
-        "precision": 0.39365671641791045,
+        "brier": 0.21993267244042214,
+        "f1": 0.3705482192877151,
+        "flagged": 1344,
+        "lift": 2.361005739482625,
+        "mean_predicted": 0.46949073672294617,
+        "pr_auc": 0.3205927144489104,
+        "precision": 0.3444940476190476,
         "predictor": "model_weighted",
-        "recall": 0.36536796536796534,
-        "threshold": 0.5640283823013306
+        "recall": 0.40086580086580087,
+        "threshold": 0.5383832454681396
       },
       {
         "base_rate": 0.13578650364448624,
-        "brier": 0.11019495378224092,
-        "f1": 0.3862876254180602,
-        "flagged": 1237,
-        "lift": 2.5729096427736793,
-        "mean_predicted": 0.07034637033939362,
-        "pr_auc": 0.349366404585422,
-        "precision": 0.3734842360549717,
+        "brier": 0.10870226779702824,
+        "f1": 0.3796698523023458,
+        "flagged": 1147,
+        "lift": 2.660017414860988,
+        "mean_predicted": 0.07186920195817947,
+        "pr_auc": 0.3611944643974184,
+        "precision": 0.38099389712292936,
         "predictor": "model_unweighted",
-        "recall": 0.4,
-        "threshold": 0.10242609679698944
+        "recall": 0.37835497835497833,
+        "threshold": 0.11317568272352219
       }
     ],
     "threshold_chosen_on": "validation",
@@ -345,7 +344,7 @@
       "model_unweighted": {
         "beats_every_baseline": {
           "brier": true,
-          "f1": true,
+          "f1": false,
           "pr_auc": true
         },
         "detail": {
@@ -357,7 +356,7 @@
           "f1": {
             "base_rate": true,
             "climatology": true,
-            "persistence": true
+            "persistence": false
           },
           "pr_auc": {
             "base_rate": true,
@@ -395,228 +394,726 @@
   "explainability": {
     "cases": {
       "false_positive": {
-        "base_value": -2.878248691558838,
+        "base_value": -2.8672685623168945,
+        "city_id": "singapore",
+        "contributions": [
+          {
+            "feature": "z_temperature_2m_mean",
+            "shap": 2.2846531867980957,
+            "value": 3.184236903900411
+          },
+          {
+            "feature": "anomaly_days_trailing30",
+            "shap": 0.8850181102752686,
+            "value": 5.0
+          },
+          {
+            "feature": "temperature_2m_mean_roll7_var",
+            "shap": 0.21254532039165497,
+            "value": 0.03238095238050504
+          },
+          {
+            "feature": "day_of_year_sin",
+            "shap": 0.11567173898220062,
+            "value": 0.9984354211555643
+          },
+          {
+            "feature": "temperature_2m_mean_roll30_var",
+            "shap": 0.08845417201519012,
+            "value": 0.6078160919535547
+          },
+          {
+            "feature": "temperature_2m_mean_lag14",
+            "shap": -0.0735447034239769,
+            "value": 26.9
+          },
+          {
+            "feature": "latitude",
+            "shap": -0.06319878995418549,
+            "value": 1.3521
+          },
+          {
+            "feature": "day_of_year_cos",
+            "shap": 0.06087730452418327,
+            "value": 0.055916990100603484
+          }
+        ],
+        "date_key": "2024-03-29",
+        "label": false,
+        "margin": 0.5785913467407227,
+        "predicted": 0.6407430768013
+      },
+      "true_positive": {
+        "base_value": -2.8672685623168945,
         "city_id": "cairo",
         "contributions": [
           {
             "feature": "z_temperature_2m_mean",
-            "shap": 2.259150266647339,
-            "value": 2.9488762532156407
+            "shap": 2.1594858169555664,
+            "value": 2.696693839814244
           },
           {
             "feature": "anomaly_days_trailing30",
-            "shap": 0.7294891476631165,
-            "value": 10.0
-          },
-          {
-            "feature": "pressure_tendency_72h",
-            "shap": 0.08694939315319061,
-            "value": 4.600000000000023
-          },
-          {
-            "feature": "temperature_2m_mean_roll30_var",
-            "shap": 0.08081893622875214,
-            "value": 6.447402298852877
+            "shap": 0.9689084887504578,
+            "value": 9.0
           },
           {
             "feature": "temperature_2m_mean_roll30_mean",
-            "shap": 0.07541263103485107,
-            "value": 18.613333333333333
+            "shap": 0.11657848209142685,
+            "value": 18.40333333333333
           },
           {
-            "feature": "day_of_year_cos",
-            "shap": 0.07123598456382751,
-            "value": 0.6901733882429719
+            "feature": "temperature_2m_mean_lag14",
+            "shap": 0.07948797941207886,
+            "value": 21.3
+          },
+          {
+            "feature": "elevation_m",
+            "shap": 0.06411197781562805,
+            "value": 23.0
           },
           {
             "feature": "pressure_msl_mean_roll30_var",
-            "shap": 0.06474190205335617,
-            "value": 9.837517241399143
+            "shap": 0.05246616154909134,
+            "value": 9.901160919563829
           },
           {
-            "feature": "day_of_year_sin",
-            "shap": 0.06465501338243484,
-            "value": 0.7236440382959124
-          }
-        ],
-        "date_key": "2026-02-16",
-        "label": false,
-        "margin": 0.7688117027282715,
-        "predicted": 0.6832637190818787
-      },
-      "true_positive": {
-        "base_value": -2.878248691558838,
-        "city_id": "delhi",
-        "contributions": [
-          {
-            "feature": "z_temperature_2m_mean",
-            "shap": 2.2908952236175537,
-            "value": 2.767787735617837
-          },
-          {
-            "feature": "anomaly_days_trailing30",
-            "shap": 0.8993672132492065,
-            "value": 5.0
-          },
-          {
-            "feature": "day_of_year_sin",
-            "shap": 0.18578681349754333,
-            "value": 0.9209712877166346
+            "feature": "temperature_2m_mean_roll7_var",
+            "shap": -0.04624081030488014,
+            "value": 1.6190476190488852
           },
           {
             "feature": "pressure_tendency_72h",
-            "shap": 0.0808989405632019,
-            "value": 2.2000000000000455
-          },
-          {
-            "feature": "pressure_msl_mean_roll30_var",
-            "shap": 0.06907129287719727,
-            "value": 9.948333333488527
-          },
-          {
-            "feature": "temperature_2m_mean_roll30_mean",
-            "shap": 0.06261104345321655,
-            "value": 22.496666666666666
-          },
-          {
-            "feature": "pressure_msl_mean_roll7_mean",
-            "shap": 0.033266883343458176,
-            "value": 1011.2142857142857
-          },
-          {
-            "feature": "pressure_msl_mean",
-            "shap": 0.025289544835686684,
-            "value": 1012.2
+            "shap": 0.043798044323921204,
+            "value": 3.0
           }
         ],
-        "date_key": "2026-03-09",
+        "date_key": "2026-02-15",
         "label": true,
-        "margin": 0.8253295421600342,
-        "predicted": 0.6953664422035217
+        "margin": 0.814948320388794,
+        "predicted": 0.6931628584861755
       }
     },
     "explained_variant": "unweighted",
     "implementation": "xgboost pred_contribs (TreeSHAP)",
-    "note": "SHAP values are in log-odds. The base value is -2.8782, which is 0.0532 as a probability.",
-    "recorded_at": "2026-09-07T09:41:25+00:00",
+    "note": "SHAP values are in log-odds. The base value is -2.8673, which is 0.0538 as a probability.",
+    "recorded_at": "2026-09-08T12:28:44+00:00",
     "rows_explained": 8506,
     "space": "log-odds",
-    "static_city_share": 0.13713666443400768,
+    "static_city_share": 0.12433258362761282,
     "tail_response": [
       {
         "band": "(-inf, -2.5]",
-        "mean_shap": 1.8491977453231812,
+        "mean_shap": 1.9287750720977783,
         "rows": 61
       },
       {
         "band": "(-2.5, -1.5]",
-        "mean_shap": 0.6980443000793457,
+        "mean_shap": 0.7212894558906555,
         "rows": 368
       },
       {
         "band": "(-1.5, -0.5]",
-        "mean_shap": -0.14077676832675934,
+        "mean_shap": -0.14883849024772644,
         "rows": 1272
       },
       {
         "band": "(-0.5, 0.5]",
-        "mean_shap": -0.27002859115600586,
+        "mean_shap": -0.3286038041114807,
         "rows": 2785
       },
       {
         "band": "(0.5, 1.5]",
-        "mean_shap": -0.1756056398153305,
+        "mean_shap": -0.19836044311523438,
         "rows": 2691
       },
       {
         "band": "(1.5, 2.5]",
-        "mean_shap": 0.8460498452186584,
+        "mean_shap": 0.838161051273346,
         "rows": 1100
       },
       {
         "band": "(2.5, inf]",
-        "mean_shap": 1.9105348587036133,
+        "mean_shap": 1.94387686252594,
         "rows": 229
       }
     ],
-    "threshold": 0.10242609679698944,
+    "threshold": 0.11317568272352219,
     "top_features": [
       {
-        "correlation": 0.34372664208045783,
+        "correlation": 0.3362199889928892,
         "feature": "z_temperature_2m_mean",
-        "mean_abs": 0.38608843088150024,
-        "mean_signed": 0.03928946331143379,
+        "mean_abs": 0.42102792859077454,
+        "mean_signed": 0.013160422444343567,
         "static_per_city": false
       },
       {
-        "correlation": 0.8392124607414508,
+        "correlation": 0.8784259219595121,
         "feature": "anomaly_days_trailing30",
-        "mean_abs": 0.21015332639217377,
-        "mean_signed": 0.06620315462350845,
+        "mean_abs": 0.24804627895355225,
+        "mean_signed": 0.07589178532361984,
         "static_per_city": false
       },
       {
-        "correlation": -0.8449696514406959,
+        "correlation": -0.8206570577700396,
         "feature": "elevation_m",
-        "mean_abs": 0.10613438487052917,
-        "mean_signed": -0.02506466582417488,
+        "mean_abs": 0.11283154040575027,
+        "mean_signed": -0.0254973117262125,
         "static_per_city": true
       },
       {
-        "correlation": -0.4246106058395557,
+        "correlation": -0.5609710032463336,
         "feature": "temperature_2m_mean_roll30_mean",
-        "mean_abs": 0.072560153901577,
-        "mean_signed": -0.018894735723733902,
+        "mean_abs": 0.10338380932807922,
+        "mean_signed": -0.04503892734646797,
         "static_per_city": false
       },
       {
-        "correlation": 0.7476500157526532,
+        "correlation": 0.7509333933572786,
         "feature": "latitude",
-        "mean_abs": 0.05755399912595749,
-        "mean_signed": -0.01930502988398075,
+        "mean_abs": 0.05775606259703636,
+        "mean_signed": -0.00998648814857006,
         "static_per_city": true
       },
       {
-        "correlation": 0.5789531813532116,
-        "feature": "day_of_year_sin",
-        "mean_abs": 0.039062801748514175,
-        "mean_signed": -0.0049460469745099545,
-        "static_per_city": false
-      },
-      {
-        "correlation": 0.4502974824826238,
-        "feature": "pressure_msl_mean_roll30_var",
-        "mean_abs": 0.034846555441617966,
-        "mean_signed": -0.016414059326052666,
-        "static_per_city": false
-      },
-      {
-        "correlation": 0.2247232899230393,
+        "correlation": 0.32508895552492084,
         "feature": "day_of_year_cos",
-        "mean_abs": 0.03029138408601284,
-        "mean_signed": -0.0018372301710769534,
+        "mean_abs": 0.057709209620952606,
+        "mean_signed": -0.005518963560461998,
         "static_per_city": false
       },
       {
-        "correlation": -0.10607640195561911,
+        "correlation": 0.4937454465414249,
+        "feature": "pressure_msl_mean_roll30_var",
+        "mean_abs": 0.0400858111679554,
+        "mean_signed": -0.02688465267419815,
+        "static_per_city": false
+      },
+      {
+        "correlation": 0.5241397238036676,
+        "feature": "temperature_2m_mean_roll7_var",
+        "mean_abs": 0.03792065382003784,
+        "mean_signed": -0.005121482536196709,
+        "static_per_city": false
+      },
+      {
+        "correlation": -0.3378753459825692,
         "feature": "temperature_2m_mean_roll30_var",
-        "mean_abs": 0.028518743813037872,
-        "mean_signed": -0.007433050312101841,
+        "mean_abs": 0.032152097672224045,
+        "mean_signed": 0.0037028982769697905,
         "static_per_city": false
       },
       {
-        "correlation": -0.40842409865954604,
-        "feature": "temperature_2m_mean",
-        "mean_abs": 0.0235397070646286,
-        "mean_signed": -0.019100284203886986,
+        "correlation": 0.3765669690521211,
+        "feature": "day_of_year_sin",
+        "mean_abs": 0.03019215352833271,
+        "mean_signed": -0.002665560692548752,
         "static_per_city": false
       }
     ]
   },
-  "generated_at": "2026-09-07T09:44:30+00:00",
+  "generated_at": "2026-09-08T12:27:02+00:00",
   "label": {
     "horizon_days": 7,
     "window": "t+1 .. t+7 inclusive"
+  },
+  "leave_one_city_out": {
+    "cities_held_out": [
+      "cairo",
+      "delhi",
+      "lagos",
+      "phoenix",
+      "singapore"
+    ],
+    "cities_not_held_out": {
+      "auckland": "no labelled rows past the feature warm-up",
+      "buenos_aires": "no labelled rows past the feature warm-up",
+      "johannesburg": "no labelled rows past the feature warm-up",
+      "london": "no rows in the test split; its record ends 1998-09-05",
+      "moscow": "no labelled rows past the feature warm-up",
+      "portland": "no labelled rows past the feature warm-up",
+      "reykjavik": "no rows in the test split; its record ends 2003-09-07",
+      "sao_paulo": "no labelled rows past the feature warm-up",
+      "sydney": "no rows in the test split; its record ends 2021-09-07",
+      "tokyo": "no rows in the test split; its record ends 2003-12-24"
+    },
+    "folds": [
+      {
+        "base_rate": 0.177751618599176,
+        "city_id": "cairo",
+        "fold_recommended_variant": "unweighted",
+        "persistence": {
+          "available": true,
+          "brier": 0.15036055762071143,
+          "fitted_on": "the other cities' training split",
+          "lift_over_base_rate": 1.3618663175862797,
+          "pr_auc": 0.24207394226666068,
+          "train_rows": 38192
+        },
+        "persistence_fits_agree_on_ranking": true,
+        "persistence_own": {
+          "available": true,
+          "brier": 0.1520638021792963,
+          "fitted_on": "this city's own training split",
+          "lift_over_base_rate": 1.3618663175862797,
+          "pr_auc": 0.24207394226666068,
+          "train_rows": 8729
+        },
+        "positives": 302,
+        "rows": 1699,
+        "train_cities": [
+          "delhi",
+          "lagos",
+          "london",
+          "phoenix",
+          "reykjavik",
+          "singapore",
+          "tokyo"
+        ],
+        "train_rows": 38192,
+        "validation_rows": 4370,
+        "variants": {
+          "unweighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": true,
+              "pr_auc": true
+            },
+            "brier_ratio_to_persistence": 1.053167653831508,
+            "held_out": {
+              "base_rate": 0.177751618599176,
+              "brier": 0.1443870798975605,
+              "lift": 2.129426582847499,
+              "positives": 302,
+              "pr_auc": 0.37850902178925533,
+              "rows": 1699
+            },
+            "in_sample": {
+              "base_rate": 0.177751618599176,
+              "brier": 0.1400859207938665,
+              "lift": 2.0802305628692546,
+              "positives": 302,
+              "pr_auc": 0.3697643496094849,
+              "rows": 1699
+            },
+            "lift_over_persistence": 1.5636091115180926,
+            "retained_of_in_sample": 1.0236493112140364
+          },
+          "weighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": false,
+              "pr_auc": true
+            },
+            "brier_ratio_to_persistence": 0.6691616688796856,
+            "held_out": {
+              "base_rate": 0.177751618599176,
+              "brier": 0.2272452372143228,
+              "lift": 2.1178216215251346,
+              "positives": 302,
+              "pr_auc": 0.37644622113042414,
+              "rows": 1699
+            },
+            "in_sample": {
+              "base_rate": 0.177751618599176,
+              "brier": 0.2461815985246141,
+              "lift": 2.038806642688067,
+              "positives": 302,
+              "pr_auc": 0.36240118074855576,
+              "rows": 1699
+            },
+            "lift_over_persistence": 1.5550877455275356,
+            "retained_of_in_sample": 1.0387555039220835
+          }
+        }
+      },
+      {
+        "base_rate": 0.05179517363154797,
+        "city_id": "delhi",
+        "fold_recommended_variant": "unweighted",
+        "persistence": {
+          "available": true,
+          "brier": 0.04671271682019536,
+          "fitted_on": "the other cities' training split",
+          "lift_over_base_rate": 2.274116911626597,
+          "pr_auc": 0.11778828029613922,
+          "train_rows": 38192
+        },
+        "persistence_fits_agree_on_ranking": true,
+        "persistence_own": {
+          "available": true,
+          "brier": 0.04621562762609064,
+          "fitted_on": "this city's own training split",
+          "lift_over_base_rate": 2.274116911626597,
+          "pr_auc": 0.11778828029613922,
+          "train_rows": 8729
+        },
+        "positives": 88,
+        "rows": 1699,
+        "train_cities": [
+          "cairo",
+          "lagos",
+          "london",
+          "phoenix",
+          "reykjavik",
+          "singapore",
+          "tokyo"
+        ],
+        "train_rows": 38192,
+        "validation_rows": 4370,
+        "variants": {
+          "unweighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": true,
+              "pr_auc": true
+            },
+            "brier_ratio_to_persistence": 1.091083900110409,
+            "held_out": {
+              "base_rate": 0.05179517363154797,
+              "brier": 0.042357537877164154,
+              "lift": 6.569229259700223,
+              "positives": 88,
+              "pr_auc": 0.34025437013161836,
+              "rows": 1699
+            },
+            "in_sample": {
+              "base_rate": 0.05179517363154797,
+              "brier": 0.04223380278799795,
+              "lift": 6.350090678822164,
+              "positives": 88,
+              "pr_auc": 0.32890404928566824,
+              "rows": 1699
+            },
+            "lift_over_persistence": 2.888694607614294,
+            "retained_of_in_sample": 1.0345095199362895
+          },
+          "weighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": false,
+              "pr_auc": true
+            },
+            "brier_ratio_to_persistence": 0.19608562532093923,
+            "held_out": {
+              "base_rate": 0.05179517363154797,
+              "brier": 0.23569105359175685,
+              "lift": 4.409934782314228,
+              "positives": 88,
+              "pr_auc": 0.22841333775376813,
+              "rows": 1699
+            },
+            "in_sample": {
+              "base_rate": 0.05179517363154797,
+              "brier": 0.2052228516902982,
+              "lift": 4.848270964634627,
+              "positives": 88,
+              "pr_auc": 0.25111703642604305,
+              "rows": 1699
+            },
+            "lift_over_persistence": 1.939185606407524,
+            "retained_of_in_sample": 0.9095891740544595
+          }
+        }
+      },
+      {
+        "base_rate": 0.15551643192488263,
+        "city_id": "lagos",
+        "fold_recommended_variant": "unweighted",
+        "persistence": {
+          "available": true,
+          "brier": 0.1251565820212736,
+          "fitted_on": "the other cities' training split",
+          "lift_over_base_rate": 2.161761116676464,
+          "pr_auc": 0.33618937553947353,
+          "train_rows": 38192
+        },
+        "persistence_fits_agree_on_ranking": true,
+        "persistence_own": {
+          "available": true,
+          "brier": 0.12439922570506146,
+          "fitted_on": "this city's own training split",
+          "lift_over_base_rate": 2.161761116676464,
+          "pr_auc": 0.33618937553947353,
+          "train_rows": 8729
+        },
+        "positives": 265,
+        "rows": 1704,
+        "train_cities": [
+          "cairo",
+          "delhi",
+          "london",
+          "phoenix",
+          "reykjavik",
+          "singapore",
+          "tokyo"
+        ],
+        "train_rows": 38192,
+        "validation_rows": 4370,
+        "variants": {
+          "unweighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": true,
+              "pr_auc": true
+            },
+            "brier_ratio_to_persistence": 1.1599813468725695,
+            "held_out": {
+              "base_rate": 0.15551643192488263,
+              "brier": 0.10724243630335499,
+              "lift": 3.1907839430156826,
+              "positives": 265,
+              "pr_auc": 0.496219333861007,
+              "rows": 1704
+            },
+            "in_sample": {
+              "base_rate": 0.15551643192488263,
+              "brier": 0.11997475125261771,
+              "lift": 2.9347526640552304,
+              "positives": 265,
+              "pr_auc": 0.4564022628959132,
+              "rows": 1704
+            },
+            "lift_over_persistence": 1.4760113494507014,
+            "retained_of_in_sample": 1.0872411777988367
+          },
+          "weighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": false,
+              "pr_auc": true
+            },
+            "brier_ratio_to_persistence": 0.5811127946636503,
+            "held_out": {
+              "base_rate": 0.15551643192488263,
+              "brier": 0.21407070511511295,
+              "lift": 3.1650825256629926,
+              "positives": 265,
+              "pr_auc": 0.49222234113890434,
+              "rows": 1704
+            },
+            "in_sample": {
+              "base_rate": 0.15551643192488263,
+              "brier": 0.2140933288027486,
+              "lift": 2.409447333144023,
+              "positives": 265,
+              "pr_auc": 0.37470865216148247,
+              "rows": 1704
+            },
+            "lift_over_persistence": 1.464122238690765,
+            "retained_of_in_sample": 1.313613492241377
+          }
+        }
+      },
+      {
+        "base_rate": 0.05650382577987051,
+        "city_id": "phoenix",
+        "fold_recommended_variant": "unweighted",
+        "persistence": {
+          "available": true,
+          "brier": 0.053410722765061716,
+          "fitted_on": "the other cities' training split",
+          "lift_over_base_rate": 1.1515299479166667,
+          "pr_auc": 0.0650658475573867,
+          "train_rows": 38192
+        },
+        "persistence_fits_agree_on_ranking": true,
+        "persistence_own": {
+          "available": true,
+          "brier": 0.05330790459531373,
+          "fitted_on": "this city's own training split",
+          "lift_over_base_rate": 1.1515299479166667,
+          "pr_auc": 0.0650658475573867,
+          "train_rows": 8729
+        },
+        "positives": 96,
+        "rows": 1699,
+        "train_cities": [
+          "cairo",
+          "delhi",
+          "lagos",
+          "london",
+          "reykjavik",
+          "singapore",
+          "tokyo"
+        ],
+        "train_rows": 38192,
+        "validation_rows": 4370,
+        "variants": {
+          "unweighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": true,
+              "pr_auc": true
+            },
+            "brier_ratio_to_persistence": 1.0967666929333817,
+            "held_out": {
+              "base_rate": 0.05650382577987051,
+              "brier": 0.048604598351485215,
+              "lift": 4.868689629727966,
+              "positives": 96,
+              "pr_auc": 0.27509959061441125,
+              "rows": 1699
+            },
+            "in_sample": {
+              "base_rate": 0.05650382577987051,
+              "brier": 0.04945980467807432,
+              "lift": 3.9577873967785213,
+              "positives": 96,
+              "pr_auc": 0.22363012954134082,
+              "rows": 1699
+            },
+            "lift_over_persistence": 4.228018245236554,
+            "retained_of_in_sample": 1.2301544124605788
+          },
+          "weighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": false,
+              "pr_auc": true
+            },
+            "brier_ratio_to_persistence": 0.23212052930259305,
+            "held_out": {
+              "base_rate": 0.05650382577987051,
+              "brier": 0.22965613922851855,
+              "lift": 4.156572584259236,
+              "positives": 96,
+              "pr_auc": 0.23486225314237003,
+              "rows": 1699
+            },
+            "in_sample": {
+              "base_rate": 0.05650382577987051,
+              "brier": 0.21021126699036313,
+              "lift": 2.4167842849371652,
+              "positives": 96,
+              "pr_auc": 0.1365575581836185,
+              "rows": 1699
+            },
+            "lift_over_persistence": 3.609608757270494,
+            "retained_of_in_sample": 1.7198773635551443
+          }
+        }
+      },
+      {
+        "base_rate": 0.23695014662756597,
+        "city_id": "singapore",
+        "fold_recommended_variant": "unweighted",
+        "persistence": {
+          "available": true,
+          "brier": 0.19633451875773036,
+          "fitted_on": "the other cities' training split",
+          "lift_over_base_rate": 1.2716557922532907,
+          "pr_auc": 0.3013190264342108,
+          "train_rows": 38192
+        },
+        "persistence_fits_agree_on_ranking": true,
+        "persistence_own": {
+          "available": true,
+          "brier": 0.20283740235203043,
+          "fitted_on": "this city's own training split",
+          "lift_over_base_rate": 1.2716557922532907,
+          "pr_auc": 0.3013190264342108,
+          "train_rows": 8729
+        },
+        "positives": 404,
+        "rows": 1705,
+        "train_cities": [
+          "cairo",
+          "delhi",
+          "lagos",
+          "london",
+          "phoenix",
+          "reykjavik",
+          "tokyo"
+        ],
+        "train_rows": 38192,
+        "validation_rows": 4370,
+        "variants": {
+          "unweighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": true,
+              "pr_auc": true
+            },
+            "brier_ratio_to_persistence": 1.0025248575456265,
+            "held_out": {
+              "base_rate": 0.23695014662756597,
+              "brier": 0.20232655661887067,
+              "lift": 1.419317360309578,
+              "positives": 404,
+              "pr_auc": 0.3363074566364044,
+              "rows": 1705
+            },
+            "in_sample": {
+              "base_rate": 0.23695014662756597,
+              "brier": 0.19143172740963374,
+              "lift": 1.7837339551457523,
+              "positives": 404,
+              "pr_auc": 0.4226560222163542,
+              "rows": 1705
+            },
+            "lift_over_persistence": 1.116117560235888,
+            "retained_of_in_sample": 0.7957001413888558
+          },
+          "weighted": {
+            "beats_base_rate": true,
+            "beats_own_persistence": {
+              "brier": false,
+              "pr_auc": false
+            },
+            "brier_ratio_to_persistence": 0.8516275627592792,
+            "held_out": {
+              "base_rate": 0.23695014662756597,
+              "brier": 0.23817618313671746,
+              "lift": 1.2139718094908252,
+              "positives": 404,
+              "pr_auc": 0.2876507982605826,
+              "rows": 1705
+            },
+            "in_sample": {
+              "base_rate": 0.23695014662756597,
+              "brier": 0.22395728795694086,
+              "lift": 1.623086598843775,
+              "positives": 404,
+              "pr_auc": 0.38459060758526986,
+              "rows": 1705
+            },
+            "lift_over_persistence": 0.9546386820129578,
+            "retained_of_in_sample": 0.7479402579970855
+          }
+        }
+      }
+    ],
+    "min_held_out_positives": 20,
+    "min_held_out_rows": 200,
+    "min_training_cities": 2,
+    "recorded_at": "2026-09-08T12:28:24+00:00",
+    "scored_on": "test",
+    "trained_on": "every other city's train and validation splits",
+    "verdict": {
+      "beats_base_rate": {
+        "cairo": true,
+        "delhi": true,
+        "lagos": true,
+        "phoenix": true,
+        "singapore": true
+      },
+      "beats_own_persistence": {
+        "cairo": true,
+        "delhi": true,
+        "lagos": true,
+        "phoenix": true,
+        "singapore": true
+      },
+      "cities": 5,
+      "cities_beating_own_persistence": 5,
+      "median_lift_over_persistence": 1.5636091115180926,
+      "median_retained_of_in_sample": 1.0345095199362895,
+      "statement": "Held out of training entirely, each of the 5 scored cities is still ranked better by the model than by its own persistence baseline (5 of 5, median PR-AUC 1.56x persistence and 103% of the same city's in-sample score), so the model transfers to a city it has never seen.",
+      "transfers": true,
+      "variant": "unweighted"
+    },
+    "yardstick": "that city's own persistence baseline, not its base rate"
   },
   "model": {
     "artifacts": {
@@ -625,31 +1122,31 @@
           "base_rate": {
             "beaten_on_brier": true,
             "beaten_on_pr_auc": true,
-            "brier": 0.12385992196381423,
-            "brier_delta": 0.013664968181573312,
+            "brier": 0.1239844477483142,
+            "brier_delta": 0.01528217995128596,
             "pr_auc": 0.13578650364448624,
-            "pr_auc_delta": 0.21357990094093576
+            "pr_auc_delta": 0.22540796075293218
           },
           "climatology": {
             "beaten_on_brier": true,
             "beaten_on_pr_auc": true,
             "brier": 0.12453788639471097,
-            "brier_delta": 0.01434293261247005,
+            "brier_delta": 0.015835618597682732,
             "pr_auc": 0.15141552079083645,
-            "pr_auc_delta": 0.19795088379458556
+            "pr_auc_delta": 0.20977894360658197
           },
           "persistence": {
             "beaten_on_brier": true,
             "beaten_on_pr_auc": true,
-            "brier": 0.1146156621653148,
-            "brier_delta": 0.004420708383073874,
+            "brier": 0.11466271929351604,
+            "brier_delta": 0.005960451496487801,
             "pr_auc": 0.22931996590876963,
-            "pr_auc_delta": 0.12004643867665238
+            "pr_auc_delta": 0.1318744984886488
           }
         },
-        "bytes": 256970,
+        "bytes": 362288,
         "committable": true,
-        "created_at": "2026-09-07T09:48:35+00:00",
+        "created_at": "2026-09-08T12:27:18+00:00",
         "feature_count": 27,
         "features": [
           "temperature_2m_mean",
@@ -680,21 +1177,21 @@
           "latitude",
           "elevation_m"
         ],
-        "filename": "model-unweighted-v1-2ad772ff7b18.joblib",
-        "fingerprint": "2ad772ff7b18",
+        "filename": "model-unweighted-v1-ac7ba867991e.joblib",
+        "fingerprint": "ac7ba867991e",
         "format_version": 1,
         "git": {
-          "branch": "machine-learning",
-          "commit": "677cfe666a5b0782e4fa288017bf77ba02aa6658",
+          "branch": "phase-two",
+          "commit": "343c61a64369d35e27137697fbdb5c3c04b9bd0b",
           "dirty": true,
-          "short_commit": "677cfe666a5b"
+          "short_commit": "343c61a64369"
         },
         "hyperparameters": {
           "early_stopping_rounds": 50,
-          "learning_rate": 0.1,
+          "learning_rate": 0.03,
           "max_depth": 6,
-          "min_child_weight": 1,
-          "n_estimators": 18,
+          "min_child_weight": 10,
+          "n_estimators": 91,
           "n_jobs": 1,
           "scale_pos_weight": 1.0,
           "seed": 42
@@ -709,47 +1206,49 @@
         "metrics": {
           "test": {
             "base_rate": 0.13578650364448624,
-            "brier": 0.11019495378224092,
-            "lift": 2.5729096427736793,
-            "mean_predicted": 0.07034637033939362,
+            "brier": 0.10870226779702824,
+            "lift": 2.660017414860988,
+            "mean_predicted": 0.07186920195817947,
             "positives": 1155,
-            "pr_auc": 0.349366404585422,
+            "pr_auc": 0.3611944643974184,
             "rows": 8506
           },
           "train": {
-            "base_rate": 0.05509330138232488,
-            "brier": 0.04275861243943066,
-            "lift": 7.577051521823508,
-            "mean_predicted": 0.05508093908429146,
-            "positives": 2483,
-            "pr_auc": 0.4174447830812259,
-            "rows": 45069
+            "base_rate": 0.054325355384582594,
+            "brier": 0.043303932434106206,
+            "lift": 6.793017835628577,
+            "mean_predicted": 0.054252248257398605,
+            "positives": 2549,
+            "pr_auc": 0.3690331080543305,
+            "rows": 46921
           },
           "validation": {
-            "base_rate": 0.0852157943067034,
-            "brier": 0.07252021077335451,
-            "lift": 3.1350019791600747,
-            "mean_predicted": 0.05656016245484352,
-            "positives": 464,
-            "pr_auc": 0.267151683807213,
-            "rows": 5445
+            "base_rate": 0.08627953837699212,
+            "brier": 0.0728795220778394,
+            "lift": 3.218839143897861,
+            "mean_predicted": 0.05693458765745163,
+            "positives": 471,
+            "pr_auc": 0.2777199554453,
+            "rows": 5459
           }
         },
         "recommended": true,
-        "sha256": "d5435a9152129871bde80c0559ffa01826923f33c1e7a709e4286f42148b288c",
+        "sha256": "436ebf81ba7d5f5eb2f3b607ac28cb3da857545e88b5e0cc5978d94cb446f46c",
         "training_window": {
           "cities": [
             "cairo",
             "delhi",
             "lagos",
+            "london",
             "phoenix",
+            "reykjavik",
             "singapore",
             "tokyo"
           ],
           "end": "2018-12-24",
-          "positive_rate": 0.05509330138232488,
-          "positives": 2483,
-          "rows": 45069,
+          "positive_rate": 0.054325355384582594,
+          "positives": 2549,
+          "rows": 46921,
           "start": "1995-01-31"
         },
         "variant": "unweighted"
@@ -759,31 +1258,31 @@
           "base_rate": {
             "beaten_on_brier": false,
             "beaten_on_pr_auc": true,
-            "brier": 0.12385992196381423,
-            "brier_delta": -0.1014327214166223,
+            "brier": 0.1239844477483142,
+            "brier_delta": -0.09594822469210794,
             "pr_auc": 0.13578650364448624,
-            "pr_auc_delta": 0.19455019507657245
+            "pr_auc_delta": 0.18480621080442416
           },
           "climatology": {
             "beaten_on_brier": false,
             "beaten_on_pr_auc": true,
             "brier": 0.12453788639471097,
-            "brier_delta": -0.10075475698572556,
+            "brier_delta": -0.09539478604571117,
             "pr_auc": 0.15141552079083645,
-            "pr_auc_delta": 0.17892117793022225
+            "pr_auc_delta": 0.16917719365807396
           },
           "persistence": {
             "beaten_on_brier": false,
             "beaten_on_pr_auc": true,
-            "brier": 0.1146156621653148,
-            "brier_delta": -0.11067698121512173,
+            "brier": 0.11466271929351604,
+            "brier_delta": -0.1052699531469061,
             "pr_auc": 0.22931996590876963,
-            "pr_auc_delta": 0.10101673281228907
+            "pr_auc_delta": 0.09127274854014078
           }
         },
-        "bytes": 270433,
+        "bytes": 291486,
         "committable": true,
-        "created_at": "2026-09-07T09:48:35+00:00",
+        "created_at": "2026-09-08T12:27:18+00:00",
         "feature_count": 27,
         "features": [
           "temperature_2m_mean",
@@ -814,23 +1313,23 @@
           "latitude",
           "elevation_m"
         ],
-        "filename": "model-weighted-v1-4696869b4c0f.joblib",
-        "fingerprint": "4696869b4c0f",
+        "filename": "model-weighted-v1-1d874fa943d9.joblib",
+        "fingerprint": "1d874fa943d9",
         "format_version": 1,
         "git": {
-          "branch": "machine-learning",
-          "commit": "677cfe666a5b0782e4fa288017bf77ba02aa6658",
+          "branch": "phase-two",
+          "commit": "343c61a64369d35e27137697fbdb5c3c04b9bd0b",
           "dirty": true,
-          "short_commit": "677cfe666a5b"
+          "short_commit": "343c61a64369"
         },
         "hyperparameters": {
           "early_stopping_rounds": 50,
           "learning_rate": 0.03,
           "max_depth": 6,
           "min_child_weight": 10,
-          "n_estimators": 18,
+          "n_estimators": 23,
           "n_jobs": 1,
-          "scale_pos_weight": 17.151026983487718,
+          "scale_pos_weight": 17.4076108277756,
           "seed": 42
         },
         "libraries": {
@@ -843,47 +1342,49 @@
         "metrics": {
           "test": {
             "base_rate": 0.13578650364448624,
-            "brier": 0.22529264338043653,
-            "lift": 2.432765332745736,
-            "mean_predicted": 0.4777618944644928,
+            "brier": 0.21993267244042214,
+            "lift": 2.361005739482625,
+            "mean_predicted": 0.46949073672294617,
             "positives": 1155,
-            "pr_auc": 0.3303366987210587,
+            "pr_auc": 0.3205927144489104,
             "rows": 8506
           },
           "train": {
-            "base_rate": 0.05509330138232488,
-            "brier": 0.21148170060956734,
-            "lift": 5.731210943732657,
-            "mean_predicted": 0.4611533284187317,
-            "positives": 2483,
-            "pr_auc": 0.3157513318087419,
-            "rows": 45069
+            "base_rate": 0.054325355384582594,
+            "brier": 0.20552839281915836,
+            "lift": 6.078785518026612,
+            "mean_predicted": 0.4542660117149353,
+            "positives": 2549,
+            "pr_auc": 0.3302321835734497,
+            "rows": 46921
           },
           "validation": {
-            "base_rate": 0.0852157943067034,
-            "brier": 0.2177273731403773,
-            "lift": 2.8979569226406934,
-            "mean_predicted": 0.46490803360939026,
-            "positives": 464,
-            "pr_auc": 0.24695170102943648,
-            "rows": 5445
+            "base_rate": 0.08627953837699212,
+            "brier": 0.2110861869495933,
+            "lift": 2.9584993190682463,
+            "mean_predicted": 0.45597681403160095,
+            "positives": 471,
+            "pr_auc": 0.2552579555378538,
+            "rows": 5459
           }
         },
         "recommended": false,
-        "sha256": "0ab23b68e20c487e2a5807714e53921e353f1665599a9e989026ab523df6e4a0",
+        "sha256": "7d33bf3c139faf1ea935af73dd947ca868e9c6c2055d4e5d6f5a9aecd7ee9726",
         "training_window": {
           "cities": [
             "cairo",
             "delhi",
             "lagos",
+            "london",
             "phoenix",
+            "reykjavik",
             "singapore",
             "tokyo"
           ],
           "end": "2018-12-24",
-          "positive_rate": 0.05509330138232488,
-          "positives": 2483,
-          "rows": 45069,
+          "positive_rate": 0.054325355384582594,
+          "positives": 2549,
+          "rows": 46921,
           "start": "1995-01-31"
         },
         "variant": "weighted"
@@ -892,9 +1393,9 @@
     "estimator": "xgboost.XGBClassifier",
     "fitted_on": "train",
     "recommended_variant": "unweighted",
-    "recorded_at": "2026-09-07T09:48:35+00:00",
+    "recorded_at": "2026-09-08T12:27:18+00:00",
     "resampling": "none",
-    "scale_pos_weight_observed": 17.151026983487718,
+    "scale_pos_weight_observed": 17.4076108277756,
     "specified_variant": "weighted",
     "tuned_on": "validation",
     "variants": {
@@ -931,180 +1432,180 @@
           "elevation_m"
         ],
         "max_rounds": 2000,
-        "n_estimators": 18,
+        "n_estimators": 91,
         "n_jobs": 1,
         "params": {
-          "learning_rate": 0.1,
+          "learning_rate": 0.03,
           "max_depth": 6,
-          "min_child_weight": 1
+          "min_child_weight": 10
         },
         "scale_pos_weight": 1.0,
         "seed": 42,
         "test": {
           "base_rate": 0.13578650364448624,
-          "brier": 0.11019495378224092,
-          "lift": 2.5729096427736793,
-          "mean_predicted": 0.07034637033939362,
+          "brier": 0.10870226779702824,
+          "lift": 2.660017414860988,
+          "mean_predicted": 0.07186920195817947,
           "positives": 1155,
-          "pr_auc": 0.349366404585422,
+          "pr_auc": 0.3611944643974184,
           "rows": 8506
         },
         "top_importances": [
           {
             "feature": "z_temperature_2m_mean",
-            "gain": 0.14264258742332458
-          },
-          {
-            "feature": "latitude",
-            "gain": 0.0769520029425621
+            "gain": 0.13839435577392578
           },
           {
             "feature": "anomaly_days_trailing30",
-            "gain": 0.0752224251627922
+            "gain": 0.10552331060171127
           },
           {
             "feature": "elevation_m",
-            "gain": 0.05393568053841591
+            "gain": 0.049501921981573105
           },
           {
             "feature": "temperature_2m_mean_roll30_mean",
-            "gain": 0.043455831706523895
+            "gain": 0.042733822017908096
           },
           {
-            "feature": "pressure_msl_mean_roll30_var",
-            "gain": 0.037294287234544754
+            "feature": "latitude",
+            "gain": 0.039483897387981415
           },
           {
             "feature": "day_of_year_cos",
-            "gain": 0.03620164841413498
+            "gain": 0.036741264164447784
+          },
+          {
+            "feature": "pressure_msl_mean",
+            "gain": 0.03595782071352005
+          },
+          {
+            "feature": "pressure_msl_mean_roll30_var",
+            "gain": 0.03582704812288284
           },
           {
             "feature": "day_of_year_sin",
-            "gain": 0.03524678945541382
+            "gain": 0.03509297966957092
           },
           {
             "feature": "temperature_2m_mean_roll30_var",
-            "gain": 0.03361826390028
-          },
-          {
-            "feature": "temperature_2m_mean_roll7_mean",
-            "gain": 0.03258723020553589
+            "gain": 0.03431959077715874
           }
         ],
         "train": {
-          "base_rate": 0.05509330138232488,
-          "brier": 0.04275861243943066,
-          "lift": 7.577051521823508,
-          "mean_predicted": 0.05508093908429146,
-          "positives": 2483,
-          "pr_auc": 0.4174447830812259,
-          "rows": 45069
+          "base_rate": 0.054325355384582594,
+          "brier": 0.043303932434106206,
+          "lift": 6.793017835628577,
+          "mean_predicted": 0.054252248257398605,
+          "positives": 2549,
+          "pr_auc": 0.3690331080543305,
+          "rows": 46921
         },
         "validation": {
-          "base_rate": 0.0852157943067034,
-          "brier": 0.07252021077335451,
-          "lift": 3.1350019791600747,
-          "mean_predicted": 0.05656016245484352,
-          "positives": 464,
-          "pr_auc": 0.267151683807213,
-          "rows": 5445
+          "base_rate": 0.08627953837699212,
+          "brier": 0.0728795220778394,
+          "lift": 3.218839143897861,
+          "mean_predicted": 0.05693458765745163,
+          "positives": 471,
+          "pr_auc": 0.2777199554453,
+          "rows": 5459
         },
         "validation_search": [
           {
             "learning_rate": 0.03,
             "max_depth": 3,
             "min_child_weight": 1,
-            "n_estimators": 20,
-            "validation_brier": 0.07463251928879522,
-            "validation_pr_auc": 0.25593205763285276
+            "n_estimators": 131,
+            "validation_brier": 0.07257701075603322,
+            "validation_pr_auc": 0.27343886200744877
           },
           {
             "learning_rate": 0.03,
             "max_depth": 3,
             "min_child_weight": 10,
+            "n_estimators": 126,
+            "validation_brier": 0.07269859608060507,
+            "validation_pr_auc": 0.2714403888871512
+          },
+          {
+            "learning_rate": 0.1,
+            "max_depth": 3,
+            "min_child_weight": 1,
             "n_estimators": 10,
-            "validation_brier": 0.07595035186251167,
-            "validation_pr_auc": 0.24212378280704572
-          },
-          {
-            "learning_rate": 0.1,
-            "max_depth": 3,
-            "min_child_weight": 1,
-            "n_estimators": 30,
-            "validation_brier": 0.07256504766710212,
-            "validation_pr_auc": 0.25837787668353623
+            "validation_brier": 0.07407915360033719,
+            "validation_pr_auc": 0.25281311360785846
           },
           {
             "learning_rate": 0.1,
             "max_depth": 3,
             "min_child_weight": 10,
-            "n_estimators": 82,
-            "validation_brier": 0.07191698204612491,
-            "validation_pr_auc": 0.265612350274409
+            "n_estimators": 32,
+            "validation_brier": 0.07280668619630082,
+            "validation_pr_auc": 0.26780487693523713
           },
           {
             "learning_rate": 0.03,
             "max_depth": 4,
             "min_child_weight": 1,
-            "n_estimators": 101,
-            "validation_brier": 0.07275707379398967,
-            "validation_pr_auc": 0.25539587379919687
+            "n_estimators": 78,
+            "validation_brier": 0.07332685462689438,
+            "validation_pr_auc": 0.2664782632447431
           },
           {
             "learning_rate": 0.03,
             "max_depth": 4,
             "min_child_weight": 10,
-            "n_estimators": 91,
-            "validation_brier": 0.07217974169237944,
-            "validation_pr_auc": 0.265689099225556
+            "n_estimators": 20,
+            "validation_brier": 0.07528268936337251,
+            "validation_pr_auc": 0.2756264304890519
           },
           {
             "learning_rate": 0.1,
             "max_depth": 4,
             "min_child_weight": 1,
             "n_estimators": 9,
-            "validation_brier": 0.07390988229829042,
-            "validation_pr_auc": 0.25677261027340204
+            "validation_brier": 0.07375815346279294,
+            "validation_pr_auc": 0.2708121580955095
           },
           {
             "learning_rate": 0.1,
             "max_depth": 4,
             "min_child_weight": 10,
-            "n_estimators": 33,
-            "validation_brier": 0.0720710004547926,
-            "validation_pr_auc": 0.26175885564317103
+            "n_estimators": 6,
+            "validation_brier": 0.07451167730434172,
+            "validation_pr_auc": 0.26183011930402855
           },
           {
             "learning_rate": 0.03,
             "max_depth": 6,
             "min_child_weight": 1,
-            "n_estimators": 5,
-            "validation_brier": 0.0774870656422493,
-            "validation_pr_auc": 0.24531563878048346
+            "n_estimators": 48,
+            "validation_brier": 0.07431096594437892,
+            "validation_pr_auc": 0.2655242344527123
           },
           {
             "learning_rate": 0.03,
             "max_depth": 6,
             "min_child_weight": 10,
-            "n_estimators": 89,
-            "validation_brier": 0.07223866684851142,
-            "validation_pr_auc": 0.2636827801639724
+            "n_estimators": 91,
+            "validation_brier": 0.0728795220778394,
+            "validation_pr_auc": 0.2777199554453
           },
           {
             "learning_rate": 0.1,
             "max_depth": 6,
             "min_child_weight": 1,
-            "n_estimators": 18,
-            "validation_brier": 0.07252021077335451,
-            "validation_pr_auc": 0.267151683807213
+            "n_estimators": 15,
+            "validation_brier": 0.07370665692108398,
+            "validation_pr_auc": 0.26607173398129613
           },
           {
             "learning_rate": 0.1,
             "max_depth": 6,
             "min_child_weight": 10,
-            "n_estimators": 10,
-            "validation_brier": 0.07272283273834161,
-            "validation_pr_auc": 0.26355529025329116
+            "n_estimators": 11,
+            "validation_brier": 0.07343319754112956,
+            "validation_pr_auc": 0.2733900822057413
           }
         ]
       },
@@ -1141,207 +1642,213 @@
           "elevation_m"
         ],
         "max_rounds": 2000,
-        "n_estimators": 18,
+        "n_estimators": 23,
         "n_jobs": 1,
         "params": {
           "learning_rate": 0.03,
           "max_depth": 6,
           "min_child_weight": 10
         },
-        "scale_pos_weight": 17.151026983487718,
+        "scale_pos_weight": 17.4076108277756,
         "seed": 42,
         "test": {
           "base_rate": 0.13578650364448624,
-          "brier": 0.22529264338043653,
-          "lift": 2.432765332745736,
-          "mean_predicted": 0.4777618944644928,
+          "brier": 0.21993267244042214,
+          "lift": 2.361005739482625,
+          "mean_predicted": 0.46949073672294617,
           "positives": 1155,
-          "pr_auc": 0.3303366987210587,
+          "pr_auc": 0.3205927144489104,
           "rows": 8506
         },
         "top_importances": [
           {
             "feature": "anomaly_days_trailing30",
-            "gain": 0.19854773581027985
+            "gain": 0.19968341290950775
           },
           {
             "feature": "z_temperature_2m_mean",
-            "gain": 0.09697914123535156
+            "gain": 0.1045624241232872
           },
           {
             "feature": "latitude",
-            "gain": 0.08557353913784027
+            "gain": 0.06210508197546005
           },
           {
             "feature": "elevation_m",
-            "gain": 0.051664579659700394
+            "gain": 0.049898408353328705
           },
           {
             "feature": "temperature_2m_mean_roll30_mean",
-            "gain": 0.05082164704799652
-          },
-          {
-            "feature": "temperature_2m_mean_roll7_mean",
-            "gain": 0.04175760596990585
+            "gain": 0.04530000686645508
           },
           {
             "feature": "day_of_year_cos",
-            "gain": 0.03968589007854462
+            "gain": 0.04093421250581741
+          },
+          {
+            "feature": "temperature_2m_mean_roll7_mean",
+            "gain": 0.03967003896832466
           },
           {
             "feature": "pressure_msl_mean_roll30_var",
-            "gain": 0.031128959730267525
+            "gain": 0.03558727353811264
           },
           {
-            "feature": "day_of_year_sin",
-            "gain": 0.030612947419285774
+            "feature": "pressure_msl_mean_roll30_mean",
+            "gain": 0.035228364169597626
           },
           {
             "feature": "pressure_msl_mean_roll7_mean",
-            "gain": 0.029233740642666817
+            "gain": 0.032705243676900864
           }
         ],
         "train": {
-          "base_rate": 0.05509330138232488,
-          "brier": 0.21148170060956734,
-          "lift": 5.731210943732657,
-          "mean_predicted": 0.4611533284187317,
-          "positives": 2483,
-          "pr_auc": 0.3157513318087419,
-          "rows": 45069
+          "base_rate": 0.054325355384582594,
+          "brier": 0.20552839281915836,
+          "lift": 6.078785518026612,
+          "mean_predicted": 0.4542660117149353,
+          "positives": 2549,
+          "pr_auc": 0.3302321835734497,
+          "rows": 46921
         },
         "validation": {
-          "base_rate": 0.0852157943067034,
-          "brier": 0.2177273731403773,
-          "lift": 2.8979569226406934,
-          "mean_predicted": 0.46490803360939026,
-          "positives": 464,
-          "pr_auc": 0.24695170102943648,
-          "rows": 5445
+          "base_rate": 0.08627953837699212,
+          "brier": 0.2110861869495933,
+          "lift": 2.9584993190682463,
+          "mean_predicted": 0.45597681403160095,
+          "positives": 471,
+          "pr_auc": 0.2552579555378538,
+          "rows": 5459
         },
         "validation_search": [
           {
             "learning_rate": 0.03,
             "max_depth": 3,
             "min_child_weight": 1,
-            "n_estimators": 10,
-            "validation_brier": 0.24084090399522906,
-            "validation_pr_auc": 0.23661333611556457
-          },
-          {
-            "learning_rate": 0.03,
-            "max_depth": 3,
-            "min_child_weight": 10,
             "n_estimators": 8,
-            "validation_brier": 0.2419567183569903,
-            "validation_pr_auc": 0.23465920056261663
+            "validation_brier": 0.24202981100240253,
+            "validation_pr_auc": 0.23602328533642253
+          },
+          {
+            "learning_rate": 0.03,
+            "max_depth": 3,
+            "min_child_weight": 10,
+            "n_estimators": 15,
+            "validation_brier": 0.23772760480767455,
+            "validation_pr_auc": 0.24750647707648168
           },
           {
             "learning_rate": 0.1,
             "max_depth": 3,
             "min_child_weight": 1,
-            "n_estimators": 6,
-            "validation_brier": 0.23303908398279177,
-            "validation_pr_auc": 0.24299469301936383
+            "n_estimators": 15,
+            "validation_brier": 0.22439632242171298,
+            "validation_pr_auc": 0.24305536267333727
           },
           {
             "learning_rate": 0.1,
             "max_depth": 3,
             "min_child_weight": 10,
+            "n_estimators": 10,
+            "validation_brier": 0.2301539444936236,
+            "validation_pr_auc": 0.24144404029520686
+          },
+          {
+            "learning_rate": 0.03,
+            "max_depth": 4,
+            "min_child_weight": 1,
             "n_estimators": 5,
-            "validation_brier": 0.2356677400706359,
-            "validation_pr_auc": 0.23842101158332416
-          },
-          {
-            "learning_rate": 0.03,
-            "max_depth": 4,
-            "min_child_weight": 1,
-            "n_estimators": 12,
-            "validation_brier": 0.23476657422282385,
-            "validation_pr_auc": 0.22554467080374876
+            "validation_brier": 0.24257846126457178,
+            "validation_pr_auc": 0.23157052898716707
           },
           {
             "learning_rate": 0.03,
             "max_depth": 4,
             "min_child_weight": 10,
-            "n_estimators": 12,
-            "validation_brier": 0.2348249490848205,
-            "validation_pr_auc": 0.24348825485888867
+            "n_estimators": 20,
+            "validation_brier": 0.22765747460762117,
+            "validation_pr_auc": 0.24937024432514
           },
           {
             "learning_rate": 0.1,
             "max_depth": 4,
             "min_child_weight": 1,
-            "n_estimators": 34,
-            "validation_brier": 0.18695901155470504,
-            "validation_pr_auc": 0.2148973825460555
+            "n_estimators": 11,
+            "validation_brier": 0.2184707310889968,
+            "validation_pr_auc": 0.23973138974311106
           },
           {
             "learning_rate": 0.1,
             "max_depth": 4,
-            "min_child_weight": 10,
-            "n_estimators": 5,
-            "validation_brier": 0.22996394393594494,
-            "validation_pr_auc": 0.23122860749077115
-          },
-          {
-            "learning_rate": 0.03,
-            "max_depth": 6,
-            "min_child_weight": 1,
-            "n_estimators": 6,
-            "validation_brier": 0.23688187869796806,
-            "validation_pr_auc": 0.19816584668939788
-          },
-          {
-            "learning_rate": 0.03,
-            "max_depth": 6,
-            "min_child_weight": 10,
-            "n_estimators": 18,
-            "validation_brier": 0.2177273731403773,
-            "validation_pr_auc": 0.24695170102943648
-          },
-          {
-            "learning_rate": 0.1,
-            "max_depth": 6,
-            "min_child_weight": 1,
-            "n_estimators": 6,
-            "validation_brier": 0.21381153778699716,
-            "validation_pr_auc": 0.2050316822881726
-          },
-          {
-            "learning_rate": 0.1,
-            "max_depth": 6,
             "min_child_weight": 10,
             "n_estimators": 7,
-            "validation_brier": 0.2090785705215274,
-            "validation_pr_auc": 0.2337932044904708
+            "validation_brier": 0.22554425316579318,
+            "validation_pr_auc": 0.24787259810301526
+          },
+          {
+            "learning_rate": 0.03,
+            "max_depth": 6,
+            "min_child_weight": 1,
+            "n_estimators": 11,
+            "validation_brier": 0.22655047600723222,
+            "validation_pr_auc": 0.2183146039346585
+          },
+          {
+            "learning_rate": 0.03,
+            "max_depth": 6,
+            "min_child_weight": 10,
+            "n_estimators": 23,
+            "validation_brier": 0.2110861869495933,
+            "validation_pr_auc": 0.2552579555378538
+          },
+          {
+            "learning_rate": 0.1,
+            "max_depth": 6,
+            "min_child_weight": 1,
+            "n_estimators": 11,
+            "validation_brier": 0.19880283702163715,
+            "validation_pr_auc": 0.22519695645240917
+          },
+          {
+            "learning_rate": 0.1,
+            "max_depth": 6,
+            "min_child_weight": 10,
+            "n_estimators": 10,
+            "validation_brier": 0.20347191214943117,
+            "validation_pr_auc": 0.25086718653921786
           }
         ]
       }
     },
     "xgboost_version": "3.4.1"
   },
-  "schema_version": 5,
+  "schema_version": 6,
   "snapshot": {
-    "cities": 6,
+    "cities": 9,
     "first_date": "1995-01-31",
     "last_date": "2026-09-01",
     "last_date_by_city": {
       "cairo": "2026-08-26",
       "delhi": "2026-08-26",
       "lagos": "2026-08-31",
+      "london": "1998-09-05",
       "phoenix": "2026-08-26",
+      "reykjavik": "2003-09-07",
       "singapore": "2026-09-01",
-      "tokyo": "1998-12-24"
+      "sydney": "2021-09-07",
+      "tokyo": "2003-12-24"
     },
-    "rows": 59090,
+    "rows": 60956,
     "rows_by_city": {
       "cairo": 11531,
       "delhi": 11531,
       "lagos": 11536,
+      "london": 12,
       "phoenix": 11531,
+      "reykjavik": 14,
       "singapore": 11537,
-      "tokyo": 1424
+      "sydney": 14,
+      "tokyo": 3250
     }
   },
   "split": {
@@ -1366,18 +1873,18 @@
     "purge_days": 7,
     "summary": [
       {
-        "base_rate": 0.05509330138232488,
+        "base_rate": 0.054325355384582594,
         "end": "2018-12-24",
-        "positives": 2483,
-        "rows": 45069,
+        "positives": 2549,
+        "rows": 46921,
         "split": "train",
         "start": "1995-01-31"
       },
       {
-        "base_rate": 0.0852157943067034,
+        "base_rate": 0.08627953837699212,
         "end": "2021-12-24",
-        "positives": 464,
-        "rows": 5445,
+        "positives": 471,
+        "rows": 5459,
         "split": "validation",
         "start": "2019-01-01"
       },

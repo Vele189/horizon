@@ -2446,17 +2446,29 @@ def test_the_reason_a_city_is_missing_comes_from_the_model_not_a_guess() -> None
 
     "No row in the predictions table" is one observation with three different
     causes, and only the model knows which.
+
+    Which city is in which state is not asserted, because it moves: Moscow was
+    uningested when this was written and now has three days of record, so it has
+    crossed from the first reason to the second without anything in the view
+    changing. What has to hold is that the two lists partition the unscored
+    cities and that every name in them comes back with the record's own reason
+    rather than a guess assembled from missing rows.
     """
     from dashboard.views import risk_horizon as risk
 
+    evaluation = risk.model_report()["evaluation"]
+    absent = set(evaluation["cities_not_ingested"])
+    unscored = set(evaluation["cities_ingested_but_not_scored"])
     reasons = risk.absence_reasons()
+
     assert reasons, "the committed evaluation record has no absence account"
-    assert set(reasons.values()) <= {
-        "not ingested",
-        "ingested, but not enough history to score",
+    assert not absent & unscored, "a city cannot be both uningested and ingested"
+    assert not (absent | unscored) & set(evaluation["cities_scored"])
+    assert set(reasons) == absent | unscored
+    assert {reasons[city] for city in absent} <= {"not ingested"}
+    assert {reasons[city] for city in unscored} <= {
+        "ingested, but not enough history to score"
     }
-    assert reasons.get("moscow") == "not ingested"
-    assert reasons.get("london") == "ingested, but not enough history to score"
 
 
 def test_the_tooltip_says_the_score_covers_the_whole_window() -> None:

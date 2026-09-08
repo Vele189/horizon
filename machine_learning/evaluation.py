@@ -27,6 +27,15 @@ other. Every :class:`Score` carries the base rate it was measured against, and
 :func:`score` also returns the lift over it, because a PR-AUC with no reference
 is the thing this whole ticket exists to prevent.
 
+**There is a second axis to hold out on, and it is not time.** ML-08 asks
+whether the model can score a city it has never seen, which the chronological
+split says nothing about: every split contains every city. :func:`hold_out_city`
+and :func:`assert_city_is_held_out` are the primitives for that fold, kept here
+beside the time split because they are the same kind of object -- a partition
+the rest of the code must not be free to write for itself -- and because the
+city fold is composed *with* the time split rather than instead of it. A
+leave-one-city-out fold is still trained to 2018 and still purged.
+
 Usage::
 
     from machine_learning.evaluation import SPLITS, score, split_frame
@@ -67,6 +76,8 @@ from machine_learning.features import (  # noqa: E402
 )
 
 __all__ = [
+    "MIN_HELD_OUT_POSITIVES",
+    "MIN_HELD_OUT_ROWS",
     "PERSISTENCE_COUNT",
     "PERSISTENCE_FLAG",
     "PERSISTENCE_WINDOW",
@@ -77,14 +88,20 @@ __all__ = [
     "assert_splits_are_disjoint",
     "EMBARGO_DAYS",
     "add_persistence_signal",
+    "assert_city_is_held_out",
     "assert_splits_are_ordered",
     "base_rate",
     "boundary_report",
+    "drop_scorable_gaps",
     "evaluation_frame",
+    "hold_out_city",
+    "scorable_cities",
     "score",
     "split_frame",
     "split_summary",
 ]
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -348,21 +365,49 @@ def split_summary(parts: Mapping[str, pd.DataFrame]) -> pd.DataFrame:
 def evaluation_frame(engine=None, **kwargs) -> pd.DataFrame:
     """The rows every model and every baseline is scored on. One definition.
 
-    Labelled, and past the feature warm-up. Both conditions matter and neither
-    is optional: a row with no label has no answer to be right about, and a row
-    inside the warm-up has null features, so a baseline that ignores features
-    could be scored on rows the model cannot see. Comparing the two would then
-    be comparing different test sets, which is the failure this ticket exists
-    to prevent wearing a different hat.
+    Labelled, past the feature warm-up, and with every model input present.
+    None of the three is optional: a row with no label has no answer to be
+    right about, and a row the model cannot read is a row a baseline would
+    score anyway, which turns "the model beats persistence" into a comparison
+    across two different test sets.
 
-    On this snapshot the two conditions leave a population with **no missing
-    feature at all**, because the rows with a null feature outside the warm-up
-    belong to the three cities that are unlabelled anyway, and a test asserts it, so
-    a future city cannot quietly introduce a row the model must skip and the
-    baseline scores.
+    The third condition used to be free. Until the daily backfill widened, the
+    only rows with a null feature outside the warm-up belonged to cities that
+    were unlabelled anyway, and this function could observe the property rather
+    than enforce it. It is no longer free: a city that lands a discontinuous
+    record has null windows spanning each hole, far outside its warm-up, and 19
+    such rows arrived with London, Reykjavík and Sydney. Dropping them here is
+    the same act :func:`~machine_learning.features.drop_warmup` documents and
+    declines to perform on its own, and it is done in one place so the model
+    and the baselines cannot end up disagreeing about which rows exist.
     """
     whole = add_persistence_signal(training_frame(engine, **kwargs))
-    return drop_warmup(drop_unlabelled(whole))
+    return drop_scorable_gaps(drop_warmup(drop_unlabelled(whole)))
+
+
+def drop_scorable_gaps(frame: pd.DataFrame) -> pd.DataFrame:
+    """Remove rows carrying a null model input, and say how many left.
+
+    Logged rather than silent. This is the one trim in the population that is
+    a fact about the data rather than about the arithmetic, so a run in which
+    it suddenly removes thousands of rows should be readable from the output
+    of the run and not from a diff in ``metrics.json``.
+    """
+    if "has_missing_feature" not in frame.columns:
+        raise ValueError(
+            "'has_missing_feature' is missing, so nothing here knows which "
+            "rows the model can read. Build the frame with build_features()."
+        )
+    unreadable = frame["has_missing_feature"].fillna(True).to_numpy(dtype=bool)
+    if unreadable.any():
+        by_city = frame.loc[unreadable, "city_id"].value_counts().to_dict()
+        log.info(
+            "dropping %d row(s) with a null model input, past the warm-up: %s",
+            int(unreadable.sum()),
+            ", ".join(f"{city} {count}" for city, count in sorted(by_city.items())),
+        )
+    return frame.loc[~unreadable].reset_index(drop=True)
+
 
 def add_persistence_signal(frame: pd.DataFrame) -> pd.DataFrame:
     """Add "was there an anomaly in t-6 .. t", as a nullable boolean.
@@ -436,6 +481,145 @@ def boundary_report(parts: Mapping[str, pd.DataFrame]) -> pd.DataFrame:
             }
         )
     return pd.DataFrame(rows)
+
+
+# --------------------------------------------------------------------------
+# Leave-one-city-out (ML-08)
+# --------------------------------------------------------------------------
+
+#: The smallest held-out test split worth quoting a PR-AUC for.
+#:
+#: Both numbers, not one. Rows alone would admit a city with three hundred test
+#: days and four positives, where average precision moves several points if a
+#: single row reorders and the lift computed from it is noise wearing four
+#: decimal places. Positives alone would admit a city whose test split is one
+#: short summer. Two hundred rows is over half a year at the daily grain, and
+#: twenty positives is the point below which the number stops being worth a
+#: sentence in the README.
+#:
+#: A city that fails either is **named** in the report rather than dropped from
+#: it, the same way an uningested city is: "not enough test rows to hold out"
+#: and "held out and scored badly" are opposite findings, and a table that
+#: simply lacks the row cannot tell them apart.
+MIN_HELD_OUT_ROWS: Final[int] = 200
+MIN_HELD_OUT_POSITIVES: Final[int] = 20
+
+
+def hold_out_city(
+    frame: pd.DataFrame, city_id: str
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Partition a population into (every other city, this one).
+
+    The whole of the leave-one-city-out design is this one line, and it is a
+    function so that exactly one line exists. The alternative -- a boolean mask
+    written at the call site next to the code that trains -- is how a fold ends
+    up filtering the training frame and forgetting the validation frame, which
+    would leak the held-out city into early stopping and the grid search while
+    every date-based check in this module still passed.
+
+    Partitions rather than filters: the two frames together are the input, row
+    for row, so a row cannot be quietly lost by a mask that means neither.
+
+    Raises:
+        ValueError: ``city_id`` is not in the frame. Holding out a city that
+            is not there would return the whole population as the training
+            fold and an empty frame as the test one, and score nothing while
+            looking like it had.
+    """
+    if "city_id" not in frame.columns:
+        raise ValueError("the frame has no 'city_id' column to hold out on.")
+    mask = frame["city_id"].to_numpy() == city_id
+    if not mask.any():
+        raise ValueError(
+            f"{city_id!r} is not in this population, so holding it out would "
+            f"train on everything and score nothing. Present: "
+            f"{sorted(frame['city_id'].unique())}."
+        )
+    others = frame.loc[~mask].reset_index(drop=True)
+    held = frame.loc[mask].reset_index(drop=True)
+    return others, held
+
+
+def assert_city_is_held_out(
+    city_id: str,
+    folds: Mapping[str, pd.DataFrame],
+    *,
+    held_out: pd.DataFrame | None = None,
+) -> None:
+    """Raise unless ``city_id`` is absent from every fold it is fitted on.
+
+    The check the whole experiment rests on. A leave-one-city-out score is only
+    evidence about transfer if the model has never seen the city, and there is
+    no date, no boundary and no row count that would reveal the failure: a fold
+    that quietly kept Cairo in its validation set produces a perfectly ordered
+    chronological split, a sensible-looking PR-AUC, and an answer to a question
+    nobody asked.
+
+    Args:
+        city_id: The city being held out.
+        folds: Frames the model is allowed to read -- typically ``train`` and
+            ``validation``. Every one is checked.
+        held_out: The frame being scored, checked to contain that city and
+            nothing else. Optional, because the guard is worth having even
+            where only the training side is to hand.
+    """
+    for name, fold in folds.items():
+        if "city_id" not in fold.columns:
+            raise ValueError(f"the {name} fold has no 'city_id' column.")
+        rows = int((fold["city_id"].to_numpy() == city_id).sum())
+        if rows:
+            raise ValueError(
+                f"{rows} {city_id} row(s) reached the {name} fold of the "
+                f"{city_id} hold-out. The model would be scoring a city it "
+                "has been trained on, which is the one thing this evaluation "
+                "exists to rule out."
+            )
+    if held_out is not None:
+        strangers = sorted(set(held_out["city_id"].unique()) - {city_id})
+        if strangers:
+            raise ValueError(
+                f"the {city_id} hold-out is being scored on {strangers} as "
+                "well, so the number would not be about that city."
+            )
+
+
+def scorable_cities(
+    parts: Mapping[str, pd.DataFrame],
+    *,
+    min_rows: int = MIN_HELD_OUT_ROWS,
+    min_positives: int = MIN_HELD_OUT_POSITIVES,
+) -> tuple[list[str], dict[str, str]]:
+    """Which cities have a test split worth holding out, and why the rest do not.
+
+    Returns the eligible cities and, beside them, a reason for every city that
+    reaches the test split and is turned away. A city that reaches it with two
+    rows is a statement about the backfill and not about the model, and the
+    difference has to survive into the report; a city that does not reach the
+    test split at all is accounted for one level up, by
+    :func:`~machine_learning.evaluate.hold_out_reasons`, which is where the
+    roster is known.
+    """
+    test = parts["test"]
+    eligible: list[str] = []
+    excluded: dict[str, str] = {}
+    for city_id, group in test.groupby("city_id", sort=True):
+        truth = positives(group[LABEL])
+        rows, positive = len(group), int(truth.sum())
+        if rows < min_rows:
+            excluded[str(city_id)] = (
+                f"{rows} test rows, under the {min_rows} needed to quote a "
+                "PR-AUC"
+            )
+        elif positive < min_positives:
+            excluded[str(city_id)] = (
+                f"{positive} positive test rows, under the {min_positives} "
+                "needed to quote a PR-AUC"
+            )
+        elif positive == rows:
+            excluded[str(city_id)] = "no negative test rows; PR-AUC undefined"
+        else:
+            eligible.append(str(city_id))
+    return eligible, excluded
 
 
 def _main(argv: Sequence[str] | None = None) -> int:

@@ -16,11 +16,11 @@ training and evaluation loop against warehouse data, honestly measured.
 
 | | |
 |---|---|
-| Version | `model-unweighted-v1-2ad772ff7b18` |
+| Version | `model-unweighted-v1-ac7ba867991e` |
 | Type | XGBoost gradient-boosted trees, binary classification |
-| Trained | 1995-01-31 to 2018-12-24, 45 069 city-days, 6 cities |
+| Trained | 1995-01-31 to 2018-12-24, 46 921 city-days, 8 cities |
 | Evaluated | 2022-01-01 to 2026-09-01, 8 506 city-days, 5 cities |
-| Snapshot | 59 090 rows to 2026-09-01, and **the backfill is incomplete** |
+| Snapshot | 60 956 rows to 2026-09-01, and **the backfill is incomplete** |
 
 ---
 
@@ -32,24 +32,24 @@ describes. If a retrain moves a score, this card fails until it is updated.
 
 | figure | value |
 |---|---|
-| model_version | model-unweighted-v1-2ad772ff7b18 |
+| model_version | model-unweighted-v1-ac7ba867991e |
 | feature_count | 27 |
-| train_rows | 45069 |
-| train_positive_rate | 0.0551 |
+| train_rows | 46921 |
+| train_positive_rate | 0.0543 |
 | test_rows | 8506 |
 | test_positive_rate | 0.1358 |
-| test_pr_auc | 0.3494 |
-| test_brier | 0.1102 |
-| test_f1 | 0.3863 |
-| test_precision | 0.3735 |
-| test_recall | 0.4000 |
-| decision_threshold | 0.1024 |
-| test_mean_predicted | 0.0703 |
+| test_pr_auc | 0.3612 |
+| test_brier | 0.1087 |
+| test_f1 | 0.3797 |
+| test_precision | 0.3810 |
+| test_recall | 0.3784 |
+| decision_threshold | 0.1132 |
+| test_mean_predicted | 0.0719 |
 | baseline_persistence_pr_auc | 0.2293 |
 | baseline_climatology_pr_auc | 0.1514 |
 | no_skill_pr_auc | 0.1358 |
-| static_city_share_of_shap | 0.1371 |
-| n_estimators | 18 |
+| static_city_share_of_shap | 0.1243 |
+| n_estimators | 91 |
 | seed | 42 |
 
 ---
@@ -140,19 +140,23 @@ Test split, against baselines fixed and committed before the model was trained.
 | no-skill reference | 0.1358 | 1.00x | 0.1239 | 0.2391 |
 | climatology baseline | 0.1514 | 1.12x | 0.1245 | 0.2116 |
 | persistence baseline | 0.2293 | 1.69x | 0.1146 | 0.3807 |
-| **this model** | **0.3494** | **2.57x** | **0.1102** | **0.3863** |
+| **this model** | **0.3612** | **2.66x** | **0.1087** | **0.3797** |
 
-It beats both baselines on all three metrics, and beats persistence in every
-city individually, from 1.7x in Singapore to 5.9x in Delhi.
+It beats both baselines on PR-AUC and on Brier, and beats persistence in
+every city individually, from 1.8x in Singapore to 6.4x in Delhi. On F1 it and
+persistence are level, which the paragraph below is about.
 
 **Accuracy is not reported.** At a 13.58% base rate, always answering "no
 anomaly" scores 86.4% and predicts nothing.
 
-**F1 is reported at 0.1024**, the threshold that maximises F1 on the
+**F1 is reported at 0.1132**, the threshold that maximises F1 on the
 *validation* split. At 0.5 this model flags nothing at all and scores F1 =
-0.00. Note how little F1 separates the model from persistence (0.3863 against
-0.3807) compared with PR-AUC (0.3494 against 0.2293): F1 collapses the curve to
-one point, and that point is where persistence is strongest.
+0.00. Note how little F1 separates the model from persistence, and that the
+sign has now changed: 0.3797 against 0.3807, a thousandth the wrong way, while
+PR-AUC is 0.3612 against 0.2293. F1 collapses the curve to one point, and that
+point is where persistence is strongest. A single-point metric that reverses on
+a thousandth is not measuring the difference between these two predictors; it
+is measuring the threshold, which is what ML-09 exists to sweep.
 
 ---
 
@@ -160,13 +164,13 @@ one point, and that point is where persistence is strongest.
 
 ### 1. It under-states risk in the present climate
 
-The most important line in this card. The positive rate is **5.51% in the
+The most important line in this card. The positive rate is **5.43% in the
 training period and 13.58% in the test period**, roughly doubling and then
 doubling again, because the climatology baseline spans the whole record and the
 climate has warmed within it. The model is correctly calibrated to a world that
 no longer exists.
 
-In consequence its mean predicted probability on the test split is **0.070
+In consequence its mean predicted probability on the test split is **0.072
 where 0.136 actually occurs**, and the shortfall runs through every decile. It
 is wrong in the direction that matters for a warning system: it says "quiet"
 more often than it should. **`risk_score` must be recalibrated before any
@@ -182,26 +186,50 @@ correct call, Delhi on 2026-03-09, had *less* evidence. **At this horizon it
 can tell you a spell is running; it cannot tell you when it will end**, and
 nothing in the feature set could.
 
-### 3. Six cities, five scorable, and all of them hot
+### 3. Eight cities in training, five scorable, and all the real ones hot
 
-Trained on Cairo, Delhi, Lagos, Phoenix, Singapore and Tokyo. No mid-latitude
-maritime climate, no continental winter, no Southern Hemisphere. The pooled
-metrics are not representative of the intended fifteen-city set and will move
-when the backfill completes. Ten of fifteen cities cannot be scored at all
-today: six never ingested, four with no usable window.
+Trained on Cairo, Delhi, Lagos, Phoenix, Singapore and Tokyo, plus twelve rows
+of London and fourteen of Reykjavík that the widening backfill has landed so
+far. No mid-latitude maritime climate with a usable record, no continental
+winter, no Southern Hemisphere. The pooled metrics are not representative of
+the intended fifteen-city set and will move when the backfill completes. Ten
+of fifteen cities cannot be scored today: none of them has a test-split row,
+and seven have no labelled row at all.
 
-### 4. 13.7% of the model is a city lookup
+**Those twenty-six rows are not free.** Removing London and Reykjavík from
+training moves test PR-AUC from 0.3612 to 0.3722 and F1 from 0.3797 to 0.3965,
+which is a 3% swing in the headline figure from 0.06% of the training rows.
+The cause is limitation 5 one size smaller: on an eighteen-observation
+baseline Reykjavík flags 89% of its days and London 56%, against 1.3-2.0% in
+every complete city, so the rows they contribute are almost all positives and
+almost all spurious. Nothing has been done about it here, because doing it in
+this card would mean choosing the training set to improve the score. DBT-14 is
+the ticket that owns it.
 
-`latitude` and `elevation_m` are third and fifth by SHAP importance and are
-constant within a city. The model is not learning about elevation; it is
-learning *which city*, and city base rates run 5.2% to 23.7%. This is
-legitimate and useful with six cities and transfers to none.
+### 4. 12.4% of the model is a city lookup
 
-### 5. Tokyo's baseline is four years, not thirty
+`latitude` and `elevation_m` are constant within a city, so to that extent the
+model is not learning about elevation, it is learning *which city*, and city
+base rates run 5.2% to 23.7%.
 
-Only four years of Tokyo have been ingested, so its leave-one-year-out σ is
-noisy and it flags 3.9% of days against ~1.6% elsewhere. It contributes to
-training with an inflated anomaly rate.
+This was recorded here as a flat statement that the model "transfers to none",
+and ML-08 tested it rather than leaving it asserted. It is wrong. Held out of
+training entirely, each of the five scored cities is still ranked better by the
+model than by its own persistence baseline, at a median 1.56x and a median 103%
+of the same city's in-sample PR-AUC. Singapore is the one city that loses
+anything by being unseen, at 80% of its in-sample score. Whatever the static
+columns are doing, the model is not depending on having met the city: the
+per-city block in `metrics.json` carries every fold, and the fold's own record
+names the cities it trained on.
+
+### 5. Tokyo's baseline is nine years, not thirty
+
+Only 1995-2003 of Tokyo has been ingested, plus three days of 2026, so its
+leave-one-year-out σ is estimated from nine reference years rather than thirty.
+Nine is enough that its flag rate, 1.7%, now sits inside the range the complete
+cities occupy; four years was not. London and Reykjavík at eighteen
+observations are the same defect at the scale where it is impossible to miss,
+and limitation 3 measures what it costs.
 
 ### 6. The label conflates two things
 
