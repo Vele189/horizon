@@ -62,10 +62,13 @@ from machine_learning.train import (  # noqa: E402
     N_JOBS,
     SEARCH_SPACE,
     SEED,
+    RECENCY_HALF_LIVES,
     TrainingError,
     fit_calibrator,
     fit_once,
     merge_into_metrics,
+    recency_ablation,
+    recency_weights,
     scale_pos_weight_from,
     train_model,
     training_matrix,
@@ -872,3 +875,213 @@ def test_the_budget_is_set_on_validation_and_the_overshoot_is_recorded(
         <= decision["budget_alerts_per_city_year"]
     ), "the budget is not even met on the period it was chosen on"
     assert chosen["test"]["alerts_per_city_year"] > 0
+
+
+# --------------------------------------------------------------------------
+# Recency weighting (ML-12)
+# --------------------------------------------------------------------------
+
+
+def test_an_infinite_half_life_is_no_weights_at_all(synthetic) -> None:
+    """The null arm of the ablation must be the fit every other ticket used.
+
+    ``recency_weights`` returns ``None`` rather than a vector of ones, because
+    ``None`` is XGBoost's own spelling of "unweighted" and takes a different
+    path through the library. A vector of ones is arithmetically the same and
+    is not the same code, and this ablation is only readable if its baseline is
+    bit-identical to the model the rest of the project describes.
+    """
+    parts = split_frame(synthetic)
+    assert recency_weights(parts["train"], float("inf")) is None
+
+    plain = tune(parts["train"], parts["validation"], scale_pos_weight=1.0)
+    explicit = tune(
+        parts["train"],
+        parts["validation"],
+        scale_pos_weight=1.0,
+        half_life_years=float("inf"),
+    )
+    np.testing.assert_array_equal(
+        plain.predict(parts["test"]), explicit.predict(parts["test"])
+    )
+
+
+def test_the_weights_decay_from_the_last_training_row(synthetic) -> None:
+    """Age is measured from the split's own end, never from today.
+
+    Today moves with the wall clock, so a weight measured from it would make
+    two runs of the same commit produce different models -- and the
+    reproducibility test that runs training twice in separate processes would
+    fail for a reason nobody could act on.
+    """
+    parts = split_frame(synthetic)
+    train = parts["train"]
+    weights = recency_weights(train, 4.0)
+
+    newest = int(train["date_key"].idxmax())
+    oldest = int(train["date_key"].idxmin())
+    assert weights[newest] == weights.max()
+    assert weights[oldest] == weights.min()
+
+    # A half-life is a half-life: a row that old carries half the weight.
+    span_years = (
+        train["date_key"].max() - train["date_key"]
+    ).dt.days.to_numpy() / 365.25
+    unnormalised = weights / weights[newest]
+    at_one_half_life = np.argmin(np.abs(span_years - 4.0))
+    assert unnormalised[at_one_half_life] == pytest.approx(0.5, abs=0.01)
+
+
+def test_the_weights_are_normalised_so_the_grid_means_one_thing(synthetic) -> None:
+    """min_child_weight is a floor on summed hessian, which scales with weights.
+
+    Without normalisation the same grid value would be a different constraint
+    at every half-life, and the search would be comparing regularisation
+    strengths while believing it was comparing half-lives.
+    """
+    parts = split_frame(synthetic)
+    for half_life in (1.0, 4.0, 16.0):
+        weights = recency_weights(parts["train"], half_life)
+        assert weights.mean() == pytest.approx(1.0)
+    with pytest.raises(ValueError, match="must be positive"):
+        recency_weights(parts["train"], 0.0)
+
+
+def test_the_half_life_is_tuned_on_validation_and_test_cannot_move_it(
+    synthetic,
+) -> None:
+    """The acceptance's "tuned on validation only", behaviourally.
+
+    ``recency_ablation`` is handed every split, because it reports on test as
+    well as choosing on validation, so a signature argument is not available
+    here the way it is for ``tune``. The behavioural check is the one that
+    matters anyway: rewrite the test period and the choice must not move.
+    """
+    parts = split_frame(synthetic)
+    baseline_fit = tune(parts["train"], parts["validation"], scale_pos_weight=1.0)
+    chosen = recency_ablation(
+        parts, scale_pos_weight=1.0, baseline=baseline_fit
+    )["chosen_half_life_years"]
+
+    # Inverted rather than set to all-True, which is how the other rewrite
+    # tests in this module wreck a split. `recency_ablation` also *reports* on
+    # test, and a single-class test period makes average precision undefined,
+    # so an all-True rewrite would fail on the reporting rather than prove
+    # anything about the choosing. Inversion is just as destructive to any
+    # signal and leaves both classes present.
+    wrecked = synthetic.copy()
+    later = wrecked["date_key"] >= pd.Timestamp("2022-01-01")
+    wrecked.loc[later, LABEL] = ~wrecked.loc[later, LABEL]
+    rebuilt = recency_ablation(
+        split_frame(wrecked), scale_pos_weight=1.0, baseline=baseline_fit
+    )["chosen_half_life_years"]
+
+    assert chosen == rebuilt, (
+        "rewriting the test period changed which half-life was chosen, so the "
+        "choice is reading test"
+    )
+
+
+def test_the_grid_offers_the_null_hypothesis(synthetic) -> None:
+    """A tuned parameter that cannot choose "do nothing" is a clipped one."""
+    assert float("inf") in RECENCY_HALF_LIVES
+    assert min(RECENCY_HALF_LIVES) > 0
+
+    block, _ = train_model(frame=synthetic)
+    recency = block["recency"]
+    assert "inf" in recency["grid"]
+    assert {row["half_life_years"] for row in recency["search"]} == set(
+        recency["grid"]
+    )
+    assert recency["helped"] is (recency["chosen_half_life_years"] != "inf")
+
+
+def test_the_ablation_shows_a_contrast_even_when_the_answer_is_no(
+    synthetic,
+) -> None:
+    """Comparing the choice with itself prints one row twice and hides it.
+
+    When the rule declines to weight -- which is what happens on this data --
+    the ablation compares the unweighted fit against the best *finite*
+    half-life, so a reader sees what the alternative would have cost rather
+    than a table that agrees with itself.
+    """
+    block, _ = train_model(frame=synthetic)
+    recency = block["recency"]
+    arms = {row["arm"]: row for row in recency["ablation"]}
+    assert set(arms) == {"unweighted", "recency"}
+    assert arms["unweighted"]["half_life_years"] == "inf"
+    assert arms["recency"]["half_life_years"] != "inf", (
+        "the ablation is comparing the unweighted fit with itself"
+    )
+    for row in recency["ablation"]:
+        for split in ("validation", "test"):
+            assert {"pr_auc", "brier", "mean_predicted"} <= set(row[split])
+
+
+def test_the_effective_sample_size_prices_a_short_half_life(synthetic) -> None:
+    """A half-life short enough to fix drift is short enough to lose the record.
+
+    Kish's effective sample size is what makes that visible: it is reported
+    beside every validation score so a half-life that wins by a hundredth on a
+    fraction of the rows can be recognised as the trade it is.
+    """
+    block, _ = train_model(frame=synthetic)
+    search = {row["half_life_years"]: row for row in block["recency"]["search"]}
+    rows = len(split_frame(synthetic)["train"])
+
+    assert search["inf"]["effective_rows"] == pytest.approx(rows)
+    finite = [row for key, row in search.items() if key != "inf"]
+    for row in finite:
+        assert row["effective_rows"] < rows
+        assert 0.0 <= row["oldest_row_weight"] <= 1.0
+    # Shorter half-lives keep less of the record, monotonically.
+    ordered = sorted(finite, key=lambda row: row["half_life_years"])
+    assert [row["effective_rows"] for row in ordered] == sorted(
+        row["effective_rows"] for row in ordered
+    )
+
+
+def test_the_diagnosis_says_whether_there_is_drift_to_lean_on(synthetic) -> None:
+    """Why the answer came out the way it did, recorded beside the answer.
+
+    Recency weighting can only exploit a trend the *training* split contains.
+    On the real warehouse there is none -- the first half of the training
+    period runs at a slightly higher base rate than the second, and the label's
+    drift is entirely between the splits -- so the search correctly refuses to
+    throw away rows for it. Without this field the null result would look like
+    a failure of the method rather than an absence of the thing it corrects.
+    """
+    block, _ = train_model(frame=synthetic)
+    drift = block["recency"]["training_drift"]
+
+    assert drift["train_first_half"]["through"] < drift["train_second_half"]["from"]
+    assert drift["within_train_ratio"] == pytest.approx(
+        drift["train_second_half"]["base_rate"]
+        / drift["train_first_half"]["base_rate"]
+    )
+    assert drift["drift_is_inside_the_training_window"] is (
+        drift["within_train_ratio"] > 1.1
+    )
+
+
+def test_the_distance_table_is_marked_as_never_selecting(synthetic) -> None:
+    """It reads the test labels, so it must be unmistakably a report.
+
+    The finding it carries is uncomfortable -- recency weighting wins on test
+    and loses on validation -- and the temptation it creates is exactly the one
+    this project refuses. The flags are asserted so that a later edit which
+    started selecting on it would have to delete an assertion saying it does
+    not.
+    """
+    block, _ = train_model(frame=synthetic)
+    table = block["recency"]["gain_by_distance"]
+
+    assert table["uses_test_labels"] is True
+    assert table["used_for_selection"] is False
+    periods = {row["period"] for row in table["periods"]}
+    assert "validation" in periods and "test" in periods
+    for row in table["periods"]:
+        assert row["gain"] == pytest.approx(
+            row["recency_pr_auc"] / row["unweighted_pr_auc"]
+        )

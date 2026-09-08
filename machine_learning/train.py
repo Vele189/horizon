@@ -108,6 +108,7 @@ from machine_learning.labels import LABEL, positives  # noqa: E402
 
 __all__ = [
     "CALIBRATION_METHOD",
+    "RECENCY_HALF_LIVES",
     "EARLY_STOPPING_ROUNDS",
     "FIXED_PARAMS",
     "MAX_ROUNDS",
@@ -117,6 +118,8 @@ __all__ = [
     "Fit",
     "calibration_report",
     "decision_report",
+    "recency_ablation",
+    "recency_weights",
     "fit_calibrator",
     "fit_once",
     "save_models",
@@ -169,6 +172,30 @@ SEARCH_SPACE: Final[Mapping[str, tuple]] = {
 }
 
 
+#: Half-lives tried for the recency weight, in years, tuned on validation.
+#:
+#: The grid runs to infinity on purpose, the same way the climatology's
+#: shrinkage grid does and for the same reason: infinity *is* the unweighted
+#: fit, so the search is offered the null hypothesis as one of its options. A
+#: tuned parameter that cannot choose "do nothing" is not a tuned parameter, and
+#: a table whose best row is the edge of the grid is a clipped result rather
+#: than a chosen one.
+#:
+#: One year to sixteen, over a training period of twenty-four. Below a year the
+#: effective sample is a season or two of a single seasonal cycle, which is not
+#: a training set; above sixteen the weight on the oldest row is more than a
+#: third and the fit is barely distinguishable from the unweighted one, which
+#: the infinity row already represents exactly.
+RECENCY_HALF_LIVES: Final[tuple[float, ...]] = (
+    1.0,
+    2.0,
+    4.0,
+    8.0,
+    16.0,
+    float("inf"),
+)
+
+
 class TrainingError(RuntimeError):
     """Raised when a model cannot honestly be recorded.
 
@@ -186,6 +213,7 @@ class Fit:
     scale_pos_weight: float
     best_iteration: int
     feature_names: tuple[str, ...]
+    half_life_years: float = float("inf")
     validation: Score | None = None
     search: list[dict[str, Any]] = field(default_factory=list)
 
@@ -205,6 +233,7 @@ class Fit:
         return {
             "params": dict(sorted(self.params.items())),
             "scale_pos_weight": self.scale_pos_weight,
+            "recency_half_life_years": _jsonable(self.half_life_years),
             "n_estimators": self.best_iteration + 1,
             "early_stopping_rounds": EARLY_STOPPING_ROUNDS,
             "max_rounds": MAX_ROUNDS,
@@ -238,6 +267,58 @@ def training_matrix(frame: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
     return matrix, positives(frame[LABEL]).to_numpy()
 
 
+def _jsonable(value: Any) -> Any:
+    """Render infinity as a string, because JSON has no word for it.
+
+    The same treatment ``baselines.py`` gives its shrinkage grid, and for the
+    same reason: the half-life grid genuinely runs to the limit, and
+    ``json.dumps`` writes a bare ``Infinity`` that every strict parser rejects.
+    """
+    if isinstance(value, float) and np.isinf(value):
+        return "inf"
+    return value
+
+
+def recency_weights(train: pd.DataFrame, half_life_years: float) -> np.ndarray | None:
+    """Exponential decay in a row's age, normalised to mean one.
+
+    ML-12's whole mechanism. The label's base rate rises 2.3x from the training
+    period to the test one, and DBT-12 established that detrending the
+    climatology removes almost none of that -- the drift is real rather than an
+    artefact. This is the other half of the response: if the world the model is
+    scored in is not the world it was fitted in, weight the fit towards the
+    part of the record that resembles it.
+
+    Age is measured from the **last training row**, not from today. Today moves
+    with the wall clock, which would make two runs of the same commit produce
+    different models, and the training split's own end is the boundary the
+    weight is really about.
+
+    **Normalised to mean one, and that is not cosmetic.** XGBoost's
+    ``min_child_weight`` is a floor on the summed hessian in a leaf, which
+    scales with the sample weights, so an unnormalised decay would silently
+    make the same grid value a different constraint at every half-life -- the
+    search would be comparing regularisation strengths while believing it was
+    comparing half-lives.
+
+    Returns:
+        ``None`` at an infinite half-life, which is XGBoost's own way of
+        spelling "no weights" and keeps the unweighted arm of the ablation
+        bit-identical to every fit this project has made until now. A vector of
+        ones would be arithmetically the same and is not the same code path.
+    """
+    if half_life_years <= 0:
+        raise ValueError(
+            f"a half-life must be positive, got {half_life_years}. Zero would "
+            "put all the weight on the last day of the training split."
+        )
+    if np.isinf(half_life_years):
+        return None
+    age_days = (train["date_key"].max() - train["date_key"]).dt.days.to_numpy()
+    weights = 0.5 ** (age_days / (half_life_years * 365.25))
+    return weights / weights.mean()
+
+
 def scale_pos_weight_from(target: np.ndarray) -> float:
     """Negatives over positives, from the training split's own class ratio."""
     positive = int(target.sum())
@@ -252,11 +333,16 @@ def fit_once(
     params: Mapping[str, Any],
     *,
     scale_pos_weight: float,
+    half_life_years: float = float("inf"),
 ) -> Fit:
     """Fit one estimator, stopping early on validation average precision.
 
     Early stopping reads validation, which is what validation is for. Test is
     not passed to this function and cannot be: it takes two frames.
+
+    ``half_life_years`` weights the training rows by recency; infinity, the
+    default, weights them equally and is exactly the fit every other ticket in
+    this project has been using.
     """
     x_train, y_train = training_matrix(train)
     x_validation, y_validation = training_matrix(validation)
@@ -269,7 +355,11 @@ def fit_once(
         early_stopping_rounds=EARLY_STOPPING_ROUNDS,
     )
     estimator.fit(
-        x_train, y_train, eval_set=[(x_validation, y_validation)], verbose=False
+        x_train,
+        y_train,
+        sample_weight=recency_weights(train, half_life_years),
+        eval_set=[(x_validation, y_validation)],
+        verbose=False,
     )
     return Fit(
         estimator=estimator,
@@ -277,6 +367,7 @@ def fit_once(
         scale_pos_weight=scale_pos_weight,
         best_iteration=int(estimator.best_iteration),
         feature_names=tuple(x_train.columns),
+        half_life_years=half_life_years,
     )
 
 
@@ -285,6 +376,7 @@ def tune(
     validation: pd.DataFrame,
     *,
     scale_pos_weight: float,
+    half_life_years: float = float("inf"),
 ) -> Fit:
     """Search the grid, keep the best validation PR-AUC. Test is never seen.
 
@@ -301,7 +393,11 @@ def tune(
     for index, values in enumerate(product(*(SEARCH_SPACE[name] for name in names))):
         params = dict(zip(names, values))
         candidate = fit_once(
-            train, validation, params, scale_pos_weight=scale_pos_weight
+            train,
+            validation,
+            params,
+            scale_pos_weight=scale_pos_weight,
+            half_life_years=half_life_years,
         )
         result = score(validation[LABEL], candidate.predict(validation))
         candidate.validation = result
@@ -374,6 +470,278 @@ def _calibration_entry(
         "pr_auc": result.pr_auc,
         "reliability": points.to_dict("records"),
     }
+
+
+def recency_ablation(
+    parts: Mapping[str, pd.DataFrame],
+    *,
+    scale_pos_weight: float,
+    baseline: "Fit",
+) -> dict[str, Any]:
+    """Tune the recency half-life on validation and price it against not doing it.
+
+    ML-12. The cheapest available response to the drift: weight the training
+    rows by recency so the fit is not dominated by a climate that no longer
+    exists. It is deliberately the *fit* side of the same question DBT-12 asked
+    of the *label*, and the two answers are meant to be read together -- how
+    much of the drift is fixed by redefining the target, and how much by
+    changing what the model pays attention to.
+
+    The half-life is chosen on **validation** and on validation alone, by the
+    same rule the class-weighting choice uses: better PR-AUC *and* better
+    Brier, or the incumbent stands. Requiring both is what stops this trading
+    away calibration to buy a hundredth of ranking, which is exactly the trade
+    a recency weight is most likely to offer.
+
+    ``mean_predicted`` is carried on every row of the ablation because it is
+    where an effect would show first. The unweighted model predicts far below
+    the rate that occurs, for the plain reason that it was fitted where the
+    rate was half what it became; if recency weighting does anything at all,
+    the first thing it should do is move that number.
+    """
+    train, validation = parts["train"], parts["validation"]
+    search: list[dict[str, Any]] = []
+    fits: dict[float, Fit] = {}
+
+    for half_life in RECENCY_HALF_LIVES:
+        candidate = (
+            baseline
+            if np.isinf(half_life)
+            else tune(
+                train,
+                validation,
+                scale_pos_weight=scale_pos_weight,
+                half_life_years=half_life,
+            )
+        )
+        fits[half_life] = candidate
+        predicted = candidate.predict(validation)
+        result = score(validation[LABEL], predicted)
+        search.append(
+            {
+                "half_life_years": _jsonable(half_life),
+                "effective_rows": _effective_rows(train, half_life),
+                "oldest_row_weight": _jsonable(_oldest_weight(train, half_life)),
+                "n_estimators": candidate.best_iteration + 1,
+                "validation_pr_auc": result.pr_auc,
+                "validation_brier": result.brier,
+                "validation_mean_predicted": float(predicted.mean()),
+            }
+        )
+
+    unweighted = next(
+        row for row in search if row["half_life_years"] == "inf"
+    )
+    better = [
+        row
+        for row in search
+        if row["half_life_years"] != "inf"
+        and row["validation_pr_auc"] > unweighted["validation_pr_auc"]
+        and row["validation_brier"] < unweighted["validation_brier"]
+    ]
+    chosen = (
+        max(better, key=lambda row: row["validation_pr_auc"])["half_life_years"]
+        if better
+        else "inf"
+    )
+    chosen_life = float("inf") if chosen == "inf" else float(chosen)
+
+    # The ablation compares the unweighted fit against the best *finite*
+    # half-life, not against whatever the rule chose. When the rule chooses not
+    # to weight -- which is what happens here -- comparing the choice with
+    # itself prints the same row twice and hides the finding. What a reader
+    # needs to see is the contrast: this is the fit, this is the best the
+    # weighted alternative could manage, and this is the gap.
+    contender = min(
+        (row for row in search if row["half_life_years"] != "inf"),
+        key=lambda row: -row["validation_pr_auc"],
+    )["half_life_years"]
+    arms = (
+        ("unweighted", float("inf")),
+        ("recency", chosen_life if chosen != "inf" else float(contender)),
+    )
+    ablation = []
+    for label, half_life in arms:
+        fit = fits[half_life]
+        row: dict[str, Any] = {
+            "arm": label,
+            "half_life_years": _jsonable(half_life),
+        }
+        for split in ("validation", "test"):
+            predicted = fit.predict(parts[split])
+            result = score(parts[split][LABEL], predicted)
+            row[split] = {
+                **result.as_dict(),
+                "mean_predicted": float(predicted.mean()),
+            }
+        ablation.append(row)
+
+    return {
+        "weighting": "exponential in the age of the row",
+        "training_drift": _training_drift(parts),
+        "measured_from": "the last day of the training split",
+        "normalised": "to mean one, so min_child_weight means the same thing "
+                      "at every half-life",
+        "tuned_on": "validation",
+        "rule": "better PR-AUC and better Brier, or the unweighted fit stands",
+        "grid": [_jsonable(value) for value in RECENCY_HALF_LIVES],
+        "search": search,
+        "chosen_half_life_years": chosen,
+        "helped": chosen != "inf",
+        "best_finite_half_life_years": contender,
+        "ablation": ablation,
+        "gain_by_distance": _gain_by_distance(
+            parts, fits[float("inf")], fits[float(contender)]
+        ),
+    }
+
+
+def _gain_by_distance(
+    parts: Mapping[str, pd.DataFrame], plain: "Fit", recent: "Fit"
+) -> dict[str, Any]:
+    """What recency weighting is worth as a function of how far away you score.
+
+    **A diagnostic, and never a selection.** It reads the test period's labels,
+    which is why it is reported after the choice has been made and can play no
+    part in making it: the half-life is chosen on validation by
+    :func:`recency_ablation` before this runs, and on this data that choice is
+    "do not weight".
+
+    It is here because the ablation alone would be misleading in a specific and
+    expensive way. Recency weighting loses on validation and wins on test by
+    about fifteen per cent, and a reader seeing only those two numbers would
+    reasonably suspect noise. Splitting the test period in half shows it is not:
+    the gain is close to +15% in *both* halves and negative only on validation,
+    so the sign change sits at the validation/test boundary rather than
+    wandering.
+
+    What the boundary is remains open, and the table is not asked to settle it.
+    Validation is both nearer the training window and drawn from a period whose
+    base rate is 6.8% against test's 11.3%, and those two candidate
+    explanations move together here. What can be said is narrower and still
+    worth saying: **the benefit is invisible on the only period this project is
+    allowed to choose on**, so the honest reading is not "recency weighting does
+    not work" but "this split cannot select it".
+    """
+    periods: list[tuple[str, pd.DataFrame]] = [
+        ("validation", parts["validation"])
+    ]
+    test = parts["test"]
+    years = test["date_key"].dt.year
+    midpoint = int(years.median())
+    periods += [
+        (f"test through {midpoint}", test.loc[years <= midpoint]),
+        (f"test from {midpoint + 1}", test.loc[years > midpoint]),
+        ("test", test),
+    ]
+
+    rows = []
+    for label, part in periods:
+        if part.empty or positives(part[LABEL]).nunique() < 2:
+            continue
+        without = score(part[LABEL], plain.predict(part))
+        with_weights = score(part[LABEL], recent.predict(part))
+        rows.append(
+            {
+                "period": label,
+                "rows": int(len(part)),
+                "base_rate": without.base_rate,
+                "unweighted_pr_auc": without.pr_auc,
+                "recency_pr_auc": with_weights.pr_auc,
+                "gain": with_weights.pr_auc / without.pr_auc,
+            }
+        )
+    on_validation = next(
+        (row for row in rows if row["period"] == "validation"), None
+    )
+    within_test = [
+        row for row in rows if row["period"].startswith("test ")
+    ]
+    return {
+        "uses_test_labels": True,
+        "used_for_selection": False,
+        "periods": rows,
+        # The claim the table actually supports, evaluated rather than
+        # asserted: the sign changes at the boundary and does not wander inside
+        # the test period. Deliberately *not* "the gain rises with distance" --
+        # it does between validation and test and does not between the two
+        # halves of test, and a field claiming a monotone trend would be
+        # reporting the first cut that happened to show one.
+        "sign_changes_at_the_validation_boundary": bool(
+            on_validation is not None
+            and within_test
+            and on_validation["gain"] < 1.0
+            and all(row["gain"] > 1.0 for row in within_test)
+        ),
+        "spread_within_test": (
+            max(row["gain"] for row in within_test)
+            - min(row["gain"] for row in within_test)
+            if within_test
+            else None
+        ),
+    }
+
+
+def _training_drift(parts: Mapping[str, pd.DataFrame]) -> dict[str, Any]:
+    """Whether there is any drift *inside* the training window to lean on.
+
+    The number that explains the result, and the one this ablation would be
+    hard to interpret without. Recency weighting can only exploit a trend the
+    training split itself contains: if the later training years look like the
+    earlier ones, weighting towards them buys nothing and costs sample size,
+    and the search will correctly refuse to do it.
+
+    The split is halved rather than regressed, because a slope fitted to
+    twenty-four annual rates is a number with a confidence interval wider than
+    the effect and this only has to answer "is there a gradient here at all".
+    """
+    train = parts["train"]
+    years = train["date_key"].dt.year
+    midpoint = int(years.median())
+    early = positives(train.loc[years <= midpoint, LABEL])
+    late = positives(train.loc[years > midpoint, LABEL])
+    return {
+        "train_first_half": {
+            "through": midpoint,
+            "base_rate": float(early.mean()),
+            "rows": int(len(early)),
+        },
+        "train_second_half": {
+            "from": midpoint + 1,
+            "base_rate": float(late.mean()),
+            "rows": int(len(late)),
+        },
+        "within_train_ratio": float(late.mean() / early.mean()),
+        "validation_base_rate": base_rate(parts["validation"][LABEL]),
+        "test_base_rate": base_rate(parts["test"][LABEL]),
+        # The whole diagnosis in one field: the drift the label undeniably has
+        # is between the splits, not inside the training one, so there is no
+        # gradient here for a recency weight to ride.
+        "drift_is_inside_the_training_window": bool(
+            late.mean() / early.mean() > 1.1
+        ),
+    }
+
+
+def _effective_rows(train: pd.DataFrame, half_life_years: float) -> float:
+    """Kish's effective sample size: what the weighted fit is really fitted on.
+
+    ``(sum w)^2 / sum w^2``. A half-life short enough to fix the drift is also
+    short enough to throw most of the record away, and the row count is how
+    that shows. It is reported beside every validation score so a half-life
+    that wins by a hundredth on four thousand effective rows can be recognised
+    as the trade it is.
+    """
+    weights = recency_weights(train, half_life_years)
+    if weights is None:
+        return float(len(train))
+    return float(weights.sum() ** 2 / np.square(weights).sum())
+
+
+def _oldest_weight(train: pd.DataFrame, half_life_years: float) -> float:
+    """What the first row of the record counts for, relative to the last."""
+    weights = recency_weights(train, half_life_years)
+    return 1.0 if weights is None else float(weights.min() / weights.max())
 
 
 def calibration_report(
@@ -745,6 +1113,11 @@ def train_model(
     # After the recommendation, because it is the recommended model that gets
     # calibrated, and before returning, so metrics.json cannot carry a model
     # block without the account of what its probabilities are worth.
+    block["recency"] = recency_ablation(
+        parts,
+        scale_pos_weight=variants[block["recommended_variant"]],
+        baseline=fits[block["recommended_variant"]],
+    )
     block["calibration"] = calibration_report(
         fits, parts, variant=block["recommended_variant"]
     )

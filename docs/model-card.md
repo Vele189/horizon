@@ -259,6 +259,16 @@ is wrong in the direction that matters for a warning system: it says "quiet"
 more often than it should. **`risk_score` must be recalibrated before any
 reader sees it as a percentage.**
 
+**Recency weighting was measured and refused (ML-12).** Weighting the training
+rows towards the recent record is the cheapest response to that drift, and on
+validation it loses monotonically: every year of history discarded costs both
+ranking and calibration, and the search correctly declines to weight at all.
+The reason is recorded beside the result — the training split contains no drift
+to lean on, running at 4.98% in 1995-2006 and 4.75% in 2007-2018, with the
+whole rise sitting between the splits. On *test* a sixteen-year half-life is
+15% better on PR-AUC, in both halves of the period, but choosing it on that
+basis would be selecting on test. It is recorded and not shipped.
+
 ML-10 measured what recalibration is worth. Isotonic regression fitted on
 validation, never on test, halves the expected calibration error, from 0.052 to
 0.030, and moves the mean prediction closer to the 0.113 that occurs. It costs

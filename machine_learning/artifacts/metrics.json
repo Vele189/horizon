@@ -1920,7 +1920,7 @@
         },
         "bytes": 489093,
         "committable": true,
-        "created_at": "2026-09-08T15:27:24+00:00",
+        "created_at": "2026-09-08T16:13:28+00:00",
         "feature_count": 27,
         "features": [
           "temperature_2m_mean",
@@ -1956,9 +1956,9 @@
         "format_version": 1,
         "git": {
           "branch": "phase-two",
-          "commit": "c7ba7c1be46ba2d90bbe556e16786351490bb982",
+          "commit": "60df811adaa83d953770b5916941ba504d6891df",
           "dirty": true,
-          "short_commit": "c7ba7c1be46b"
+          "short_commit": "60df811adaa8"
         },
         "hyperparameters": {
           "early_stopping_rounds": 50,
@@ -2059,7 +2059,7 @@
         },
         "bytes": 128929,
         "committable": true,
-        "created_at": "2026-09-08T15:27:24+00:00",
+        "created_at": "2026-09-08T16:13:28+00:00",
         "feature_count": 27,
         "features": [
           "temperature_2m_mean",
@@ -2095,9 +2095,9 @@
         "format_version": 1,
         "git": {
           "branch": "phase-two",
-          "commit": "c7ba7c1be46ba2d90bbe556e16786351490bb982",
+          "commit": "60df811adaa83d953770b5916941ba504d6891df",
           "dirty": true,
-          "short_commit": "c7ba7c1be46b"
+          "short_commit": "60df811adaa8"
         },
         "hyperparameters": {
           "early_stopping_rounds": 50,
@@ -2629,8 +2629,184 @@
     },
     "estimator": "xgboost.XGBClassifier",
     "fitted_on": "train",
+    "recency": {
+      "ablation": [
+        {
+          "arm": "unweighted",
+          "half_life_years": "inf",
+          "test": {
+            "base_rate": 0.11298342541436464,
+            "brier": 0.09455165259216793,
+            "lift": 2.554703670526944,
+            "mean_predicted": 0.061113741248846054,
+            "positives": 2045,
+            "pr_auc": 0.2886391716147846,
+            "rows": 18100
+          },
+          "validation": {
+            "base_rate": 0.06840744139484442,
+            "brier": 0.05881129330549262,
+            "lift": 3.5335079439671015,
+            "mean_predicted": 0.04779747873544693,
+            "positives": 820,
+            "pr_auc": 0.2417182375951467,
+            "rows": 11987
+          }
+        },
+        {
+          "arm": "recency",
+          "half_life_years": 16.0,
+          "test": {
+            "base_rate": 0.11298342541436464,
+            "brier": 0.09193638870625555,
+            "lift": 2.9422838252056622,
+            "mean_predicted": 0.06491518765687943,
+            "positives": 2045,
+            "pr_auc": 0.33242930511301544,
+            "rows": 18100
+          },
+          "validation": {
+            "base_rate": 0.06840744139484442,
+            "brier": 0.05917357397386287,
+            "lift": 3.409607060625926,
+            "mean_predicted": 0.051695454865694046,
+            "positives": 820,
+            "pr_auc": 0.23324249517921578,
+            "rows": 11987
+          }
+        }
+      ],
+      "best_finite_half_life_years": 16.0,
+      "chosen_half_life_years": "inf",
+      "gain_by_distance": {
+        "periods": [
+          {
+            "base_rate": 0.06840744139484442,
+            "gain": 0.9649354450857492,
+            "period": "validation",
+            "recency_pr_auc": 0.23324249517921578,
+            "rows": 11987,
+            "unweighted_pr_auc": 0.2417182375951467
+          },
+          {
+            "base_rate": 0.09428168312723048,
+            "gain": 1.1474652689877654,
+            "period": "test through 2024",
+            "recency_pr_auc": 0.2659170019061852,
+            "rows": 12049,
+            "unweighted_pr_auc": 0.2317429634630802
+          },
+          {
+            "base_rate": 0.1502231036192365,
+            "gain": 1.1452541275260804,
+            "period": "test from 2025",
+            "recency_pr_auc": 0.41618321719899826,
+            "rows": 6051,
+            "unweighted_pr_auc": 0.36339813775481955
+          },
+          {
+            "base_rate": 0.11298342541436464,
+            "gain": 1.1517123724172573,
+            "period": "test",
+            "recency_pr_auc": 0.33242930511301544,
+            "rows": 18100,
+            "unweighted_pr_auc": 0.2886391716147846
+          }
+        ],
+        "sign_changes_at_the_validation_boundary": true,
+        "spread_within_test": 0.0022111414616849956,
+        "used_for_selection": false,
+        "uses_test_labels": true
+      },
+      "grid": [
+        1.0,
+        2.0,
+        4.0,
+        8.0,
+        16.0,
+        "inf"
+      ],
+      "helped": false,
+      "measured_from": "the last day of the training split",
+      "normalised": "to mean one, so min_child_weight means the same thing at every half-life",
+      "rule": "better PR-AUC and better Brier, or the unweighted fit stands",
+      "search": [
+        {
+          "effective_rows": 11592.77799775002,
+          "half_life_years": 1.0,
+          "n_estimators": 32,
+          "oldest_row_weight": 6.406174465780056e-08,
+          "validation_brier": 0.062174726349562434,
+          "validation_mean_predicted": 0.04490289464592934,
+          "validation_pr_auc": 0.2011314452363079
+        },
+        {
+          "effective_rows": 23173.831114401968,
+          "half_life_years": 2.0,
+          "n_estimators": 19,
+          "oldest_row_weight": 0.000253104216989367,
+          "validation_brier": 0.06193917302887475,
+          "validation_mean_predicted": 0.04568944871425629,
+          "validation_pr_auc": 0.21515357219652517
+        },
+        {
+          "effective_rows": 44919.429873888956,
+          "half_life_years": 4.0,
+          "n_estimators": 9,
+          "oldest_row_weight": 0.015909249416278786,
+          "validation_brier": 0.06080059453873036,
+          "validation_mean_predicted": 0.04826274514198303,
+          "validation_pr_auc": 0.22149950872250057
+        },
+        {
+          "effective_rows": 71971.48900223017,
+          "half_life_years": 8.0,
+          "n_estimators": 9,
+          "oldest_row_weight": 0.12613187311809332,
+          "validation_brier": 0.06020720082096214,
+          "validation_mean_predicted": 0.0497836172580719,
+          "validation_pr_auc": 0.22763322197593389
+        },
+        {
+          "effective_rows": 88271.42503311593,
+          "half_life_years": 16.0,
+          "n_estimators": 19,
+          "oldest_row_weight": 0.3551504936193856,
+          "validation_brier": 0.05917357397386287,
+          "validation_mean_predicted": 0.051695454865694046,
+          "validation_pr_auc": 0.23324249517921578
+        },
+        {
+          "effective_rows": 96019.0,
+          "half_life_years": "inf",
+          "n_estimators": 126,
+          "oldest_row_weight": 1.0,
+          "validation_brier": 0.05881129330549262,
+          "validation_mean_predicted": 0.04779747873544693,
+          "validation_pr_auc": 0.2417182375951467
+        }
+      ],
+      "training_drift": {
+        "drift_is_inside_the_training_window": false,
+        "test_base_rate": 0.11298342541436464,
+        "train_first_half": {
+          "base_rate": 0.04975143550811206,
+          "rows": 51898,
+          "through": 2007
+        },
+        "train_second_half": {
+          "base_rate": 0.047483057954262144,
+          "from": 2008,
+          "rows": 44121
+        },
+        "validation_base_rate": 0.06840744139484442,
+        "within_train_ratio": 0.9544057868746308
+      },
+      "tuned_on": "validation",
+      "weighting": "exponential in the age of the row"
+    },
     "recommended_variant": "unweighted",
-    "recorded_at": "2026-09-08T15:27:24+00:00",
+    "recorded_at": "2026-09-08T16:13:28+00:00",
     "resampling": "none",
     "scale_pos_weight_observed": 19.530040624331836,
     "specified_variant": "weighted",
@@ -2676,6 +2852,7 @@
           "max_depth": 6,
           "min_child_weight": 10
         },
+        "recency_half_life_years": "inf",
         "scale_pos_weight": 1.0,
         "seed": 42,
         "test": {
@@ -2886,6 +3063,7 @@
           "max_depth": 4,
           "min_child_weight": 1
         },
+        "recency_half_life_years": "inf",
         "scale_pos_weight": 19.530040624331836,
         "seed": 42,
         "test": {

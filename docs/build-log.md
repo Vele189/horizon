@@ -4357,6 +4357,108 @@ the model artefact, so wiring it through is a serving change. The panel says
 that in the vintage caption rather than leaving a reader to reconcile a model
 card that argues for one threshold with a view that applies another.
 
+## Recency weighting, and a split that cannot see its own benefit
+
+ML-12. The cheapest available response to the drift: weight the training rows
+by recency so the fit is not dominated by a climate that no longer exists.
+Exponential decay in the age of a row, half-life tuned on validation, measured
+against the unweighted fit.
+
+The half-life grid runs to infinity on purpose, the same way the climatology's
+shrinkage grid does. Infinity *is* the unweighted fit, so the search is offered
+the null hypothesis as one of its options; a tuned parameter that cannot choose
+"do nothing" is not tuned, it is clipped.
+
+### On validation it loses, monotonically
+
+| half-life | effective rows | oldest row's weight | validation PR-AUC | validation Brier |
+|---:|---:|---:|---:|---:|
+| 1 y | 11 593 | 0.000 | 0.2011 | 0.0622 |
+| 2 y | 23 174 | 0.000 | 0.2152 | 0.0619 |
+| 4 y | 44 919 | 0.016 | 0.2215 | 0.0608 |
+| 8 y | 71 971 | 0.126 | 0.2276 | 0.0602 |
+| 16 y | 88 271 | 0.355 | 0.2332 | 0.0592 |
+| **∞** | **96 019** | **1.000** | **0.2417** | **0.0588** |
+
+Both columns improve monotonically as the weighting is relaxed. Every year of
+history discarded costs ranking *and* calibration, and the rule — better PR-AUC
+and better Brier, or the incumbent stands — chooses not to weight at all.
+
+Kish's effective sample size is reported beside every row because it is what
+makes the trade legible: a four-year half-life is fitting on 45 000 rows'
+worth of information rather than 96 000, and a one-year half-life on 12 000.
+
+### Why: there is no drift inside the training window
+
+The obvious reading of a null result is that the method is weak. It is not.
+Recency weighting can only exploit a trend the *training split itself*
+contains, and this one has none:
+
+| period | base rate |
+|---|---:|
+| train, 1995–2006 | 4.98% |
+| train, 2007–2018 | 4.75% |
+| validation, 2019–2021 | 6.84% |
+| test, 2022–2026 | 11.30% |
+
+The second half of the training period runs *slightly quieter* than the first.
+The label's drift — the thing this whole phase has been circling — is entirely
+**between** the splits, not inside the training one. Weighting towards the end
+of the training window weights towards years that are, if anything, marginally
+calmer, and all it achieves is throwing rows away. `training_drift` records
+this beside the result, because without it a correct refusal looks like a
+failed method.
+
+Read against DBT-12 the pair is tidy. Detrending the climatology removes 5% of
+the drift, so it is not an artefact of the label's construction. Recency
+weighting cannot reach it either, because it is not inside the fitting window.
+The drift is real, recent, and outside the reach of both cheap corrections.
+
+### And then the uncomfortable part
+
+The ablation compares the unweighted fit against the best finite half-life
+rather than against whatever the rule chose — comparing a choice with itself
+prints one row twice and hides the finding. The contrast:
+
+| arm | half-life | split | PR-AUC | Brier | mean predicted |
+|---|---:|---|---:|---:|---:|
+| unweighted | ∞ | validation | **0.2417** | **0.0588** | 0.0478 |
+| recency | 16 y | validation | 0.2332 | 0.0592 | 0.0517 |
+| unweighted | ∞ | test | 0.2886 | 0.0946 | 0.0611 |
+| recency | 16 y | test | **0.3324** | **0.0919** | 0.0649 |
+
+**Recency weighting is 15% better on test and worse on validation.** It also
+moves the mean prediction towards the rate that actually occurs, which is the
+first place an effect should show.
+
+A reader seeing only those four rows would reasonably suspect noise, so the
+test period is split in half: the gain is +14.8% in one half and +14.5% in the
+other, and −3.5% on validation. The sign change sits at the
+validation/test boundary and does not wander inside test.
+
+What the boundary *is* remains open, and the recorded table does not pretend to
+settle it. Validation is both nearer the training window and drawn from a
+period whose base rate is 6.8% against test's 11.3%, and here those two
+explanations move together. `sign_changes_at_the_validation_boundary` is
+recorded; `gain_rises_with_distance` was drafted and deleted, because it is
+true between validation and test and false between the two halves of test, and
+a field claiming a monotone trend would have been reporting whichever cut
+happened to show one.
+
+### It is recorded and not shipped
+
+Choosing the sixteen-year half-life because it wins on test would be selecting
+on test, which is the one thing this project does not do. `gain_by_distance`
+carries `uses_test_labels: true` and `used_for_selection: false`, and a test
+asserts both, so a later edit that started selecting on it would have to delete
+an assertion saying it does not.
+
+The honest statement is not that recency weighting does not work. It is that
+**its benefit is invisible on the only period this project is allowed to choose
+on**, and that the geometry of the split — a validation window adjacent to
+training, in a record whose drift is concentrated at the far end — is what
+makes it unusable rather than anything about the method.
+
 ## Publishing
 
 Community Cloud requires a public repository, which makes deployment the moment
