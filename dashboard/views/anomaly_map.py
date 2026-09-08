@@ -21,6 +21,22 @@ visible at a glance rather than findable on inspection.
 rows dbt flags with ``is_anomaly``. The map and the mart cannot disagree about
 what counts as an anomaly, and a test asserts it at the boundary value where
 they otherwise would.
+
+**Which climatology this is, said out loud (DBT-13).** The warehouse carries
+two, and a reader looking at a red dot is owed the question it answers. This
+map shows *unusual for the record*: the day scored against a baseline built
+from every year of that city's history, so a hot day in 2024 is compared with
+the whole 1995-2026 record and not only with the recent part of it.
+
+The alternative is *unusual for this era*, the detrended baseline DBT-12 built,
+which walks the normal along a fitted warming trend to meet the year being
+scored. It is a legitimate and different product: under it a record-hot day is
+measured against a warmed baseline and reads less anomalous. It is not what
+this view shows, and it is not shipped anywhere, because it does not answer the
+question a reader of a map of today's extremes is asking, and because DBT-12
+measured what it buys - five per cent of the label's drift across the
+chronological split - against what it costs, which is that every number in the
+project would mean something else. `docs/proposal.md` §5.3 records the choice.
 """
 
 from __future__ import annotations
@@ -44,7 +60,10 @@ VIEW = ViewMeta(
     question="Where is it abnormally hot or cold right now?",
     caption=(
         "Each city on one day, sized by how far it sat from its own seasonal "
-        "normal and coloured by which way."
+        "normal and coloured by which way. The normal is built from every year "
+        "on record, so this is *unusual for the record* rather than unusual "
+        "for the present climate; the detrended alternative is measured in the "
+        "warehouse and deliberately not shipped."
     ),
     source_table=f"{GOLD_SCHEMA}.fact_weather_anomalies",
 )
@@ -118,8 +137,12 @@ def _tooltip(row: pd.Series) -> str:
         f"<br><b>{row['baseline_c']:.1f} °C</b> baseline μ"
         f" (σ {row['baseline_sigma']:.1f})"
         f"<br><b>{row['departure_c']:+.1f} °C</b> departure"
+        # Which baseline, on every scored point. The warehouse holds two, and a
+        # Z-score with no statement of what it was measured against is the same
+        # omission as a PR-AUC with no base rate beside it.
         f"<br><span style='font-size:0.85em'>"
-        f"{int(row['baseline_observations'])} reference observations</span>"
+        f"{int(row['baseline_observations'])} reference observations, "
+        f"all years (not detrended)</span>"
     )
 
 

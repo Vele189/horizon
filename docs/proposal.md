@@ -140,6 +140,24 @@ Reanalysis data is cleaner than the draft implied. Rather than manufacture messi
 
 If a deliberately messy ingestion exercise is wanted, a small synthetic corruption layer can be added to bronze and the cleaning logic demonstrated against it, but it should be labelled as synthetic, not passed off as source behaviour.
 
+#### Which question the anomaly flag answers (decided, DBT-13)
+
+An anomaly is a departure from a normal, and there is more than one defensible normal. The warehouse computes two and the product ships one, so the choice is recorded here rather than left to whichever column a query happened to select.
+
+**Shipped: *unusual for the record*.** `is_anomaly`, from a leave-one-year-out baseline over every year of that city's history. A hot day in 2024 is measured against the whole 1995-2026 record.
+
+**Built, measured, and not shipped: *unusual for this era*.** `is_anomaly_detrended`, from the same baseline with a per-city, per-day linear trend in year removed and the result referenced to the year being scored. The trend is fitted only on years before that one, on an expanding window, because a label that can see forward would be a worse defect than the drift it was built to fix.
+
+They are different products, not two implementations of one. The reasons for shipping the first:
+
+1. **Detrending does not fix what it was proposed to fix.** The seven-day label's base rate rises 2.29x from the training period to the test period. Detrended, it rises 2.22x. Five per cent of the drift goes. The drift lives in the tail and the trend lives in the centre: a slope of 0.3 °C/decade moves the baseline by about a tenth of a sigma, which halves the correlation between year and Z and barely touches the rate at which days clear 2.5 sigma.
+2. **No documented event changes verdict.** The validation gate runs against both flags. Every checkable event moves by 0.01 to 0.19 sigma, in the direction the trend predicts, and not one crosses the threshold. There is no evidence from the gate for preferring either, which removes the argument that would have overridden point 1.
+3. **The Climate Matrix exists to draw how anomaly counts move across thirty years.** Detrending removes, by construction, the signal that view is for. A product cannot ship a flag that erases one of its own four views.
+
+The choice is uniform across the four views rather than split per view. A split would be legitimate - the Risk Horizon is arguably asking an operational question about now - but it would mean two flags with the same name meaning different things in different tabs, for a difference DBT-12 measured at five per cent, and the reader would have to carry which was which.
+
+`is_anomaly_detrended` remains in `fact_weather_anomalies` in full, with its fitted slope and that slope's standard error beside it, because the measurement is worth keeping and because the decision should be re-checkable rather than re-argued.
+
 ---
 
 ## 6. Workstreams
