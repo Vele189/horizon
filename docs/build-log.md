@@ -1320,7 +1320,7 @@ than silently invalidated.
 
 ```bash
 python dbt_analytics/dbt_env.py -- dbt docs generate
-python dbt_analytics/render_lineage.py     # regenerates docs/images/lineage.svg
+python dbt_analytics/render_lineage.py     # regenerates lineage.svg and .png
 ```
 
 `dbt build` is green end to end: **190 nodes, PASS=190, WARN=0, ERROR=0**, and
@@ -4725,6 +4725,169 @@ claim an exactness the arithmetic does not provide. It also decides what
 happens at a level tighter than the sample can certify, and infinity is the
 honest answer there: every set becomes both labels, which is useless and
 accurate.
+
+## How unusual, in years, and two ways to get the trend wrong
+
+ML-15/DBT-15. A Z-score answers *is this unusual*. The unit a reader actually
+wants is time — "a one-in-twelve-year day here" — and getting there means
+leaving the Gaussian behind. A Z is standardised by a mean and a variance,
+which are properties of the middle of a distribution, and the entire content of
+an extreme is that it is not in the middle. Extreme value theory gives the
+right instrument: above a high enough threshold, exceedances of almost any
+distribution converge to a generalised Pareto.
+
+`machine_learning/extremes.py` fits one per city and writes
+`gold_marts.fact_extreme_value`; a dbt mart joins those parameters back onto
+every scored day. Python estimates, SQL derives, and the boundary is a table
+with named columns rather than a pickle — the same division as
+`fact_ml_predictions`, and declared as a dbt `source` so the ordering appears
+in the DAG instead of living in someone's head.
+
+### Declustering, which is not a technicality
+
+A five-day heatwave is one event. Counted as five exceedances it triples the
+apparent frequency of extremes, and every return period computed from it is
+too short by that factor — in the direction that makes the product look more
+dramatic, which is the direction to be most suspicious of.
+
+Runs declustering keeps the peak of each run and discards the rest. On this
+data the mean cluster is 1.9 to 2.6 days, so the correction is roughly a factor
+of two on every number in the mart. It is enforced twice beyond the code: a
+check constraint on the table (`exceedance_rate <= exceedances / observations`)
+and a test that halving the rate doubles the period, because passing the raw
+fraction is the one error that would leave every figure finite, plausible, and
+wrong in the same direction.
+
+### The shape parameter is not pinned down, and the map says so
+
+The shape decides whether a tail is bounded — whether there is a hottest
+possible day. At a few hundred declustered exceedances per city it is unstable:
+Delhi's moves from −0.005 to +0.147 when the threshold moves from the 95th
+percentile to the 98th. The intervals are bootstrapped over *clusters* rather
+than days, because resampling days would put one heatwave into a replicate as
+five draws and return an interval narrower than the data earns — the same error
+declustering exists to prevent, reintroduced one level down.
+
+Seven of the eleven fitted cities have a shape interval that crosses zero. The
+consequence is not academic. Recomputing the return period at the ends of that
+interval:
+
+| \|Z\| | 2.6 | 3.0 | 3.4 | 3.8 | 4.2 | 4.6 |
+|---|---|---|---|---|---|---|
+| median band | 1.3x | 1.8x | 4.1x | 9.6x | 134x | 4879x |
+
+Up to three sigma every city is inside a factor of three, and "about a
+one-in-two-year day" is a sentence the data supports. Phoenix at four sigma
+reads 28 years, and its interval puts it between 9 and 152 405.
+
+So `return_period_is_reportable` is a column, and the decision lives in SQL
+rather than in the view: a point estimate where the band is inside one order of
+magnitude, and a floor phrased as one — "at least a 1-in-15-year day" — where
+it is not. The floor comes from the *heaviest* tail in the interval, the
+reading that makes an extreme most frequent, so the uncertainty is resolved
+toward understating rarity. Portland's 2021 heat dome therefore reads "at least
+1-in-15-years", which is conservative and defensible. A headline number off a
+thirty-year record is the kind of thing that gets quoted onward and cannot be
+walked back.
+
+### The first wrong trend: one fit for two tails
+
+The ticket asks for a non-stationary GPD, since a stationary tail under a
+warming trend is DBT-12's mistake one layer up. Fitting a time trend in the
+scale on the folded `abs(Z)` exceedances gave seven cities a significant trend
+— and gave Phoenix and Reykjavík significant **narrowing**, at p = 0.017 and
+p = 0.006.
+
+That reading was an artefact, and checking it took one query. Z is referenced to
+a leave-one-year-out baseline over the whole 1995–2026 record, so a warming city
+sits below its own baseline early and above it late. The warm share of
+declustered exceedances, first half against second:
+
+| | Lagos | Singapore | Tokyo | London | Phoenix | Reykjavík |
+|---|---|---|---|---|---|---|
+| early | 0.08 | 0.19 | 0.37 | 0.45 | 0.16 | 0.33 |
+| late | 0.61 | 0.53 | 0.66 | 0.76 | 0.32 | 0.45 |
+
+It rises in all eleven. A single scale trend was being fitted to a mixture whose
+composition inverts across the record, and it reported that inversion as a
+change in width. Phoenix's cold tail — which dominates its early exceedances —
+is retreating faster than its warm tail is growing, and one parameter cannot
+say both.
+
+Each direction now gets its own threshold, declustering and fit, with the cold
+tail reflected so it is an upper tail like any other.
+
+### The second wrong trend: a bar that does not move
+
+Splitting by direction left a subtler confound, and a synthetic record found it.
+Take a series with a pure location drift of 0.02 σ a year and a *rigorously
+constant* variance: nothing about its tail gets wider. Fitted against a fixed
+threshold, the cold-side scale trend came back significantly negative at
+p = 0.002.
+
+Nothing had narrowed. As the distribution slides, the region above a fixed bar
+empties on the cold side and fills on the warm side, and the excesses above it
+are drawn from an ever-more-truncated region. A threshold held still turns a
+*location* drift into an apparent change in *width*.
+
+The fix is a threshold fitted as a line in time, by minimising the pinball loss
+— the loss whose minimiser is the conditional quantile. On that same synthetic
+record it recovers a slope of 0.0202 a year against the 0.02 that was injected,
+and reports no width trend in either direction, p = 0.69 and p = 0.17.
+
+Both are tests. One asserts the current behaviour; one asserts that the fixed
+threshold reaches the wrong conclusion. Reverting the fix turns the first red
+and the second green, and the pair says exactly what changed.
+
+### What survived
+
+With drift and width separated, the answer is smaller and more honest than
+either wrong version. Every city's warm tail is **moving** — up to +0.048 σ a
+year in Lagos — and every city's cold tail is moving toward the mean. Only four
+of twenty-two directional width trends survive at p < 0.05: London's warm tail
+at 1.79x over the record, São Paulo's at 1.67x, Singapore's at 1.46x, and
+Lagos's cold tail at 1.76x. The fixed-threshold version claimed seven.
+
+This is the drift proposal §5.3 said detrending the mean could not reach: "the
+drift lives in the tail and the trend lives in the centre". It is measured here,
+in the tail, and most of it turns out to be the tail *moving* rather than
+*spreading*.
+
+### The map, sized two ways
+
+Marker size on the Anomaly Map now reads as departure in sigma or as rarity in
+years. Colour is unchanged in both, so a reader toggling is re-reading one
+picture rather than being shown a second one, and the two size keys share a
+pixel range for the same reason.
+
+The rarity channel is logarithmic — the interesting distances are one year to
+ten and ten to a hundred, and those are the same distance to a reader — and
+capped at fifty years, because past that the fitted answers separate by
+hundreds of years on a parameter whose interval spans two orders of magnitude.
+Capping the *channel* rather than the number lets the map stop distinguishing
+what it cannot distinguish while the tooltip still reports what the fit said.
+
+Four states had to stay distinct, and two of them are easy to collapse:
+
+- **Fitted, and today is rare.** A size, and a phrase.
+- **Fitted, and today is ordinary.** The smallest circle. On a rarity channel
+  "nothing rare happened" *is* the floor, exactly as half a sigma is on the
+  departure channel.
+- **Fitted, but below the tail threshold.** No period. The GPD is a model for
+  exceedances and is not evaluated below its own floor.
+- **Not fitted at all.** Sydney's eighteen scored days cannot support a tail.
+  This one leaves the filled trace for the open ring, which already means "no
+  number here" on this map. Drawing it at the floor would say its weather is
+  calm when what happened is that nobody fitted it.
+
+Two bugs surfaced from looking at the rendered output rather than at the tests.
+The first draft phrased Cairo's ordinary-exceedance day as "about a
+1-in-0.1-year day", which is arithmetically correct and unreadable; below a
+year the reader's question reverses, and most rows in the mart are below a year,
+so that was the common case rather than an edge. The second was worse: on the
+rarity encoding the only city with a fitted answer drew *smallest*, because
+unfitted cities were falling back to their departure sizes and the two scales
+are not comparable. That fallback is now the open ring.
 
 ## Publishing
 

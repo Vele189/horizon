@@ -43,7 +43,7 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Any, Final, Mapping, Sequence
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -59,11 +59,13 @@ VIEW = ViewMeta(
     url_path="anomaly-map",
     question="Where is it abnormally hot or cold right now?",
     caption=(
-        "Each city on one day, sized by how far it sat from its own seasonal "
-        "normal and coloured by which way. The normal is built from every year "
-        "on record, so this is *unusual for the record* rather than unusual "
-        "for the present climate; the detrended alternative is measured in the "
-        "warehouse and deliberately not shipped."
+        "Each city on one day, coloured by how far it sat from its own seasonal "
+        "normal and which way. The normal is built from every year on record, "
+        "so this is *unusual for the record* rather than unusual for the "
+        "present climate; the detrended alternative is measured in the "
+        "warehouse and deliberately not shipped. Marker size reads either as "
+        "departure in sigma or as rarity in years, from a generalised Pareto "
+        "fitted to each city's declustered tail."
     ),
     source_table=f"{GOLD_SCHEMA}.fact_weather_anomalies",
 )
@@ -83,11 +85,25 @@ _DAY_SQL = f"""
            a.departure_c,
            a.is_anomaly,
            a.baseline_observations,
-           (a.city_id is not null)      as observed
+           (a.city_id is not null)      as observed,
+           -- Left-joined, and null for two different reasons that the tooltip
+           -- keeps apart: an ordinary day is below its city's tail threshold
+           -- and the fit says nothing about it, while a city with too short a
+           -- record has no fit at all. Neither is an error, and neither may be
+           -- drawn as "not rare".
+           r.return_period_years_quoted as return_years,
+           r.return_period_qualifier    as return_qualifier,
+           r.return_period_is_reportable as return_is_reportable,
+           (f.city_id is not null)      as tail_fitted
       from {GOLD_SCHEMA}.dim_cities c
       left join {GOLD_SCHEMA}.fact_weather_anomalies a
              on a.city_id = c.city_id
             and a.date_key = :day
+      left join {GOLD_SCHEMA}.fact_extreme_value f
+             on f.city_id = c.city_id
+      left join {GOLD_SCHEMA}.fact_anomaly_return_periods r
+             on r.city_id = c.city_id
+            and r.date_key = :day
      order by c.name
 """
 
@@ -141,11 +157,74 @@ def _tooltip(row: pd.Series) -> str:
         # Which baseline, on every scored point. The warehouse holds two, and a
         # Z-score with no statement of what it was measured against is the same
         # omission as a PR-AUC with no base rate beside it.
+        f"{_rarity_line(row)}"
         f"<br><span style='font-size:0.85em'>"
         f"{int(row['baseline_observations'])} reference observations, "
         f"all years (not detrended)"
         f"{_baseline_note(row)}</span>"
     )
+
+
+def _rarity_line(row: pd.Series) -> str:
+    """How unusual this day is in years, when the fit will say.
+
+    Four states, and collapsing any pair of them would be a lie of a different
+    kind:
+
+    *No fit at all.* The city's record is too short to fit a tail to -- Sydney
+    has eighteen scored days. Silent rather than "not rare", because the map
+    must not imply an answer it does not have.
+
+    *Below the threshold.* An ordinary day. The generalised Pareto is a model
+    for exceedances and is not evaluated here; saying "more often than once a
+    year" would be true and would also invite the reader to think the fit had
+    been consulted.
+
+    *A reportable exceedance.* "About a 1-in-4.2-year day."
+
+    *An exceedance past where the shape is pinned down.* A floor, phrased as
+    one -- "at least a 1-in-15-year day" -- because the point estimate there
+    carries a sensitivity band spanning orders of magnitude. The floor comes
+    from the heaviest tail in the interval, so it errs toward the day being
+    *less* rare than it was, which is the only direction worth erring in on a
+    map somebody might quote.
+    """
+    if not row.get("tail_fitted") or pd.isna(row.get("return_years")):
+        return ""
+    return (
+        f"<br><b>{_rarity_phrase(float(row['return_years']), bool(row.get('return_is_reportable')))}</b>"
+        f"<span style='font-size:0.85em'> (both tails)</span>"
+    )
+
+
+def _rarity_phrase(years: float, reportable: bool) -> str:
+    """A return period in the unit and the direction a reader thinks in.
+
+    "A 1-in-0.1-year day" is arithmetically correct and unreadable. Below a
+    year the natural direction reverses -- these are events a city sees several
+    times a season, and the quantity a reader holds is *how often*, not *how
+    long between*. Above a year it reverses back.
+
+    That reversal is the common case, not an edge. The tail threshold sits at
+    the 95th percentile of each city's own Z, so most rows in the mart are days
+    that recur within the year.
+
+    The floor phrasing only ever applies above a year: a row is unreportable
+    only when its shape sensitivity spans an order of magnitude, which does not
+    happen below 3.3 sigma anywhere in this data, and 3.3 sigma is already a
+    multi-year event in every fitted city. The branch is still written, because
+    a refit on more data could move that boundary and a phrase that silently
+    dropped "at least" would overstate the fit's confidence.
+    """
+    if years < 1:
+        per_year = 1.0 / years
+        often = (
+            "most weeks" if per_year >= 15 else f"about {per_year:.0f} times a year"
+        )
+        return f"A day this city sees {often}"
+    figure = f"{years:.1f}" if years < 10 else f"{years:.0f}"
+    lead = "About" if reportable else "At least"
+    return f"{lead} a 1-in-{figure}-year day here"
 
 
 def _baseline_note(row: pd.Series) -> str:
@@ -175,8 +254,13 @@ def _baseline_note(row: pd.Series) -> str:
 
 def _figure(frame: pd.DataFrame) -> go.Figure:
     ground = theme.map_chrome()
-    scored = frame[frame["z"].notna()]
-    unscored = frame[frame["z"].isna()]
+    # Split on whether the marker's *size* carries a value, not on whether the
+    # city was scored. On the departure encoding those are the same set. On the
+    # rarity encoding they are not: a scored city with no fitted tail has a
+    # colour and no size, and belongs with the rings.
+    encoded = frame["encoded"] if "encoded" in frame else frame["z"].notna()
+    scored = frame[encoded]
+    unscored = frame[~encoded]
 
     figure = go.Figure()
 
@@ -245,8 +329,34 @@ def _figure(frame: pd.DataFrame) -> go.Figure:
     return figure
 
 
-def prepare(frame: pd.DataFrame, day: dt.date) -> pd.DataFrame:
-    """Attach the encoded columns. Split out so a test can read them."""
+#: The two things marker area can mean on this map.
+#:
+#: Colour always encodes direction and magnitude in sigma; only *size* changes.
+#: Two channels changing together would make the toggle a different map rather
+#: than a different reading of the same one.
+ENCODINGS: Final[tuple[str, ...]] = ("departure", "rarity")
+
+
+def prepare(
+    frame: pd.DataFrame, day: dt.date, *, encoding: str = "departure"
+) -> pd.DataFrame:
+    """Attach the encoded columns. Split out so a test can read them.
+
+    ``encoding`` chooses what marker area means.
+
+    ``departure`` sizes by |Z|: how far from normal, in units of this city's
+    own variability. Every scored city gets a size.
+
+    ``rarity`` sizes by return period: how often a day this far out happens
+    here, from the fitted tail. **Cities with no fitted answer keep their
+    departure size and are not shrunk to the floor.** A city whose record is
+    too short to fit, or whose day is inside its tail threshold, has no rarity
+    to draw; drawing it at the minimum would encode "this is ordinary" using
+    the same mark that means "we did not compute this", and the reader has no
+    way to tell those apart from a dot. The tooltip names which one it is.
+    """
+    if encoding not in ENCODINGS:
+        raise ValueError(f"encoding must be one of {ENCODINGS}, got {encoding!r}.")
     frame = frame.copy()
     frame["date_label"] = day.strftime("%d %B %Y")
     frame["colour"] = [
@@ -255,6 +365,32 @@ def prepare(frame: pd.DataFrame, day: dt.date) -> pd.DataFrame:
     frame["diameter"] = [
         theme.marker_diameter(z) if pd.notna(z) else None for z in frame["z"]
     ]
+    frame["encoded"] = frame["z"].notna()
+    if encoding == "rarity":
+        # A day below its city's tail threshold gets the floor, and that is the
+        # encoding rather than a gap: on a rarity channel "nothing rare
+        # happened" is the smallest circle, exactly as half a sigma is on the
+        # departure channel.
+        #
+        # A city with no fitted tail at all is a different thing and gets no
+        # size. It leaves the filled trace for the open ring, which already
+        # means "no number here" on this map -- Sydney's eighteen scored days
+        # cannot support a tail, and drawing it at the floor would say its
+        # weather is calm when what happened is that nobody fitted it.
+        fitted = frame.get("tail_fitted", pd.Series(False, index=frame.index))
+        frame["encoded"] = frame["z"].notna() & fitted.fillna(False).astype(bool)
+        # `rarity_diameter` returns the floor for a missing period, which is
+        # what a below-threshold day should get, so the null case needs no
+        # branch here -- only the unencoded case does.
+        frame["diameter"] = [
+            theme.rarity_diameter(float(years) if pd.notna(years) else float("nan"))
+            if encoded
+            else None
+            for years, encoded in zip(
+                frame.get("return_years", pd.Series(index=frame.index, dtype=float)),
+                frame["encoded"],
+            )
+        ]
     frame["tooltip"] = [_tooltip(row) for _, row in frame.iterrows()]
     return frame
 
@@ -431,7 +567,26 @@ def render() -> None:
     coverage = _coverage()
     day, event = _selected_day(coverage)
 
-    frame = prepare(_day(day), day)
+    encoding = st.radio(
+        "Size the markers by",
+        ENCODINGS,
+        format_func=lambda name: {
+            "departure": "Departure (σ)",
+            "rarity": "Rarity (years)",
+        }[name],
+        horizontal=True,
+        key="anomaly_map_encoding",
+        help=(
+            "Departure sizes each city by how far it sat from its own normal. "
+            "Rarity sizes it by how often a day that far out happens there, "
+            "from a generalised Pareto fitted to that city's declustered tail. "
+            "The two disagree on purpose: two sigma means the same arithmetic "
+            "everywhere and a very different rarity in a steady climate than in "
+            "a volatile one."
+        ),
+    )
+
+    frame = prepare(_day(day), day, encoding=encoding)
 
     if event is not None:
         state, sentence = verify(event, frame, run_query(_CITY_COVERAGE_SQL, reference=True))
@@ -441,6 +596,18 @@ def render() -> None:
         st.caption(event.description)
     scored = int(frame["z"].notna().sum())
     flagged = int(frame["is_anomaly"].fillna(False).sum())
+    # `.get` rather than indexing: the columns arrive from a left join against
+    # two marts the fit writes, and a frame without them is a real state --
+    # a warehouse where extremes.py has not run yet. The map degrades to the
+    # departure encoding rather than failing to draw.
+    blank = pd.Series(index=frame.index, dtype="object")
+    fitted = int(frame.get("tail_fitted", blank).fillna(False).astype(bool).sum())
+    rare = int(frame.get("return_years", blank).notna().sum())
+    unfitted_note = (
+        f"{rare} above their tail threshold today"
+        if rare
+        else "no city is above its tail threshold today"
+    )
 
     st.plotly_chart(
         _figure(frame),
@@ -452,7 +619,17 @@ def render() -> None:
     with key:
         st.markdown(theme.anomaly_key_html(), unsafe_allow_html=True)
     with size:
-        st.markdown(theme.size_key_html(), unsafe_allow_html=True)
+        st.markdown(
+            theme.rarity_key_html() if encoding == "rarity"
+            else theme.size_key_html(),
+            unsafe_allow_html=True,
+        )
+        if encoding == "rarity":
+            st.caption(
+                f"Fitted tails for {fitted} of {len(frame)} cities; "
+                f"{unfitted_note}. Cities with no fitted answer keep their "
+                "departure size."
+            )
     with count:
         st.metric("Flagged this day", flagged, help="|Z| above 2.5, both tails.")
         st.caption(f"{scored} of {len(frame)} cities scored.")

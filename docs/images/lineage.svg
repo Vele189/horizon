@@ -1,42 +1,44 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1586" height="502" viewBox="0 0 1586 502" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1586" height="560" viewBox="0 0 1586 560" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif">
 <style>text{dominant-baseline:middle}</style>
-<rect width="1586" height="502" fill="#ffffff"/>
+<rect width="1586" height="560" fill="#ffffff"/>
 <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9aa4b2"/></marker></defs>
-<text x="141" y="30" text-anchor="middle" font-size="13" font-weight="600" fill="#8c6d3f">bronze (source)</text>
+<text x="141" y="30" text-anchor="middle" font-size="13" font-weight="600" fill="#8c6d3f">sources (read, not written)</text>
 <text x="467" y="30" text-anchor="middle" font-size="13" font-weight="600" fill="#6b7280">seed</text>
 <text x="793" y="30" text-anchor="middle" font-size="13" font-weight="600" fill="#2f6f4e">silver (staging)</text>
 <text x="1119" y="30" text-anchor="middle" font-size="13" font-weight="600" fill="#7a5ea8">intermediate</text>
 <text x="1445" y="30" text-anchor="middle" font-size="13" font-weight="600" fill="#1f4e79">gold (marts)</text>
-<path d="M1010,238 C974,238 974,296 1002,296" fill="none" stroke="#9aa4b2" stroke-width="1.1" marker-end="url(#a)" opacity="0.65" stroke-dasharray="3 2"/>
-<path d="M902,267 C956,267 956,296 1002,296" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
-<path d="M576,238 C630,238 630,209 676,209" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
-<path d="M250,296 C467,296 467,325 676,325" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
-<path d="M250,238 C467,238 467,267 676,267" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
+<path d="M1010,267 C974,267 974,325 1002,325" fill="none" stroke="#9aa4b2" stroke-width="1.1" marker-end="url(#a)" opacity="0.65" stroke-dasharray="3 2"/>
+<path d="M902,296 C956,296 956,325 1002,325" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
+<path d="M576,267 C630,267 630,238 676,238" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
+<path d="M250,296 C467,296 467,354 676,354" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
+<path d="M250,238 C467,238 467,296 676,296" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
 <path d="M1336,93 C1260,93 1260,383 1328,383" fill="none" stroke="#9aa4b2" stroke-width="1.1" marker-end="url(#a)" opacity="0.65" stroke-dasharray="3 2"/>
-<path d="M1228,296 C1282,296 1282,383 1328,383" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
-<path d="M902,325 C1119,325 1119,209 1328,209" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
-<path d="M902,267 C1119,267 1119,267 1328,267" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
+<path d="M1228,325 C1282,325 1282,383 1328,383" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
+<path d="M902,354 C1119,354 1119,209 1328,209" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
+<path d="M902,296 C1119,296 1119,267 1328,267" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
 <path d="M1336,151 C1280,151 1280,325 1328,325" fill="none" stroke="#9aa4b2" stroke-width="1.1" marker-end="url(#a)" opacity="0.65" stroke-dasharray="3 2"/>
-<path d="M902,209 C1119,209 1119,151 1328,151" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
+<path d="M902,238 C1119,238 1119,151 1328,151" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
 <path d="M1336,93 C1250,93 1250,441 1328,441" fill="none" stroke="#9aa4b2" stroke-width="1.1" marker-end="url(#a)" opacity="0.65" stroke-dasharray="3 2"/>
 <path d="M1336,383 C1300,383 1300,441 1328,441" fill="none" stroke="#9aa4b2" stroke-width="1.1" marker-end="url(#a)" opacity="0.65" stroke-dasharray="3 2"/>
 <path d="M1336,267 C1280,267 1280,441 1328,441" fill="none" stroke="#9aa4b2" stroke-width="1.1" marker-end="url(#a)" opacity="0.65" stroke-dasharray="3 2"/>
-<path d="M576,296 C956,296 956,441 1328,441" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
-<rect x="1010" y="218" width="218" height="40" rx="7" fill="#f1ecf9" stroke="#7a5ea8" stroke-width="1.4"/>
-<text x="1022" y="232" font-size="12.5" font-weight="600" fill="#1a1a1a">int_climatology_window</text>
-<text x="1022" y="248" font-size="10.5" fill="#6b7280">ephemeral</text>
-<rect x="1010" y="276" width="218" height="40" rx="7" fill="#f1ecf9" stroke="#7a5ea8" stroke-width="1.4"/>
-<text x="1022" y="290" font-size="12.5" font-weight="600" fill="#1a1a1a">int_climatology_contributions</text>
-<text x="1022" y="306" font-size="10.5" fill="#6b7280">ephemeral</text>
-<rect x="684" y="189" width="218" height="40" rx="7" fill="#e8f5ee" stroke="#2f6f4e" stroke-width="1.4"/>
-<text x="696" y="203" font-size="12.5" font-weight="600" fill="#1a1a1a">stg_cities</text>
-<text x="696" y="219" font-size="10.5" fill="#6b7280">view</text>
-<rect x="684" y="305" width="218" height="40" rx="7" fill="#e8f5ee" stroke="#2f6f4e" stroke-width="1.4"/>
-<text x="696" y="319" font-size="12.5" font-weight="600" fill="#1a1a1a">stg_observations_hourly</text>
-<text x="696" y="335" font-size="10.5" fill="#6b7280">view</text>
-<rect x="684" y="247" width="218" height="40" rx="7" fill="#e8f5ee" stroke="#2f6f4e" stroke-width="1.4"/>
-<text x="696" y="261" font-size="12.5" font-weight="600" fill="#1a1a1a">stg_observations_daily</text>
-<text x="696" y="277" font-size="10.5" fill="#6b7280">view</text>
+<path d="M576,325 C956,325 956,441 1328,441" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
+<path d="M1336,441 C1300,441 1300,499 1328,499" fill="none" stroke="#9aa4b2" stroke-width="1.1" marker-end="url(#a)" opacity="0.65" stroke-dasharray="3 2"/>
+<path d="M250,354 C793,354 793,499 1328,499" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
+<rect x="1010" y="247" width="218" height="40" rx="7" fill="#f1ecf9" stroke="#7a5ea8" stroke-width="1.4"/>
+<text x="1022" y="261" font-size="12.5" font-weight="600" fill="#1a1a1a">int_climatology_window</text>
+<text x="1022" y="277" font-size="10.5" fill="#6b7280">ephemeral</text>
+<rect x="1010" y="305" width="218" height="40" rx="7" fill="#f1ecf9" stroke="#7a5ea8" stroke-width="1.4"/>
+<text x="1022" y="319" font-size="12.5" font-weight="600" fill="#1a1a1a">int_climatology_contributions</text>
+<text x="1022" y="335" font-size="10.5" fill="#6b7280">ephemeral</text>
+<rect x="684" y="218" width="218" height="40" rx="7" fill="#e8f5ee" stroke="#2f6f4e" stroke-width="1.4"/>
+<text x="696" y="232" font-size="12.5" font-weight="600" fill="#1a1a1a">stg_cities</text>
+<text x="696" y="248" font-size="10.5" fill="#6b7280">view</text>
+<rect x="684" y="334" width="218" height="40" rx="7" fill="#e8f5ee" stroke="#2f6f4e" stroke-width="1.4"/>
+<text x="696" y="348" font-size="12.5" font-weight="600" fill="#1a1a1a">stg_observations_hourly</text>
+<text x="696" y="364" font-size="10.5" fill="#6b7280">view</text>
+<rect x="684" y="276" width="218" height="40" rx="7" fill="#e8f5ee" stroke="#2f6f4e" stroke-width="1.4"/>
+<text x="696" y="290" font-size="12.5" font-weight="600" fill="#1a1a1a">stg_observations_daily</text>
+<text x="696" y="306" font-size="10.5" fill="#6b7280">view</text>
 <rect x="1336" y="363" width="218" height="40" rx="7" fill="#e7f0f8" stroke="#1f4e79" stroke-width="1.4"/>
 <text x="1348" y="377" font-size="12.5" font-weight="600" fill="#1a1a1a">fact_climatology</text>
 <text x="1348" y="393" font-size="10.5" fill="#6b7280">table</text>
@@ -55,19 +57,25 @@
 <rect x="1336" y="131" width="218" height="40" rx="7" fill="#e7f0f8" stroke="#1f4e79" stroke-width="1.4"/>
 <text x="1348" y="145" font-size="12.5" font-weight="600" fill="#1a1a1a">dim_cities</text>
 <text x="1348" y="161" font-size="10.5" fill="#6b7280">table</text>
-<rect x="358" y="276" width="218" height="40" rx="7" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.4"/>
-<text x="370" y="290" font-size="12.5" font-weight="600" fill="#1a1a1a">t_critical</text>
-<text x="370" y="306" font-size="10.5" fill="#6b7280">seed</text>
-<rect x="358" y="218" width="218" height="40" rx="7" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.4"/>
-<text x="370" y="232" font-size="12.5" font-weight="600" fill="#1a1a1a">cities</text>
-<text x="370" y="248" font-size="10.5" fill="#6b7280">seed</text>
+<rect x="358" y="305" width="218" height="40" rx="7" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.4"/>
+<text x="370" y="319" font-size="12.5" font-weight="600" fill="#1a1a1a">t_critical</text>
+<text x="370" y="335" font-size="10.5" fill="#6b7280">seed</text>
+<rect x="358" y="247" width="218" height="40" rx="7" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.4"/>
+<text x="370" y="261" font-size="12.5" font-weight="600" fill="#1a1a1a">cities</text>
+<text x="370" y="277" font-size="10.5" fill="#6b7280">seed</text>
 <rect x="1336" y="421" width="218" height="40" rx="7" fill="#e7f0f8" stroke="#1f4e79" stroke-width="1.4"/>
 <text x="1348" y="435" font-size="12.5" font-weight="600" fill="#1a1a1a">fact_weather_anomalies</text>
 <text x="1348" y="451" font-size="10.5" fill="#6b7280">table</text>
+<rect x="1336" y="479" width="218" height="40" rx="7" fill="#e7f0f8" stroke="#1f4e79" stroke-width="1.4"/>
+<text x="1348" y="493" font-size="12.5" font-weight="600" fill="#1a1a1a">fact_anomaly_return_periods</text>
+<text x="1348" y="509" font-size="10.5" fill="#6b7280">table</text>
 <rect x="32" y="218" width="218" height="40" rx="7" fill="#fdf6e8" stroke="#8c6d3f" stroke-width="1.4"/>
 <text x="44" y="232" font-size="12.5" font-weight="600" fill="#1a1a1a">bronze.observations_daily</text>
 <text x="44" y="248" font-size="10.5" fill="#6b7280">source</text>
 <rect x="32" y="276" width="218" height="40" rx="7" fill="#fdf6e8" stroke="#8c6d3f" stroke-width="1.4"/>
 <text x="44" y="290" font-size="12.5" font-weight="600" fill="#1a1a1a">bronze.observations_hourly</text>
 <text x="44" y="306" font-size="10.5" fill="#6b7280">source</text>
+<rect x="32" y="334" width="218" height="40" rx="7" fill="#fdf6e8" stroke="#8c6d3f" stroke-width="1.4"/>
+<text x="44" y="348" font-size="12.5" font-weight="600" fill="#1a1a1a">gold.fact_extreme_value</text>
+<text x="44" y="364" font-size="10.5" fill="#6b7280">source</text>
 </svg>

@@ -448,6 +448,46 @@ backfill is not finished. When cities land, the baselines must be re-run and
 re-committed **before** the model is compared against them again, or "target
 fixed in advance" stops being true.
 
+### 12. A return period is a thirty-year record extrapolated
+
+`fact_anomaly_return_periods` reports how often a day this far from normal
+happens, in years, from a generalised Pareto fitted per city. Four things
+constrain what that number is worth.
+
+**The record is about thirty years long.** Any period past it is extrapolation,
+and the extrapolation is governed by the shape parameter, which is the one the
+data pins down worst: seven of the eleven fitted cities have a bootstrap
+interval on the shape that crosses zero, meaning the record cannot say whether
+their tail is bounded. Recomputed at the ends of that interval, the median
+return period spans a factor of 1.8 at three sigma and 134 at 4.2. The mart
+therefore refuses to quote a point estimate past the point where the band
+opens beyond one order of magnitude, and quotes the floor instead. Nothing in
+this project should be read as a thousand-year event; the data cannot certify
+one.
+
+**It is a marginal summary, not a current one.** The stationary fit that
+produces the return levels is fitted over the whole record, so it describes
+how often such a day happened *on average across 1995-2026*, in a period during
+which the tails demonstrably moved. The non-stationary fits beside it measure
+that movement, and they are reported rather than folded into the return
+periods, because a return level conditioned on a year is a different product
+with a different reader.
+
+**Declustering discards duration, deliberately, which sharpens limitation 9.**
+A five-day heatwave is one event and is represented by its peak. That is
+correct for a rate — five days is not five independent extremes — and it means
+a return period answers "a day this far out" and never "a spell this long".
+Phoenix's July 2023 dome is the case: it contributes one cluster, at its peak
+Z of +1.97, which is below the tail threshold entirely. The number this table
+reports about that event is *nothing*, and that is the honest reading of what
+was measured, not a gap to be filled in.
+
+**Both tails are folded together.** A row means "this far from normal in either
+direction", matching `is_anomaly`, which is on `abs(Z)` for the reason a
+one-sided flag loses Moscow's January. It also means the return periods cannot
+be read as heat return periods. The directional trends are fitted separately
+and are the place to look for asymmetry.
+
 ---
 
 ## What was checked, and what it would take to break it

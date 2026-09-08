@@ -156,6 +156,7 @@ the palette keeps its promise that a colour on this page means a number.
 
 from __future__ import annotations
 
+import math
 from typing import Final, Literal, Mapping, Sequence
 
 __all__ = [
@@ -170,6 +171,8 @@ __all__ = [
     "DIVERGING",
     "MARKER_MAX_PX",
     "MARKER_MIN_PX",
+    "RARITY_YEARS_CAP",
+    "RARITY_YEARS_FLOOR",
     "MARKER_Z_CAP",
     "Mode",
     "NEUTRAL",
@@ -189,6 +192,8 @@ __all__ = [
     "sequential_scale",
     "marker_diameter",
     "resolve_mode",
+    "rarity_diameter",
+    "rarity_key_html",
     "size_key_html",
 ]
 
@@ -436,6 +441,74 @@ def marker_diameter(z: float) -> float:
     magnitude = min(abs(z), MARKER_Z_CAP)
     span = MARKER_MAX_PX - MARKER_MIN_PX
     return MARKER_MIN_PX + span * (magnitude / MARKER_Z_CAP) ** 0.5
+
+
+#: Where the rarity encoding tops out, in years.
+#:
+#: Fifty. The records behind the fit are about thirty years long, so a
+#: fifty-year return period is already an extrapolation of most of the record
+#: again; past it the fitted answers separate by hundreds of years on the
+#: strength of a shape parameter whose bootstrap interval spans two orders of
+#: magnitude at that reach. Capping the *channel* rather than the number means
+#: the map stops distinguishing what it cannot distinguish, while the tooltip
+#: still reports what the fit said.
+RARITY_YEARS_CAP: Final[float] = 50.0
+
+#: Where it starts. Below the tail threshold there is no fitted answer at all,
+#: and the smallest exceedance sits near a tenth of a year.
+RARITY_YEARS_FLOOR: Final[float] = 0.1
+
+
+def rarity_diameter(years: float) -> float:
+    """Pixel diameter for a return period, in years.
+
+    Logarithmic, because return periods are: the interesting distances are
+    one year to ten and ten to a hundred, and those are the same distance to a
+    reader. On a linear channel every ordinary exceedance would collapse into
+    the same dot while a single fifty-year day took the whole range -- which is
+    the encoding failure the *sigma* channel avoids by capping, arrived at from
+    the other direction.
+
+    Shares `marker_diameter`'s floor and ceiling on purpose. The two encodings
+    are alternatives for the same map, and a reader toggling between them is
+    comparing shapes; if the pixel range moved as well, every city would appear
+    to change size for a reason that had nothing to do with the data.
+    """
+    if not math.isfinite(years) or years <= 0:
+        return MARKER_MIN_PX
+    bounded = min(max(years, RARITY_YEARS_FLOOR), RARITY_YEARS_CAP)
+    low, high = math.log(RARITY_YEARS_FLOOR), math.log(RARITY_YEARS_CAP)
+    fraction = (math.log(bounded) - low) / (high - low)
+    return MARKER_MIN_PX + (MARKER_MAX_PX - MARKER_MIN_PX) * fraction
+
+
+def rarity_key_html(
+    mode: Mode = MAP_MODE, *, samples: Sequence[float] = (0.5, 5.0, 50.0)
+) -> str:
+    """Reference circles for the rarity channel, labelled in years.
+
+    The same key `size_key_html` draws for sigma, in the other unit, because a
+    toggle that changes what size means and leaves the key alone is worse than
+    no toggle: the reader has a legend that is now wrong and no reason to
+    doubt it.
+    """
+    tokens = chrome(mode)
+    ring = _MAP["ring"]
+    largest = rarity_diameter(max(samples))
+    circles = "".join(
+        f'<div style="display:flex;flex-direction:column;align-items:center;'
+        f'justify-content:flex-end;min-width:{largest + 8:.0f}px;">'
+        f'<span style="width:{rarity_diameter(value):.0f}px;'
+        f'height:{rarity_diameter(value):.0f}px;border-radius:50%;'
+        f'border:2px solid {ring};background:{NEUTRAL[mode]};"></span>'
+        f'<span style="font-size:0.7rem;color:{tokens["ink_muted"]};'
+        f'margin-top:0.25rem;">1 in {value:g} yr</span></div>'
+        for value in samples
+    )
+    return (
+        f'<div style="display:flex;align-items:flex-end;gap:0.75rem;">'
+        f"{circles}</div>"
+    )
 
 
 def anomaly_key_html(mode: Mode = MAP_MODE) -> str:

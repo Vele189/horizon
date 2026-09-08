@@ -37,6 +37,8 @@ python ingestion/backfill.py --grain daily  # then --grain hourly
 python dbt_analytics/dbt_env.py -- dbt build
 python machine_learning/train.py --write
 python machine_learning/evaluate.py --thresholds --leave-one-city-out --write
+python machine_learning/extremes.py --write   # fits the tails, then:
+python dbt_analytics/dbt_env.py -- dbt build --select fact_anomaly_return_periods
 streamlit run dashboard/app.py
 ```
 
@@ -226,6 +228,57 @@ Full metrics, feature importances, and the intended use of the model are in the
 [model card](docs/model-card.md), which is generated from the run manifest and
 cannot go stale.
 
+### How unusual, in years
+
+A Z-score answers *is this unusual*. A reader wants *how unusual*, and the unit
+for that is time. `machine_learning/extremes.py` fits a generalised Pareto to
+each city's declustered tail — a five-day heatwave is one event, and on this
+data the mean cluster runs 1.9 to 2.6 days, so counting them singly would halve
+every return period — and `fact_anomaly_return_periods` turns those parameters
+into a per-day answer the Anomaly Map can size markers by.
+
+**The tail is not pinned down, and the map says so rather than rounding.** Seven
+of the eleven fitted cities have a shape parameter whose bootstrap interval
+crosses zero: the data cannot say whether their tail is bounded. The
+consequence is quantitative and sharp. Recomputing a return period at the ends
+of that interval, the median band across cities is a factor of 1.8 at three
+sigma, 9.6 at 3.8, and 134 at 4.2. Phoenix at four sigma reads 28 years and its
+interval puts it between 9 years and 152 000.
+
+So the map quotes a number where the band is inside one order of magnitude and
+a floor — "at least a 1-in-15-year day" — where it is not, taking the floor from
+the heaviest tail in the interval, so the error runs toward *understating*
+rarity. Portland's 2021 heat dome reads "at least 1-in-15-years", which is
+conservative and defensible; the alternative is a headline number off a
+thirty-year record that gets quoted onward and cannot be walked back.
+
+### The tails are moving, and mostly not widening
+
+Fitting a time trend to the tail is where this ticket nearly went wrong twice.
+
+Folding both tails into `abs(Z)` and fitting one trend called Phoenix and
+Reykjavík significantly **narrowing** — cities whose warm share of exceedances
+nearly doubled. The warm share rises in every one of the eleven cities, from
+7.5% to 61% in Lagos and 19% to 53% in Singapore: a single trend was being
+fitted to a mixture whose composition inverts across the record, and it
+reported that inversion as a change in width.
+
+Splitting by direction fixed that and left a second confound. A threshold held
+still while the distribution slides under it turns a *location* drift into an
+apparent change in width — on a simulated record with a pure 0.02 σ/year drift
+and a rigorously constant variance, the fixed-threshold fit called the cold
+tail narrowing at p = 0.002. Nothing had narrowed. Fitting the threshold as a
+line in time recovers the injected drift to 0.0202 and reports no width trend
+in either direction.
+
+With both separated, the answer is smaller and more honest than either wrong
+version: **every city's warm tail is moving** (up to +0.048 σ/year in Lagos)
+and **its cold tail is moving toward the mean**, while only four of twenty-two
+directional width trends survive at p < 0.05. The fixed-threshold version
+claimed seven. Both tests are in `tests/test_extremes.py`, one asserting the
+current behaviour and one asserting that the old method got it wrong, so the
+pair says exactly what changed if either is reverted.
+
 ## Known limitations
 
 **The validation gate does not pass, and it should not.**
@@ -326,7 +379,8 @@ and fails if one is missing from `requirements.txt`.
 ```
 ingestion/          API client, planner, raw archive, bronze loader, reconciliation
 dbt_analytics/      staging, intermediate, and gold marts, plus macros and tests
-machine_learning/   features, labels, baselines, split, training, SHAP, scoring
+machine_learning/   features, labels, baselines, split, training, SHAP, scoring,
+                    extreme value fits
 serving/            promotion of gold marts and predictions to Neon
 dashboard/          Streamlit app, theme, database access, four views
 config/             city registry

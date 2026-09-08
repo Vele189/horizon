@@ -1,0 +1,58 @@
+version: 2
+
+sources:
+  # ---------------------------------------------------------------------------
+  # A table dbt reads and does not write.
+  #
+  # `fact_extreme_value` is fitted by machine_learning/extremes.py, because
+  # maximum likelihood over a generalised Pareto and five hundred bootstrap
+  # refits are not SQL. Declaring it as a source rather than reaching for it
+  # with a bare schema-qualified name is what makes the dependency appear in
+  # the DAG: this model runs *after* a Python step, and that is a real
+  # constraint on the build order rather than an implementation detail.
+  #
+  #     dbt build                                   # core marts, incl. anomalies
+  #     python machine_learning/extremes.py --write # fits the tails
+  #     dbt build --select fact_anomaly_return_periods
+  #
+  # No freshness block. The fit is refreshed when the tails are refitted, which
+  # is a deliberate act after a backfill and not a schedule; a staleness warning
+  # here would fire on every ordinary day and mean nothing.
+  # ---------------------------------------------------------------------------
+  - name: gold
+    description: >
+      Marts written by Python rather than by dbt. Kept in the same schema as
+      the dbt marts because they are the same product to a reader, and
+      separated here only so the direction of the dependency is visible.
+    schema: gold_marts
+
+    tables:
+      - name: fact_extreme_value
+        description: >
+          One row per city: a generalised Pareto fitted to declustered peaks
+          over a high per-city quantile of abs(Z), with bootstrap intervals
+          over clusters. Turns "how many sigma" into "how many years".
+        columns:
+          - name: city_id
+            description: "{{ doc('col_city_id') }}"
+            data_tests:
+              - unique
+              - not_null
+          - name: exceedance_rate
+            description: >
+              DECLUSTERED events per observed day. Runs of consecutive
+              exceedances are one event. The raw fraction is 1.9 to 2.6 times
+              larger on this data and every return period computed from it
+              would be too short by that factor.
+            data_tests:
+              - not_null
+          - name: shape
+            description: >
+              GPD shape. Negative bounds the tail, positive makes it heavy.
+              Read with shape_low/shape_high, which straddle zero for seven of
+              the eleven fitted cities.
+            data_tests:
+              - not_null
+          - name: scale
+            data_tests:
+              - not_null

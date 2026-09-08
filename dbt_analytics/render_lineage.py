@@ -10,18 +10,39 @@ Generated from `target/manifest.json`, so it cannot drift from the project;
 run `dbt docs generate` first. SVG rather than a screenshot because it stays
 crisp at any size, diffs as text, and needs no browser to produce.
 
+**The PNG beside it is what the README and the build log actually display**,
+because GitHub will not render an SVG referenced from markdown. It is written
+here, from the SVG just produced, rather than by hand: for a while it was not,
+and the two drifted -- ML-15 added two nodes, the SVG grew them, and the
+picture every reader sees stayed on the previous shape with a test that only
+checked the file existed. A diagram that is quietly a version behind is worse
+than no diagram, because nobody thinks to distrust it.
+
+Rasterising needs a browser, which the SVG deliberately does not. If none is
+installed the SVG is still written and the PNG is left alone, with a warning
+saying so -- the same browser this project already uses for deployment
+screenshots.
+
     python dbt_analytics/render_lineage.py
 """
 
 from __future__ import annotations
 
 import json
+import re
+import shutil
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent
 MANIFEST = PROJECT / "target" / "manifest.json"
 OUTPUT = PROJECT.parent / "docs" / "images" / "lineage.svg"
+RASTER = OUTPUT.with_suffix(".png")
+
+#: Shared with `tests/check_deployment.py`, which needs the same browser.
+CHROME_CANDIDATES = ("google-chrome", "chromium", "chromium-browser")
 
 LAYERS = ("source", "seed", "staging", "intermediate", "marts")
 COLOUR = {
@@ -32,7 +53,11 @@ COLOUR = {
     "marts": ("#1f4e79", "#e7f0f8"),
 }
 LABEL = {
-    "source": "bronze (source)",
+    # Not "bronze (source)". The lane holds every table dbt reads and does not
+    # write, and since ML-15 that includes `gold.fact_extreme_value`, which is
+    # a gold mart fitted by Python. Naming the lane after one of its members
+    # would put a wrong label directly beside the node it is wrong about.
+    "source": "sources (read, not written)",
     "seed": "seed",
     "staging": "silver (staging)",
     "intermediate": "intermediate",
@@ -176,13 +201,64 @@ def build() -> str:
     return "\n".join(out)
 
 
+def rasterise(svg: str) -> bool:
+    """Write the PNG the README displays, at the SVG's own pixel size.
+
+    The size is read out of the SVG rather than fixed, so a diagram that grows
+    a row of nodes -- which is what adding a model does -- comes out whole
+    instead of cropped at last year's height.
+
+    Returns:
+        Whether a PNG was written. False means no browser, not a failure: the
+        SVG is the source of truth and is already on disk.
+    """
+    binary = next(
+        (found for name in CHROME_CANDIDATES if (found := shutil.which(name))),
+        None,
+    )
+    if binary is None:
+        print(
+            f"no browser among {', '.join(CHROME_CANDIDATES)}; "
+            f"{RASTER.name} left unchanged",
+            file=sys.stderr,
+        )
+        return False
+
+    size = re.search(r'width="(\d+)" height="(\d+)"', svg)
+    if size is None:
+        print("could not read the SVG's size; PNG not written", file=sys.stderr)
+        return False
+
+    # Chrome screenshots a *page*, so the SVG is served from a file URL at
+    # exactly its own dimensions and the scrollbars are hidden; anything else
+    # and the raster picks up a margin the SVG does not have.
+    with tempfile.TemporaryDirectory() as scratch:
+        result = subprocess.run(
+            [
+                binary, "--headless", "--disable-gpu", "--no-sandbox",
+                "--hide-scrollbars", f"--user-data-dir={scratch}",
+                f"--screenshot={RASTER}",
+                f"--window-size={size.group(1)},{size.group(2)}",
+                OUTPUT.as_uri(),
+            ],
+            capture_output=True, text=True, check=False,
+        )
+    if result.returncode != 0:
+        print(f"browser failed: {result.stderr.strip()}", file=sys.stderr)
+        return False
+    return True
+
+
 def main() -> int:
     if not MANIFEST.exists():
         print("run `dbt docs generate` first", file=sys.stderr)
         return 1
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(build(), encoding="utf-8")
+    svg = build()
+    OUTPUT.write_text(svg, encoding="utf-8")
     print(f"wrote {OUTPUT}")
+    if rasterise(svg):
+        print(f"wrote {RASTER}")
     return 0
 
 

@@ -964,3 +964,91 @@ models:
               arguments:
                 values: ['hot', 'cold', 'none']
 
+
+  - name: fact_anomaly_return_periods
+    description: >
+      How unusual a day is, in years rather than in sigmas. One row per city
+      per day past that city's fitted tail threshold - about five per cent of
+      scored days, which is the point: this model is for the days a reader
+      stops on.
+
+
+      **Both tails, on abs(Z).** A row says "a day this far from normal, in
+      either direction, happens about this often here". One-sided would lose
+      Moscow's January, exactly as it would in fact_weather_anomalies.
+
+
+      **Only cities with a fitted tail appear.** Sydney's eighteen scored days
+      cannot support a generalised Pareto, and it is excluded by a
+      minimum-cluster rule rather than by name, so the next short city is
+      excluded without anyone editing a list.
+
+
+      **The fit is not here.** The generalised Pareto parameters come from
+      source('gold', 'fact_extreme_value'), written by
+      machine_learning/extremes.py, because maximum likelihood and five hundred
+      bootstrap refits are not SQL. This model is the join and the exponent,
+      which means the numbers a reader sees are recomputed from published
+      parameters on every build rather than carried forward from a run nobody
+      can repeat.
+
+
+      **Below the threshold there is no row, and that is deliberate.** The GPD
+      is a model *for* exceedances, fitted only to them. A return period for an
+      ordinary Tuesday would be an extrapolation under the model's own floor,
+      dressed up as a lookup.
+
+
+      **The shape sensitivity is not a confidence interval.** The two
+      return_period_years_shape_* columns hold the period recomputed at the
+      ends of the shape's bootstrap interval with the scale held at its point
+      estimate. A genuine interval would need the joint distribution of shape
+      and scale, which are strongly negatively correlated in a GPD fit;
+      propagating them independently would be wider than the truth while
+      looking more rigorous. The columns are named after what was varied so
+      they cannot be read as the other thing.
+    columns:
+      - name: city_id
+        description: "{{ doc('col_city_id') }}"
+        data_tests:
+          - not_null
+      - name: date_key
+        data_tests:
+          - not_null
+      - name: abs_z
+        description: >
+          The magnitude the period was computed from. Always strictly above
+          tail_threshold - that is the model's own join condition, asserted
+          here so a change to it cannot silently admit rows the GPD was never
+          fitted for.
+        data_tests:
+          - not_null
+      - name: return_period_years
+        description: >
+          The point estimate, in years. Nullable: a bounded tail (negative
+          shape) stops, and a level past where it stops has no return period
+          rather than a very long one.
+      - name: return_period_is_reportable
+        description: >
+          True when the shape sensitivity spans less than one order of
+          magnitude. False above roughly 3.3 sigma, where the band opens to a
+          factor of a hundred or more and only a floor may be quoted. The
+          Anomaly Map reads this column rather than deciding for itself.
+        data_tests:
+          - not_null
+      - name: return_period_qualifier
+        description: The word the map is allowed to use - 'about' or 'at least'.
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ['about', 'at least']
+      - name: return_period_years_quoted
+        description: >
+          What may be said: the point estimate where the band is tight, the
+          floor where it is not. Rounded, because the digits past this are
+          noise.
+        data_tests:
+          - not_null
+    data_tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [city_id, date_key]

@@ -14,6 +14,7 @@ it was simply not a layering anyone could follow.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -231,3 +232,31 @@ def test_the_lineage_image_regenerates_identically() -> None:
     assert svg.read_text(encoding="utf-8") == before, (
         "docs/images/lineage.svg is stale; re-run render_lineage.py"
     )
+
+
+def test_the_png_matches_the_svg_it_is_supposed_to_be() -> None:
+    """The PNG is what readers see, and it drifted once already.
+
+    GitHub will not render an SVG referenced from markdown, so the README and
+    the build log both display `lineage.png` while every check pointed at
+    `lineage.svg`. ML-15 added two nodes; the SVG grew a row and the picture
+    everyone actually looks at stayed on the previous shape, passing a test
+    that only asserted the file existed.
+
+    Compared on dimensions rather than bytes: a raster from a headless browser
+    is not reproducible to the pixel across versions and platforms, and a test
+    that demanded byte equality would fail for everyone but its author. The
+    height is the part that moves when the graph grows, which is the drift
+    worth catching.
+    """
+    Image = pytest.importorskip("PIL.Image", reason="Pillow not installed")
+
+    svg = (IMAGES / "lineage.svg").read_text(encoding="utf-8")
+    declared = re.search(r'width="(\d+)" height="(\d+)"', svg)
+    assert declared, "the SVG does not declare its own size"
+
+    with Image.open(IMAGES / "lineage.png") as raster:
+        assert raster.size == (int(declared.group(1)), int(declared.group(2))), (
+            "docs/images/lineage.png is stale against lineage.svg; "
+            "re-run dbt_analytics/render_lineage.py"
+        )

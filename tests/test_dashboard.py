@@ -2940,3 +2940,195 @@ def risk_horizon_module():
     from dashboard.views import risk_horizon
 
     return risk_horizon
+
+
+# ---------------------------------------------------------------------------
+# The rarity encoding (ML-15/DBT-15)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def rarity_frame():
+    """Four cities, covering every state the rarity encoding has to draw.
+
+    Delhi is far out and has a fitted tail. Cairo is a modest exceedance, also
+    fitted. Portland is fitted but ordinary today, so it is below its tail
+    threshold and has no period. Sydney is scored and has *no fitted tail* --
+    eighteen days of record cannot support one -- which is the state most
+    easily confused with "nothing happening here".
+    """
+    return pd.DataFrame(
+        [
+            {"city_id": "delhi", "name": "Delhi", "country": "India",
+             "latitude": 28.6, "longitude": 77.2, "observed_c": 35.0,
+             "baseline_c": 28.7, "baseline_sigma": 1.32, "z": 4.79,
+             "departure_c": 6.34, "is_anomaly": True,
+             "baseline_observations": 465.0, "observed": True,
+             "return_years": 22.0, "return_qualifier": "at least",
+             "return_is_reportable": False, "tail_fitted": True},
+            {"city_id": "cairo", "name": "Cairo", "country": "Egypt",
+             "latitude": 30.0, "longitude": 31.2, "observed_c": 33.0,
+             "baseline_c": 29.1, "baseline_sigma": 1.9, "z": 2.04,
+             "departure_c": 3.9, "is_anomaly": False,
+             "baseline_observations": 465.0, "observed": True,
+             "return_years": 0.1, "return_qualifier": "about",
+             "return_is_reportable": True, "tail_fitted": True},
+            {"city_id": "portland", "name": "Portland", "country": "United States",
+             "latitude": 45.5, "longitude": -122.7, "observed_c": 19.0,
+             "baseline_c": 18.3, "baseline_sigma": 3.2, "z": 0.22,
+             "departure_c": 0.7, "is_anomaly": False,
+             "baseline_observations": 465.0, "observed": True,
+             "return_years": None, "return_qualifier": None,
+             "return_is_reportable": None, "tail_fitted": True},
+            {"city_id": "sydney", "name": "Sydney", "country": "Australia",
+             "latitude": -33.9, "longitude": 151.2, "observed_c": 26.0,
+             "baseline_c": 22.0, "baseline_sigma": 1.4, "z": 2.86,
+             "departure_c": 4.0, "is_anomaly": True,
+             "baseline_observations": 17.0, "observed": True,
+             "return_years": None, "return_qualifier": None,
+             "return_is_reportable": None, "tail_fitted": False},
+        ]
+    )
+
+
+def test_the_two_encodings_size_the_same_day_differently(rarity_frame) -> None:
+    """Sigma and rarity disagree on purpose, and that is the toggle's content.
+
+    Two sigma is the same arithmetic everywhere and a very different rarity in
+    a steady climate than in a volatile one. If the two channels produced the
+    same picture the control would be decoration.
+    """
+    from dashboard.views import anomaly_map
+
+    day = dt.date(2021, 6, 28)
+    departure = anomaly_map.prepare(rarity_frame, day, encoding="departure")
+    rarity = anomaly_map.prepare(rarity_frame, day, encoding="rarity")
+
+    assert not departure["diameter"].equals(rarity["diameter"])
+    # Colour is the same map in both: only size changes, so a reader toggling
+    # is re-reading one picture rather than being shown a second one.
+    assert departure["colour"].equals(rarity["colour"])
+
+
+def test_an_unfitted_city_gets_no_size_on_the_rarity_encoding(rarity_frame) -> None:
+    """Sydney leaves the filled trace for the open ring, rather than shrinking.
+
+    Drawing it at the floor would say "nothing rare happened here" using the
+    same mark that means "nobody could fit this city", and a reader has no way
+    to tell those apart from a dot. The ring already means "no number here" on
+    this map.
+    """
+    from dashboard.views import anomaly_map
+
+    frame = anomaly_map.prepare(rarity_frame, dt.date(2021, 6, 28), encoding="rarity")
+    sydney = frame[frame["city_id"] == "sydney"].iloc[0]
+
+    assert not sydney["encoded"]
+    assert pd.isna(sydney["diameter"])
+
+    figure = anomaly_map._figure(frame)
+    rings = next(trace for trace in figure.data if trace.name == "not scored")
+    assert "Sydney" in " ".join(rings.text)
+
+
+def test_a_fitted_city_below_its_threshold_is_drawn_smallest(rarity_frame) -> None:
+    """Portland is fitted and ordinary, so it gets the floor and keeps its size.
+
+    The opposite state to Sydney's, and the reason the two are distinguished:
+    "we fitted this city and today is unremarkable" is a real answer, and the
+    smallest circle is the right way to draw it.
+    """
+    from dashboard import theme
+    from dashboard.views import anomaly_map
+
+    frame = anomaly_map.prepare(rarity_frame, dt.date(2021, 6, 28), encoding="rarity")
+    portland = frame[frame["city_id"] == "portland"].iloc[0]
+
+    assert portland["encoded"]
+    assert portland["diameter"] == pytest.approx(theme.MARKER_MIN_PX)
+
+
+def test_the_rarity_channel_is_logarithmic_and_capped() -> None:
+    """Return periods span orders of magnitude; the channel has forty pixels.
+
+    A linear channel would collapse every ordinary exceedance into one dot
+    while a single fifty-year day took the whole range. The cap exists for the
+    other end: past fifty years the fitted answers separate by hundreds of
+    years on a shape parameter whose interval spans two orders of magnitude,
+    and the map must stop distinguishing what it cannot distinguish.
+    """
+    from dashboard import theme
+
+    steps = [theme.rarity_diameter(years) for years in (0.1, 1.0, 10.0, 50.0)]
+    assert steps == sorted(steps)
+    # Equal ratios in years must be equal distances in pixels.
+    assert steps[1] - steps[0] == pytest.approx(steps[2] - steps[1], abs=0.01)
+    assert theme.rarity_diameter(500.0) == theme.rarity_diameter(theme.RARITY_YEARS_CAP)
+    assert theme.rarity_diameter(float("nan")) == theme.MARKER_MIN_PX
+
+
+def test_the_two_size_keys_share_a_pixel_range() -> None:
+    """A toggle that moved the scale would make every city appear to change.
+
+    The reader switching encodings is comparing shapes between two pictures. If
+    the pixel range moved as well, every marker would resize for a reason that
+    had nothing to do with the data.
+    """
+    from dashboard import theme
+
+    assert theme.rarity_diameter(theme.RARITY_YEARS_FLOOR) == pytest.approx(
+        theme.marker_diameter(0.0)
+    )
+    assert theme.rarity_diameter(theme.RARITY_YEARS_CAP) == pytest.approx(
+        theme.marker_diameter(theme.MARKER_Z_CAP)
+    )
+
+
+def test_a_sub_year_period_is_phrased_as_a_frequency() -> None:
+    """"A 1-in-0.1-year day" is correct and unreadable.
+
+    Below a year the reader's question reverses: these are days a city sees
+    several times a season, and the quantity they hold is how often, not how
+    long between. Most rows in the mart are below a year, so this is the common
+    case rather than an edge.
+    """
+    from dashboard.views.anomaly_map import _rarity_phrase
+
+    assert "10 times a year" in _rarity_phrase(0.1, True)
+    assert "most weeks" in _rarity_phrase(0.05, True)
+    assert "1-in-" not in _rarity_phrase(0.1, True)
+
+
+def test_an_unreportable_period_is_phrased_as_a_floor() -> None:
+    """"At least", not "about", where the shape sensitivity spans a decade.
+
+    Phoenix at four sigma reads 28 years and its shape interval puts it between
+    9 and 152,000. The map quotes the floor and says so; printing the point
+    estimate there would be a number that gets quoted onward and cannot be
+    walked back.
+    """
+    from dashboard.views.anomaly_map import _rarity_phrase
+
+    assert _rarity_phrase(15.1, False).startswith("At least")
+    assert _rarity_phrase(4.2, True).startswith("About")
+
+
+def test_the_tooltip_says_which_of_the_four_states_a_city_is_in(rarity_frame) -> None:
+    """Fitted-and-rare, fitted-and-ordinary, fitted-but-below, and unfitted.
+
+    Collapsing any pair of these would be a lie of a different kind. The one
+    that matters most is the last: silence, rather than a claim the map cannot
+    support.
+    """
+    from dashboard.views import anomaly_map
+
+    frame = anomaly_map.prepare(rarity_frame, dt.date(2021, 6, 28), encoding="rarity")
+    tips = dict(zip(frame["city_id"], frame["tooltip"]))
+
+    assert "At least a 1-in-22-year day" in tips["delhi"]
+    assert "sees about 10 times a year" in tips["cairo"]
+    # Fitted but below its threshold, and unfitted entirely: both silent, and
+    # neither claiming the day was ordinary on the strength of a model that was
+    # not consulted.
+    assert "year day" not in tips["portland"]
+    assert "year day" not in tips["sydney"]
