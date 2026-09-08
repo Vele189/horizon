@@ -4281,6 +4281,82 @@ no out-of-sample skill and still far below persistence's 1.69x; the test that
 guards that finding is now a bound rather than a pinned value, because the
 figure moves whenever the label does and the claim worth keeping does not.
 
+## Show the reader how much to trust the number
+
+BI-08. The Risk Horizon view shows a probability directly, and until ML-10
+there was nothing honest to say about what it was worth. Now there is, and this
+puts it one click from the grid rather than in a file the reader will not open.
+
+### The verdict is chosen by the number
+
+"How much to trust the number" opens under the grid and carries three things:
+the expected calibration error as scored, with the calibrated figure as a
+delta; the reliability curve; and a sentence.
+
+The sentence is picked by the measurement rather than written once and left.
+`theme.CALIBRATION_TRUST_CEILING` is two and a half points — a reader looking
+at "8%" can be a point wrong without having been misled — and above it the
+panel says **read the grid as a ranking, not as a percentage**, with the actual
+error in it. This model's raw error is five points, which is enough to turn
+one-in-twelve into one-in-eight, so that is the sentence a reader sees. A
+retrain that brought it under the ceiling would change the sentence without
+anyone editing the copy, and a test asserts the number in the prose is the
+number in the file.
+
+### The diagonal is the chart
+
+A reliability curve without the line a perfect model would draw is two lines
+with nothing to be right or wrong about. It is drawn in the chrome's axis
+colour and dashed, so a reader sees two curves against a reference rather than
+three curves; a test asserts there are exactly three traces, that the reference
+is actually diagonal, and that the two curves take the palette.
+
+`calibrated` takes the top of the risk ramp — the same violet as the grid's
+strongest step, because it is the number the grid would be painted from — and
+`raw` is deliberately achromatic, since it is the thing being improved on and a
+hue of its own would invite reading it as a third category rather than as a
+before.
+
+The bins hold equal *counts*, not equal widths, which is why the points are not
+evenly spaced along the x-axis and why they can be read as equally
+trustworthy. This model's predictions pile between 0.01 and 0.30; equal-width
+bins would put nearly every city-day in the first one and draw a curve out of
+two points and eight empty boxes.
+
+**Every bin sits above the diagonal.** At each level of predicted probability,
+more weeks turned out anomalous than the model said — the shape of a model
+fitted where positives are 4.9% of rows and scored where they are 11.3%. The
+caption says so, and a test asserts it, because a caption describing a shape
+the data has stopped having is worse than no caption.
+
+### The budget moved to where the decision is made
+
+ML-11 put the alert budget in the vintage panel. That was the wrong place. The
+risk key is the number that says which cities are lit, and a threshold shown
+there without the decision it encodes is a number a reader has to take on
+trust, while a decision explained three panels away is one nobody reads. It now
+sits directly under the key: no city should light up more than twenty days a
+year, which on a calibrated probability is the same as saying 3.98 false alarms
+are worth one missed extreme week. A test asserts the sentence is rendered in
+that block and not only in the vintage.
+
+### Both views now name their climatology
+
+DBT-13 decided the product ships *unusual for the record*, and the Anomaly Map
+said so. The Risk Horizon did not, which is the arrangement a reader would
+least expect and least notice: one view naming the definition and the other
+leaving it implicit, for the same flag. The caption and the module docstring
+now state it, and `tests/test_validation_gate.py` checks both views alongside
+the proposal and the model card rather than the map alone.
+
+### What is still not shipped, said out loud
+
+The grid is painted from the model's raw score against the F1 threshold. The
+budget rule is defined on calibrated probabilities and the calibrator is not in
+the model artefact, so wiring it through is a serving change. The panel says
+that in the vintage caption rather than leaving a reader to reconcile a model
+card that argues for one threshold with a view that applies another.
+
 ## Publishing
 
 Community Cloud requires a public repository, which makes deployment the moment

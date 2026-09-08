@@ -21,6 +21,15 @@ Those reasons are read from the model's own ``metrics.json`` rather than
 guessed from missing rows. The model records which cities it scored, which
 were ingested but not scorable, and which were never ingested.
 
+**Which anomaly it is predicting (DBT-13).** The target is `is_anomaly`, so
+this view answers whether next week will be *unusual for the record* -- against
+every year of that city's history rather than against the recent climate. The
+warehouse also carries a detrended flag, `is_anomaly_detrended`, which asks
+whether a week is unusual for the present climate; it is measured and
+deliberately not shipped, because detrending removes only 5% of the label's
+drift across the split and would erase the signal the Climate Matrix exists to
+draw. `docs/proposal.md` §5.3 records the choice.
+
 **The drivers are the model's, recorded at evaluation time.** The top SHAP
 features come from the committed metrics file, computed on the test split when
 the model was explained. They are global rather than per-cell: a per-row
@@ -57,7 +66,9 @@ VIEW = ViewMeta(
     question="Which cities are flagged for the coming week?",
     caption=(
         "The model's score for each city over the seven days after the last "
-        "observed one, against the threshold chosen on validation."
+        "observed one, against the threshold chosen on validation. It predicts "
+        "an anomaly that is *unusual for the record* — measured against every "
+        "year of that city's history, not against the recent climate."
     ),
     source_table=f"{GOLD_SCHEMA}.fact_ml_predictions",
 )
@@ -116,6 +127,64 @@ def top_drivers(limit: int = 8) -> pd.DataFrame:
         return pd.DataFrame(columns=["feature", "mean_abs", "mean_signed"])
     frame = pd.DataFrame(features).head(limit)
     return frame.loc[:, [c for c in ("feature", "mean_abs", "mean_signed") if c in frame]]
+
+
+def calibration() -> Mapping[str, Any]:
+    """What the model's probabilities are worth, from the committed record.
+
+    ML-10 measured it and recorded four variants; this view needs two of them,
+    the model as it is scored and the same model with the calibrator applied.
+    Read rather than recomputed, for the same reason the SHAP drivers are: this
+    deployment ships no XGBoost and no warehouse, and could not reproduce the
+    number if it wanted to.
+    """
+    return model_report().get("model", {}).get("calibration", {})
+
+
+def reliability_points(variant: str) -> pd.DataFrame:
+    """One variant's reliability curve, as points a chart can draw."""
+    entry = calibration().get("variants", {}).get(variant, {})
+    points = entry.get("reliability", [])
+    if not points:
+        return pd.DataFrame(columns=["predicted", "observed", "rows", "weight"])
+    return pd.DataFrame(points)
+
+
+def calibration_error(variant: str) -> float | None:
+    entry = calibration().get("variants", {}).get(variant, {})
+    value = entry.get("expected_calibration_error")
+    return float(value) if value is not None else None
+
+
+def trust_sentence() -> str:
+    """How much a reader should believe the number, in a sentence.
+
+    Chosen by the recorded error rather than written once and left: the
+    threshold is :data:`theme.CALIBRATION_TRUST_CEILING`, and a retrain that
+    moved the error past it would move this sentence with it.
+    """
+    raw = calibration_error("raw_unweighted")
+    if raw is None:
+        return ""
+    if raw <= theme.CALIBRATION_TRUST_CEILING:
+        return (
+            f"The scores in the grid are within **{raw:.1%}** of the rate they "
+            "claim, averaged over the test split, so they can be read as "
+            "probabilities."
+        )
+    calibrated = calibration_error("calibrated")
+    fixed = (
+        f" Calibrating on the validation split brings it to **{calibrated:.1%}**, "
+        "and that calibrator is not shipped with the model, so the grid is "
+        "painted from the uncalibrated score."
+        if calibrated is not None
+        else ""
+    )
+    return (
+        f"**Read the grid as a ranking, not as a percentage.** The scores sit "
+        f"**{raw:.1%}** away from the rate they claim, averaged over the test "
+        f"split, which is enough to turn one-in-twelve into one-in-eight.{fixed}"
+    )
 
 
 def alert_budget() -> Mapping[str, Any]:
@@ -284,6 +353,73 @@ def _figure(frame: pd.DataFrame, days: Sequence[dt.date], mode: theme.Mode) -> g
     return figure
 
 
+def _reliability_figure(mode: str) -> go.Figure | None:
+    """Predicted against observed, with the line a perfect model would draw.
+
+    The diagonal is the whole chart. Everything else is a curve to compare
+    against it: below the line the model is over-confident, above it the model
+    is saying "quiet" more often than it should, and this model is above it
+    everywhere, which is the shape of a model fitted where positives are 4.9%
+    of rows and scored where they are 11.3%.
+
+    Bins hold equal *counts* rather than equal widths, so the leftmost point
+    carries as many city-days as the rightmost. That is why the points are not
+    evenly spaced along the x-axis, and why they can be read as equally
+    trustworthy.
+    """
+    tokens = theme.chrome(mode)
+    colours = theme.calibration_colours(mode)
+    series = [
+        ("raw_unweighted", "as scored", colours["raw"]),
+        ("calibrated", "calibrated on validation", colours["calibrated"]),
+    ]
+    drawn = [(name, label, colour) for name, label, colour in series
+             if not reliability_points(name).empty]
+    if not drawn:
+        return None
+
+    limit = max(
+        float(reliability_points(name)[["predicted", "observed"]].to_numpy().max())
+        for name, _, _ in drawn
+    )
+    edge = min(1.0, limit * 1.1)
+
+    figure = go.Figure()
+    figure.add_trace(
+        go.Scatter(
+            x=[0, edge], y=[0, edge], mode="lines", name="perfectly calibrated",
+            line={"color": tokens["axis"], "width": 1.2, "dash": "dash"},
+            hoverinfo="skip",
+        )
+    )
+    for name, label, colour in drawn:
+        points = reliability_points(name)
+        figure.add_trace(
+            go.Scatter(
+                x=points["predicted"], y=points["observed"], mode="lines+markers",
+                name=label, line={"color": colour, "width": 2},
+                marker={"size": 7, "color": colour},
+                customdata=points["rows"],
+                hovertemplate=(
+                    "predicted %{x:.3f}<br>observed %{y:.3f}"
+                    "<br>%{customdata:,} city-days<extra>" + label + "</extra>"
+                ),
+            )
+        )
+    figure.update_layout(
+        height=320,
+        margin={"r": 8, "t": 8, "l": 8, "b": 8},
+        paper_bgcolor=tokens["surface"],
+        plot_bgcolor=tokens["surface"],
+        font={"color": tokens["ink_secondary"]},
+        legend={"orientation": "h", "y": -0.2},
+        xaxis={"title": "predicted probability", "range": [0, edge], "zeroline": False},
+        yaxis={"title": "observed rate", "range": [0, edge], "zeroline": False},
+        dragmode=False,
+    )
+    return figure
+
+
 DISCLAIMER: Final[str] = (
     "**This is a demonstration model, not an operational forecast.** It is a "
     "gradient-boosted tree fitted to thirty years of reanalysis and scored "
@@ -330,6 +466,13 @@ def render() -> None:
         st.markdown(
             theme.risk_key_html(mode, stamp["threshold"]), unsafe_allow_html=True
         )
+        # Beside the threshold rather than in the vintage panel. The number on
+        # the key is where a reader decides what "flagged" means, and a
+        # threshold shown without the decision it encodes is a number they have
+        # to take on trust.
+        sentence = budget_sentence()
+        if sentence:
+            st.caption(sentence)
         flagged = frame[frame["prediction_label"].fillna(False)]
         st.metric(
             "Flagged for this week",
@@ -361,6 +504,65 @@ def render() -> None:
                 width="stretch",
             )
 
+    with st.expander("How much to trust the number"):
+        block = calibration()
+        if not block:
+            st.caption(
+                "No calibration has been recorded for this model. Run "
+                "`machine_learning/train.py --write`."
+            )
+        else:
+            sentence = trust_sentence()
+            if sentence:
+                st.markdown(sentence)
+
+            left, right = st.columns([2, 3])
+            with left:
+                raw = calibration_error("raw_unweighted")
+                calibrated = calibration_error("calibrated")
+                if raw is not None:
+                    st.metric(
+                        "Calibration error, as scored",
+                        f"{raw:.1%}",
+                        delta=(
+                            None if calibrated is None
+                            else f"{calibrated - raw:+.1%} calibrated"
+                        ),
+                        delta_color="inverse",
+                        help=(
+                            "Expected calibration error: how far the predicted "
+                            "probabilities sit from the rates they claim, "
+                            "averaged over ten equal-count bins of the test "
+                            "split. Zero is perfect. The base rate itself "
+                            "scores zero and predicts nothing, which is why "
+                            "this is never read without the ranking beside it."
+                        ),
+                    )
+                observed = block.get("observed_target_prior")
+                if observed is not None:
+                    st.caption(
+                        f"Anomalous weeks are **{observed:.1%}** of the test "
+                        "split. A model fitted where they were half that will "
+                        "say *quiet* more often than it should."
+                    )
+            with right:
+                figure = _reliability_figure(mode)
+                if figure is None:
+                    st.caption("No reliability curve has been recorded.")
+                else:
+                    st.plotly_chart(
+                        figure, width="stretch",
+                        config={"displayModeBar": False},
+                    )
+            st.caption(
+                "Both curves sit **above** the diagonal, which means the model "
+                "under-states risk rather than over-stating it: at every level "
+                "of predicted probability, more weeks turned out anomalous "
+                "than it said. Prior-shift correction was measured for this and "
+                "is not shipped, because its estimate of the target period's "
+                "rate is badly biased here; the model card has the numbers."
+            )
+
     with st.expander("Model vintage"):
         st.markdown(
             f"""
@@ -381,13 +583,10 @@ def render() -> None:
             "when `predict.py` ran, which is a different question from how "
             "fresh the weather behind it is."
         )
-        sentence = budget_sentence()
-        if sentence:
-            st.markdown(sentence)
-            st.caption(
-                "The scores in this view are the model's raw output and the "
-                "threshold applied to them is still the F1 one, because the "
-                "budget rule is defined on calibrated probabilities and the "
-                "calibrator is not yet shipped with the model artefact. The "
-                "budget and what it buys are recorded in the model card."
-            )
+        st.caption(
+            "The scores in this view are the model's raw output and the "
+            "threshold applied to them is still the F1 one, because the budget "
+            "rule is defined on calibrated probabilities and the calibrator is "
+            "not shipped with the model artefact. The budget and what it buys "
+            "are recorded in the model card."
+        )

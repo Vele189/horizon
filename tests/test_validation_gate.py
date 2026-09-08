@@ -435,6 +435,11 @@ STATEMENTS = {
     "docs/proposal.md": "§5.3",
     "docs/model-card.md": "the model card",
     "dashboard/views/anomaly_map.py": "the Anomaly Map",
+    # Added by BI-08. Both views show the reader a consequence of the flag --
+    # one paints the day, the other predicts the week -- so both owe them the
+    # question it answers. A definition stated on one view and not the other is
+    # the arrangement a reader would least expect and least notice.
+    "dashboard/views/risk_horizon.py": "the Risk Horizon",
 }
 
 

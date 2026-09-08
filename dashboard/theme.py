@@ -160,6 +160,8 @@ from typing import Final, Literal, Mapping, Sequence
 
 __all__ = [
     "ANOMALY_BREAKS",
+    "CALIBRATION",
+    "CALIBRATION_TRUST_CEILING",
     "EMPHASIS",
     "RISK",
     "SEQUENTIAL",
@@ -176,6 +178,7 @@ __all__ = [
     "anomaly_colour",
     "anomaly_key_html",
     "anomaly_step",
+    "calibration_colours",
     "chrome",
     "diverging_scale",
     "emphasis",
@@ -592,6 +595,40 @@ def risk_step(score: float, threshold: float) -> int:
     if threshold <= 0:
         raise ValueError("a decision threshold of zero has no scale")
     return sum(1 for multiple in RISK_BREAKS if score >= multiple * threshold)
+
+
+# The reliability curve's three lines. Two are data and one is the truth they
+# are being measured against, so the third must not compete with them: `ideal`
+# is drawn as a dashed rule in the chrome's own border colour rather than as a
+# fourth series, because a reader should see two curves against a reference and
+# not three curves.
+#
+# `calibrated` takes the top of the risk ramp, so the line that says "this is
+# the number the grid above is painted from" is the same violet as the grid's
+# strongest step. `raw` is deliberately achromatic: it is the thing being
+# improved on, and giving it a hue of its own would invite reading it as a
+# third category rather than as a before.
+CALIBRATION: Final[Mapping[Mode, Mapping[str, str]]] = {
+    "light": {"raw": "#8a8a86", "calibrated": RISK["light"][-1]},
+    "dark": {"raw": "#9a9a95", "calibrated": RISK["dark"][-1]},
+}
+
+
+def calibration_colours(mode: Mode) -> Mapping[str, str]:
+    """The reliability curve's palette: what was measured, and what it became."""
+    return CALIBRATION[mode]
+
+
+#: Expected calibration error above which the view stops calling a probability
+#: trustworthy in plain English.
+#:
+#: Two and a half points. A reader looking at "8%" is entitled to be wrong by
+#: about a point without having been misled, and this model's raw error is
+#: five, which is enough to turn one-in-twelve into one-in-eight. It is a
+#: presentation threshold and nothing computes against it; it exists so the
+#: sentence under the curve is chosen by a number rather than by whoever last
+#: edited the copy.
+CALIBRATION_TRUST_CEILING: Final[float] = 0.025
 
 
 def risk_key_html(mode: Mode, threshold: float) -> str:

@@ -2761,3 +2761,134 @@ def test_the_view_says_which_threshold_it_is_actually_applying() -> None:
     rule = risk._threshold_rule()
     assert "F1" in rule.upper()
     assert "budget" in rule
+
+
+# ---------------------------------------------------------------------------
+# Show the reader how much to trust the number (BI-08)
+# ---------------------------------------------------------------------------
+
+
+def test_the_reliability_curve_is_drawn_from_the_committed_record() -> None:
+    """The curve is the model's own, not one the dashboard recomputed.
+
+    This deployment ships no XGBoost and no warehouse, so it could not
+    reproduce a reliability curve if it wanted to. Reading it from
+    `metrics.json` is the same arrangement the SHAP drivers use, and it means
+    the curve cannot disagree with the model card: both are quoting one file.
+    """
+    from dashboard.views import risk_horizon as risk
+
+    if not risk.calibration():
+        pytest.skip("no calibration recorded; run train.py --write first")
+
+    for variant in ("raw_unweighted", "calibrated"):
+        points = risk.reliability_points(variant)
+        assert not points.empty, variant
+        assert set(points.columns) >= {"predicted", "observed", "rows", "weight"}
+        assert points["predicted"].is_monotonic_increasing
+        assert points["predicted"].between(0, 1).all()
+        assert points["observed"].between(0, 1).all()
+        assert risk.calibration_error(variant) is not None
+
+
+def test_the_curve_is_a_figure_and_carries_the_diagonal() -> None:
+    """Three traces: two curves and the truth they are measured against.
+
+    The diagonal is the whole chart -- a reliability curve without it is two
+    lines with nothing to be right or wrong about. It is drawn in the chrome's
+    axis colour rather than as a third series, so a reader sees two curves
+    against a reference and not three curves.
+    """
+    from dashboard.views import risk_horizon as risk
+
+    if not risk.calibration():
+        pytest.skip("no calibration recorded; run train.py --write first")
+
+    figure = risk._reliability_figure("dark")
+    assert figure is not None
+    names = [trace.name for trace in figure.data]
+    assert "perfectly calibrated" in names
+    assert len(figure.data) == 3
+
+    reference = next(t for t in figure.data if t.name == "perfectly calibrated")
+    assert list(reference.x) == list(reference.y), "the diagonal is not diagonal"
+    assert reference.line.dash == "dash"
+    assert reference.line.color == theme.chrome("dark")["axis"]
+
+    curves = [t for t in figure.data if t.name != "perfectly calibrated"]
+    palette = set(theme.calibration_colours("dark").values())
+    assert {t.line.color for t in curves} == palette
+
+
+def test_the_curve_shows_the_model_understating_risk() -> None:
+    """The finding the panel exists to show, asserted rather than captioned.
+
+    Every bin sits above the diagonal: at each level of predicted probability
+    more weeks turned out anomalous than the model said. That is the shape of a
+    model fitted where positives are ~4.9% of rows and scored where they are
+    ~11.3%, and the caption says so. If it ever stopped being true the caption
+    would be wrong and nothing else would notice.
+    """
+    from dashboard.views import risk_horizon as risk
+
+    if not risk.calibration():
+        pytest.skip("no calibration recorded; run train.py --write first")
+
+    points = risk.reliability_points("raw_unweighted")
+    above = (points["observed"] >= points["predicted"]).mean()
+    assert above > 0.7, (
+        "the model no longer under-states risk across most of the range; the "
+        "caption under the reliability curve says it does"
+    )
+
+
+def test_the_trust_sentence_is_chosen_by_the_number_not_the_copy() -> None:
+    """A verdict in prose has to move when the number it describes moves."""
+    from dashboard.views import risk_horizon as risk
+
+    if not risk.calibration():
+        pytest.skip("no calibration recorded; run train.py --write first")
+
+    raw = risk.calibration_error("raw_unweighted")
+    sentence = risk.trust_sentence()
+    assert sentence
+    assert f"{raw:.1%}" in sentence
+    if raw > theme.CALIBRATION_TRUST_CEILING:
+        assert "ranking, not as a percentage" in sentence
+    else:
+        assert "can be read as" in sentence
+
+
+def test_the_view_names_the_climatology_it_predicts_against() -> None:
+    """DBT-13 decided which question the flag answers; this view has to say it.
+
+    The warehouse carries two climatologies and the model is trained on one of
+    them. A reader looking at a violet band is owed the question it answers,
+    and "unusual for the record" and "unusual for this era" are different
+    products rather than two phrasings of one.
+    """
+    from dashboard.views import risk_horizon as risk
+
+    assert "unusual for the record" in risk.VIEW.caption.lower()
+    assert "detrended" in risk.__doc__.lower()
+    assert "unusual for the record" in risk.__doc__.lower()
+
+
+def test_the_budget_sits_with_the_threshold_and_not_only_in_the_vintage() -> None:
+    """Where a reader decides what "flagged" means is where the rule belongs.
+
+    The risk key is the number that says which cities are lit. A threshold
+    shown there without the decision it encodes is a number to take on trust,
+    and a decision explained three panels away is one nobody reads.
+    """
+    source = (
+        Path(risk_horizon_module().__file__).read_text(encoding="utf-8")
+    )
+    key_block = source.split("with key:", 1)[1].split("with drivers:", 1)[0]
+    assert "budget_sentence()" in key_block
+
+
+def risk_horizon_module():
+    from dashboard.views import risk_horizon
+
+    return risk_horizon
