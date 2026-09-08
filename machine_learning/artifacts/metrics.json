@@ -806,7 +806,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-08T13:43:07+00:00",
+  "generated_at": "2026-09-08T14:39:52+00:00",
   "label": {
     "anomaly_z_threshold": 2.5,
     "horizon_days": 7,
@@ -1920,7 +1920,7 @@
         },
         "bytes": 415801,
         "committable": true,
-        "created_at": "2026-09-08T13:43:35+00:00",
+        "created_at": "2026-09-08T14:40:17+00:00",
         "feature_count": 27,
         "features": [
           "temperature_2m_mean",
@@ -1956,9 +1956,9 @@
         "format_version": 1,
         "git": {
           "branch": "phase-two",
-          "commit": "e55f1e472f8f79ef36c7f1d7eab128ea89f85703",
+          "commit": "b9e86e02f0d947bc1f05519360c6419c7f8224cc",
           "dirty": true,
-          "short_commit": "e55f1e472f8f"
+          "short_commit": "b9e86e02f0d9"
         },
         "hyperparameters": {
           "early_stopping_rounds": 50,
@@ -2059,7 +2059,7 @@
         },
         "bytes": 213167,
         "committable": true,
-        "created_at": "2026-09-08T13:43:35+00:00",
+        "created_at": "2026-09-08T14:40:17+00:00",
         "feature_count": 27,
         "features": [
           "temperature_2m_mean",
@@ -2095,9 +2095,9 @@
         "format_version": 1,
         "git": {
           "branch": "phase-two",
-          "commit": "e55f1e472f8f79ef36c7f1d7eab128ea89f85703",
+          "commit": "b9e86e02f0d947bc1f05519360c6419c7f8224cc",
           "dirty": true,
-          "short_commit": "e55f1e472f8f"
+          "short_commit": "b9e86e02f0d9"
         },
         "hyperparameters": {
           "early_stopping_rounds": 50,
@@ -2170,10 +2170,396 @@
         "variant": "weighted"
       }
     },
+    "calibration": {
+      "applied_to": "test",
+      "bin_strategy": "quantile",
+      "bins": 10,
+      "calibrated_variant": "unweighted",
+      "em_iterations": 139,
+      "estimated_target_prior": 0.2992128485100286,
+      "fitted_on": "validation",
+      "fixed_point_at_observed_prior": 0.1338641402567338,
+      "method": "isotonic",
+      "observed_target_prior": 0.11497237569060774,
+      "prior_estimate_error": 0.18424047281942085,
+      "quantifier_diagnostics": {
+        "candidates": {
+          "unweighted": {
+            "posteriors_from": "unweighted",
+            "source_prior": 0.0501671544173549,
+            "test": {
+              "error": 0.27208163274135777,
+              "estimated": 0.3870540084319655,
+              "iterations": 182,
+              "observed": 0.11497237569060774
+            },
+            "validation": {
+              "error": 0.02838652318442836,
+              "estimated": 0.09917781810646621,
+              "iterations": 200,
+              "observed": 0.07079129492203785
+            }
+          },
+          "weighted": {
+            "posteriors_from": "weighted",
+            "source_prior": 0.5,
+            "test": {
+              "error": 0.0042253450557787064,
+              "estimated": 0.11919772074638645,
+              "iterations": 180,
+              "observed": 0.11497237569060774
+            },
+            "validation": {
+              "error": -0.07079039472808371,
+              "estimated": 9.001939541359091e-07,
+              "iterations": 200,
+              "observed": 0.07079129492203785
+            }
+          }
+        },
+        "closest_on_test": "weighted",
+        "closest_on_validation": "unweighted",
+        "validation_picks_the_better_quantifier": false
+      },
+      "recommendation_note": "Isotonic on validation halves the calibration error and is worth shipping. The prior shift is not: its EM estimate of the target prior is badly biased here, and no choice among the candidate quantifiers can be made on validation. See quantifier_diagnostics.",
+      "recommended": "calibrated",
+      "source_prior": 0.07079129492203785,
+      "train_prior": 0.0501671544173549,
+      "variants": {
+        "calibrated": {
+          "brier": 0.09111788367817794,
+          "expected_calibration_error": 0.02534965431977588,
+          "mean_predicted": 0.08962272137083185,
+          "pr_auc": 0.31714252135596815,
+          "reliability": [
+            {
+              "observed": 0.05208603265094584,
+              "predicted": 0.03387114481454323,
+              "rows": 3859,
+              "weight": 0.21320441988950276
+            },
+            {
+              "observed": 0.060879368658399095,
+              "predicted": 0.04160534279691864,
+              "rows": 1774,
+              "weight": 0.0980110497237569
+            },
+            {
+              "observed": 0.0691027496382055,
+              "predicted": 0.05252620544117456,
+              "rows": 2764,
+              "weight": 0.15270718232044198
+            },
+            {
+              "observed": 0.08558558558558559,
+              "predicted": 0.055007569133877394,
+              "rows": 666,
+              "weight": 0.03679558011049724
+            },
+            {
+              "observed": 0.07721796276013143,
+              "predicted": 0.05648535517781875,
+              "rows": 1826,
+              "weight": 0.10088397790055248
+            },
+            {
+              "observed": 0.10212545360290305,
+              "predicted": 0.06240697855688921,
+              "rows": 1929,
+              "weight": 0.10657458563535911
+            },
+            {
+              "observed": 0.12572944297082228,
+              "predicted": 0.08212519551698978,
+              "rows": 1885,
+              "weight": 0.10414364640883977
+            },
+            {
+              "observed": 0.1611267605633803,
+              "predicted": 0.13779847617300464,
+              "rows": 1775,
+              "weight": 0.09806629834254144
+            },
+            {
+              "observed": 0.4087546239210851,
+              "predicted": 0.37787518435319756,
+              "rows": 1622,
+              "weight": 0.08961325966850829
+            }
+          ],
+          "what": "isotonic fitted on validation, applied to test"
+        },
+        "calibrated_prior_shifted": {
+          "brier": 0.12937464916074579,
+          "expected_calibration_error": 0.1842404728993774,
+          "mean_predicted": 0.29921284858998515,
+          "pr_auc": 0.31714252135596815,
+          "reliability": [
+            {
+              "observed": 0.05208603265094584,
+              "predicted": 0.16257532081076279,
+              "rows": 3859,
+              "weight": 0.21320441988950276
+            },
+            {
+              "observed": 0.060879368658399095,
+              "predicted": 0.19563528097738891,
+              "rows": 1774,
+              "weight": 0.0980110497237569
+            },
+            {
+              "observed": 0.0691027496382055,
+              "predicted": 0.23687592134793622,
+              "rows": 2764,
+              "weight": 0.15270718232044198
+            },
+            {
+              "observed": 0.08558558558558559,
+              "predicted": 0.24597529387521064,
+              "rows": 666,
+              "weight": 0.03679558011049724
+            },
+            {
+              "observed": 0.07721796276013143,
+              "predicted": 0.251226394921425,
+              "rows": 1826,
+              "weight": 0.10088397790055248
+            },
+            {
+              "observed": 0.10212545360290305,
+              "predicted": 0.2716848802201543,
+              "rows": 1929,
+              "weight": 0.10657458563535911
+            },
+            {
+              "observed": 0.12572944297082228,
+              "predicted": 0.33201133735825716,
+              "rows": 1885,
+              "weight": 0.10414364640883977
+            },
+            {
+              "observed": 0.1611267605633803,
+              "predicted": 0.4663953252420811,
+              "rows": 1775,
+              "weight": 0.09806629834254144
+            },
+            {
+              "observed": 0.4087546239210851,
+              "predicted": 0.7313564805137578,
+              "rows": 1622,
+              "weight": 0.08961325966850829
+            }
+          ],
+          "what": "and re-weighted to the prior EM estimates on the target period"
+        },
+        "prior_shifted_oracle": {
+          "brier": 0.09123284188123786,
+          "expected_calibration_error": 0.018933559420419847,
+          "mean_predicted": 0.1338641402567338,
+          "pr_auc": 0.31714252135596815,
+          "reliability": [
+            {
+              "observed": 0.05208603265094584,
+              "predicted": 0.0563083567232132,
+              "rows": 3859,
+              "weight": 0.21320441988950276
+            },
+            {
+              "observed": 0.060879368658399095,
+              "predicted": 0.068918861432524,
+              "rows": 1774,
+              "weight": 0.0980110497237569
+            },
+            {
+              "observed": 0.0691027496382055,
+              "predicted": 0.08635410695248207,
+              "rows": 2764,
+              "weight": 0.15270718232044198
+            },
+            {
+              "observed": 0.08558558558558559,
+              "predicted": 0.09029465538222303,
+              "rows": 666,
+              "weight": 0.03679558011049724
+            },
+            {
+              "observed": 0.07721796276013143,
+              "predicted": 0.09262807682945212,
+              "rows": 1826,
+              "weight": 0.10088397790055248
+            },
+            {
+              "observed": 0.10212545360290305,
+              "predicted": 0.10192937095315757,
+              "rows": 1929,
+              "weight": 0.10657458563535911
+            },
+            {
+              "observed": 0.12572944297082228,
+              "predicted": 0.13217517564072628,
+              "rows": 1885,
+              "weight": 0.10414364640883977
+            },
+            {
+              "observed": 0.1611267605633803,
+              "predicted": 0.21318015824370162,
+              "rows": 1775,
+              "weight": 0.09806629834254144
+            },
+            {
+              "observed": 0.4087546239210851,
+              "predicted": 0.4878300406565493,
+              "rows": 1622,
+              "weight": 0.08961325966850829
+            }
+          ],
+          "uses_test_labels": true,
+          "what": "NOT SHIPPABLE: re-weighted to the observed test prior, to show what the correction is worth when the estimate is right"
+        },
+        "raw_unweighted": {
+          "brier": 0.09335911926767024,
+          "expected_calibration_error": 0.04920781952478198,
+          "mean_predicted": 0.06576455384492874,
+          "pr_auc": 0.3312746023302296,
+          "reliability": [
+            {
+              "observed": 0.04088397790055249,
+              "predicted": 0.02414660580168113,
+              "rows": 1810,
+              "weight": 0.1
+            },
+            {
+              "observed": 0.05966850828729282,
+              "predicted": 0.02818178755658272,
+              "rows": 1810,
+              "weight": 0.1
+            },
+            {
+              "observed": 0.06408839779005525,
+              "predicted": 0.03186303436426827,
+              "rows": 1810,
+              "weight": 0.1
+            },
+            {
+              "observed": 0.07348066298342541,
+              "predicted": 0.03513365736570806,
+              "rows": 1810,
+              "weight": 0.1
+            },
+            {
+              "observed": 0.06961325966850829,
+              "predicted": 0.03838580614418944,
+              "rows": 1810,
+              "weight": 0.1
+            },
+            {
+              "observed": 0.07679558011049724,
+              "predicted": 0.042788266061254625,
+              "rows": 1810,
+              "weight": 0.1
+            },
+            {
+              "observed": 0.09668508287292818,
+              "predicted": 0.050159482118668476,
+              "rows": 1810,
+              "weight": 0.1
+            },
+            {
+              "observed": 0.12320441988950276,
+              "predicted": 0.06168601287950798,
+              "rows": 1810,
+              "weight": 0.1
+            },
+            {
+              "observed": 0.1580110497237569,
+              "predicted": 0.08802597779183756,
+              "rows": 1810,
+              "weight": 0.1
+            },
+            {
+              "observed": 0.38729281767955803,
+              "predicted": 0.25727493157455933,
+              "rows": 1810,
+              "weight": 0.1
+            }
+          ],
+          "what": "the recommended model, uncalibrated"
+        },
+        "raw_weighted": {
+          "brier": 0.2077191333661987,
+          "expected_calibration_error": 0.32875821990635024,
+          "mean_predicted": 0.44373056292533875,
+          "pr_auc": 0.3026084242029622,
+          "reliability": [
+            {
+              "observed": 0.04640883977900553,
+              "predicted": 0.23024704738916285,
+              "rows": 1810,
+              "weight": 0.1
+            },
+            {
+              "observed": 0.05580110497237569,
+              "predicted": 0.2872306842665646,
+              "rows": 1810,
+              "weight": 0.1
+            },
+            {
+              "observed": 0.06629834254143646,
+              "predicted": 0.3241728995386408,
+              "rows": 1810,
+              "weight": 0.1
+            },
+            {
+              "observed": 0.06850828729281767,
+              "predicted": 0.3585080420444025,
+              "rows": 1810,
+              "weight": 0.1
+            },
+            {
+              "observed": 0.07624309392265194,
+              "predicted": 0.39214221332942584,
+              "rows": 1810,
+              "weight": 0.1
+            },
+            {
+              "observed": 0.08508287292817679,
+              "predicted": 0.42800845200844234,
+              "rows": 1810,
+              "weight": 0.1
+            },
+            {
+              "observed": 0.10331491712707182,
+              "predicted": 0.47000147792515834,
+              "rows": 1810,
+              "weight": 0.1
+            },
+            {
+              "observed": 0.11823204419889503,
+              "predicted": 0.5303283996838891,
+              "rows": 1810,
+              "weight": 0.1
+            },
+            {
+              "observed": 0.15359116022099448,
+              "predicted": 0.6167685758343059,
+              "rows": 1810,
+              "weight": 0.1
+            },
+            {
+              "observed": 0.3762430939226519,
+              "predicted": 0.799898163949587,
+              "rows": 1810,
+              "weight": 0.1
+            }
+          ],
+          "what": "the model ML-05 specifies, uncalibrated"
+        }
+      }
+    },
     "estimator": "xgboost.XGBClassifier",
     "fitted_on": "train",
     "recommended_variant": "unweighted",
-    "recorded_at": "2026-09-08T13:43:35+00:00",
+    "recorded_at": "2026-09-08T14:40:17+00:00",
     "resampling": "none",
     "scale_pos_weight_observed": 18.93336101307868,
     "specified_variant": "weighted",
@@ -2602,7 +2988,7 @@
     },
     "xgboost_version": "3.4.1"
   },
-  "schema_version": 7,
+  "schema_version": 8,
   "snapshot": {
     "cities": 12,
     "first_date": "1995-01-31",

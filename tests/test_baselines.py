@@ -793,3 +793,43 @@ def test_the_claim_scanner_would_notice_an_unqualified_boast() -> None:
     assert metrics_named(found[0]) == set()
     assert metrics_named(found[1]) == {"f1"}
     assert any(word in found[2].lower() for word in QUALIFIERS)
+
+
+def test_no_block_another_module_writes_is_dropped_by_a_rebuild(tmp_path) -> None:
+    """The carry list has to name every block, and it silently did not.
+
+    ``write_metrics`` keeps the downstream blocks when the snapshot has not
+    moved, and drops them when it has, which is right: a model block describing
+    a different warehouse is worse than no model block. What it cannot do is
+    forget one. ML-09's ``threshold_sensitivity`` was missing from that tuple
+    for exactly as long as it took to write this, and the loss is invisible --
+    the file stays valid, every number left in it stays correct, and a block
+    that has been dropped looks identical to one whose module was never run.
+
+    So the tuple is checked against the keys the file actually acquires, taken
+    from the committed file rather than from a second list that could drift
+    from it in the same way.
+    """
+    path = metrics_path()
+    if not path.exists():
+        pytest.skip("no metrics.json; run baselines.py --write first")
+    committed = json.loads(path.read_text())
+
+    written_elsewhere = set(committed) - {
+        "schema_version", "generated_at", "label", "split", "snapshot", "baselines",
+    }
+    assert written_elsewhere, "nothing downstream has been recorded yet"
+
+    destination = tmp_path / "metrics.json"
+    destination.write_text(json.dumps(committed, indent=2, sort_keys=True) + "\n")
+    # Rewritten with the same snapshot, which is the case where everything must
+    # survive. build_metrics is not re-run: the payload is the committed one.
+    write_metrics(committed, destination)
+    rewritten = json.loads(destination.read_text())
+
+    lost = sorted(written_elsewhere - set(rewritten))
+    assert not lost, (
+        f"a rebuild of the baselines dropped {lost}. Add them to the "
+        "`downstream` tuple in write_metrics; a block missing from it "
+        "disappears without an error."
+    )

@@ -3968,6 +3968,116 @@ every complete city now sits at 459 observations and within 0.02 of one. It is
 excluded from every per-city table for want of test rows, so it moves no
 headline, and DBT-14 still owns it.
 
+## Calibration under label shift, and an estimator that does not survive it
+
+ML-10. `train.py` already recorded that the weighted model's mean predicted
+probability is 0.444 against a test base rate of 0.115 — it tells a reader that
+almost every other week is extreme. The recommendation to prefer the unweighted
+model was right and incomplete: that model is miscalibrated too, in the other
+direction, predicting 0.066 where 0.115 occurs, because it was fitted where
+positives are 5.0% of rows and scored where they are 11.5%.
+
+Two corrections, four rows, and a fifth that cannot be shipped.
+
+| | mean predicted | ECE | Brier | PR-AUC |
+|---|---:|---:|---:|---:|
+| raw, weighted | 0.4437 | 0.3288 | 0.2077 | 0.3026 |
+| raw, unweighted | 0.0658 | 0.0492 | 0.0934 | 0.3313 |
+| **calibrated** | 0.0896 | **0.0254** | 0.0911 | 0.3171 |
+| calibrated + prior shift | 0.2992 | 0.1842 | 0.1294 | 0.3171 |
+| *oracle prior shift* | *0.1339* | *0.0189* | *0.0912* | *0.3171* |
+
+Isotonic fitted on validation halves the calibration error, and it ships. The
+prior shift does not, and the reason is the finding.
+
+### The correction is right and the estimate is not
+
+The roadmap's reasoning was that isotonic fitted on validation (7.1%) and
+applied to test (11.5%) arrives already miscalibrated, so the right tool is
+prior-shift correction: re-estimate the class prior on the target period by EM
+over the model's own posteriors, with no labels, and re-weight.
+
+The premise holds. Calibration alone leaves the mean prediction at 0.090
+against 0.115, short in exactly the direction predicted. And the correction
+works: told the observed prior, re-weighting produces the best-calibrated
+probabilities in the table, ECE 0.0189 against the calibrator's 0.0254. That is
+the oracle row, italicised because it is told the answer and can never be
+deployed; it is there to separate "the correction is wrong" from "the estimate
+is wrong", and it says the second.
+
+Asked to estimate the prior, the EM converges to **0.2992** against an observed
+0.1150. Two and a half times the truth.
+
+It is not a convergence failure: the fixed point is unique and reached from
+0.02, from 0.07, from the true prior and from 0.5. It is not an implementation
+fault either, and the control that settles that is worth more than any amount
+of re-reading — asked to estimate validation's prior *from validation*, the
+same routine returns 0.0708 against a true 0.0708, to the digit. A correct
+estimator reports no shift when there is none, and this one does.
+
+What it is, is the known bias of this estimator under a weakly separating
+classifier. A correct estimate is a fixed point of
+`mean(reweight(p, π)) == π`; evaluated at the true prior that left side comes
+to 0.1339, above the 0.1150 it is being compared with, so the iteration has
+somewhere to climb and climbs until the curvature stops it.
+`fixed_point_at_observed_prior` records that number, because it is the whole
+mechanism in one figure.
+
+### The part that would have been easy to get wrong
+
+There are two posteriors that could feed the EM. The unweighted model's carry
+the training prior; the weighted model's carry 0.5, because weighting the
+positive class by the negative-to-positive ratio *is* training at a balanced
+prior. On the target period they disagree wildly:
+
+| quantifier | source prior | EM on validation | EM on test |
+|---|---:|---:|---:|
+| unweighted | 0.0502 | 0.0992 (+0.028) | 0.3871 (+0.272) |
+| weighted | 0.5000 | 0.0000 (−0.071) | 0.1192 (**+0.004**) |
+
+The weighted model estimates the test prior almost exactly. It would have made
+a good paragraph: the model the project recommends *against*, because its raw
+probabilities are absurd, turns out to carry the posterior that quantifies the
+shift, and for a reason that sounds principled — EM is better conditioned on
+posteriors spread across the unit interval than on posteriors piled against
+zero.
+
+It does not survive the only test that matters. **On validation the ranking
+reverses.** The weighted model's EM collapses to 0.0000 there and the
+unweighted model's is the closer of the two, so a selection made honestly, on
+validation, picks the quantifier that is off by 0.272 on test. The near-exact
+figure is something that can only be known by looking at the answer, and
+shipping it would be selecting on test — the one thing this project does not
+do. `validation_picks_the_better_quantifier` is recorded as `false`, and the
+prior shift is recorded and not recommended.
+
+### Two smaller things, both recorded rather than absorbed
+
+**Isotonic costs 4% of PR-AUC.** It is monotone but not strictly: it collapses
+17 247 distinct scores into 127 flat runs, and average precision is
+tie-sensitive, so ranking falls 0.3313 to 0.3171. The prior shift is a monotone
+map of the posterior odds and leaves PR-AUC identical to the last digit. Every
+row in the table carries its PR-AUC so the price of the calibration is visible
+beside what it bought.
+
+**The calibration error is computed on quantile bins, and the file says so.**
+This model's predictions pile between 0.01 and 0.30; equal-width bins put
+nearly every row in the first one and reduce the whole reliability curve to two
+points and eight empty boxes. `bin_strategy` is recorded beside every number
+computed from it, because a calibration error quoted without its binning is not
+comparable with anyone else's.
+
+### A block that would have vanished
+
+Adding the eighth block to `metrics.json` surfaced that the seventh was not in
+`write_metrics`'s carry list. `threshold_sensitivity` would have been dropped,
+silently, the next time the baselines were rebuilt: the file stays valid, every
+number left in it stays correct, and a block that has been dropped is
+indistinguishable from one whose module was never run. There is now a test that
+takes the set of keys the committed file actually has, rewrites it, and requires
+every one to survive — checked against the file rather than against a second
+list that could drift from the first in the same way.
+
 ## Publishing
 
 Community Cloud requires a public repository, which makes deployment the moment

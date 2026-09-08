@@ -20,8 +20,8 @@ half right: those methods do distort probabilities. But ``scale_pos_weight``
 is arithmetically the same operation, since weighting the positive class by
 *k* is oversampling it *k*-fold, so it distorts them the same way, for the same
 reason. At the
-observed ratio of 17.15 this model's mean predicted probability is 0.478
-against a true test base rate of 0.136: it tells the dashboard reader that
+observed ratio of 18.9 this model's mean predicted probability is 0.444
+against a true test base rate of 0.115: it tells the dashboard reader that
 almost every other week is extreme.
 
 Both are therefore trained and both are recorded. The weighted model is the one
@@ -31,8 +31,21 @@ ranking for calibration. The recommendation is in the README and in the run
 output, and the numbers are in ``metrics.json`` so the choice is not a matter
 of taking anyone's word.
 
+**And the recommendation was right but incomplete (ML-10).** The unweighted
+model is miscalibrated too, in the other direction: it predicts 0.066 where
+0.115 occurs, because it was fitted where positives are 5% of rows and scored
+where they are 11.5%. :func:`calibration_report` measures what two corrections
+do about that. Isotonic regression fitted on validation halves the calibration
+error and is worth shipping. Prior-shift correction on top of it -- estimating
+the target period's class prior by EM over the model's own posteriors, with no
+labels -- is the method that ought to handle a shift of exactly this kind, and
+on this data its estimator overshoots by a factor of two and a half. Both are
+recorded, and so is the oracle that shows the correction is sound and only the
+estimate is not.
+
 Everything else is tuned on validation and nothing whatever is tuned on test:
-:func:`tune` takes two frames and there is no third to pass it.
+:func:`tune` takes two frames and there is no third to pass it, and
+:func:`fit_calibrator` takes one.
 
 Usage::
 
@@ -60,6 +73,7 @@ from typing import Any, Final, Mapping, Sequence
 import numpy as np
 import pandas as pd
 from sqlalchemy import Engine
+from sklearn.isotonic import IsotonicRegression
 from xgboost import XGBClassifier
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -70,10 +84,16 @@ from machine_learning.artifact import (  # noqa: E402
 )
 from machine_learning.baselines import build_metrics, metrics_path  # noqa: E402
 from machine_learning.evaluation import (  # noqa: E402
+    CALIBRATION_BINS,
     SPLITS,
     Score,
+    apply_prior_shift,
     assert_splits_are_disjoint,
+    base_rate,
+    estimate_prior,
     evaluation_frame,
+    expected_calibration_error,
+    reliability_points,
     score,
     split_frame,
 )
@@ -81,6 +101,7 @@ from machine_learning.features import feature_columns  # noqa: E402
 from machine_learning.labels import LABEL, positives  # noqa: E402
 
 __all__ = [
+    "CALIBRATION_METHOD",
     "EARLY_STOPPING_ROUNDS",
     "FIXED_PARAMS",
     "MAX_ROUNDS",
@@ -88,6 +109,8 @@ __all__ = [
     "SEED",
     "TrainingError",
     "Fit",
+    "calibration_report",
+    "fit_calibrator",
     "fit_once",
     "save_models",
     "scale_pos_weight_from",
@@ -292,6 +315,253 @@ def tune(
     return best
 
 
+# --------------------------------------------------------------------------
+# Calibration under label shift (ML-10)
+# --------------------------------------------------------------------------
+
+#: Isotonic rather than Platt. Platt fits a two-parameter sigmoid, which
+#: assumes the miscalibration has a sigmoid shape; the distortion here comes
+#: from a class-weighting factor and a prior shift, and there is no reason it
+#: should. Isotonic assumes only monotonicity, which is the one property that
+#: must hold if the ranking is to be preserved, and the validation split has
+#: 11 993 rows with 849 positives, which is enough for a step function not to
+#: be fitting noise.
+CALIBRATION_METHOD: Final[str] = "isotonic"
+
+
+def fit_calibrator(fit: "Fit", validation: pd.DataFrame):
+    """Fit the probability calibrator. On validation, and on nothing else.
+
+    **It takes one frame.** There is no argument for a second, so this function
+    cannot be handed the test split by a caller in a hurry, in the same way
+    :func:`tune` cannot. ``tests/test_training.py`` makes the stronger check
+    that a rewritten test period leaves the fitted calibrator identical, which
+    is the property a signature can only suggest.
+
+    Fitted on validation rather than on train because a calibrator fitted on
+    the data the model was fitted on is calibrating against predictions the
+    model has already memorised: the training-split probabilities are far too
+    confident in the right direction, and the map learned from them would undo
+    a distortion that only exists in sample.
+    """
+    truth = positives(validation[LABEL]).to_numpy()
+    return IsotonicRegression(y_min=0.0, y_max=1.0, out_of_bounds="clip").fit(
+        fit.predict(validation), truth
+    )
+
+
+def _calibration_entry(
+    labels: pd.Series, predictions: np.ndarray, note: str
+) -> dict[str, Any]:
+    result = score(labels, predictions)
+    points = reliability_points(labels, predictions, bins=CALIBRATION_BINS)
+    return {
+        "what": note,
+        "mean_predicted": float(np.mean(predictions)),
+        "expected_calibration_error": expected_calibration_error(
+            labels, predictions, bins=CALIBRATION_BINS
+        ),
+        "brier": result.brier,
+        # Carried so the claim that neither step reorders anything is checkable
+        # from the file rather than only from the test that asserts it.
+        "pr_auc": result.pr_auc,
+        "reliability": points.to_dict("records"),
+    }
+
+
+def calibration_report(
+    fits: Mapping[str, "Fit"], parts: Mapping[str, pd.DataFrame], *, variant: str
+) -> dict[str, Any]:
+    """What the probabilities are worth, and what two corrections do to them.
+
+    ``train.py`` already records that the weighted model's mean prediction is
+    far above the rate it is predicting. The recommendation to prefer the
+    unweighted one is right and incomplete: that model is miscalibrated too,
+    just less spectacularly, and in the opposite direction. It predicts 0.066
+    where 0.115 occurs, because it was fitted where positives are 5% of rows
+    and scored where they are 11.5%.
+
+    **The obvious fix is the wrong one.** Isotonic regression fitted on
+    validation maps scores onto validation-period frequencies, and validation's
+    base rate is 7.1% against test's 11.5%. Applied to test it arrives already
+    wrong, in the same direction and for the same reason: *calibration does not
+    survive label shift*. That is why this reports four rows and not two. The
+    calibrated row is expected to improve on the raw one and to remain visibly
+    short, and it is recorded rather than skipped so the reader can see the
+    thing that does not work as well as the thing that does.
+
+    The correction that handles the shift is prior-shift adjustment: estimate
+    the class prior on the target period by EM over the model's own posteriors,
+    with no labels, and re-weight. It is applied *on top of* the calibrator
+    rather than instead of it, because the two fix different faults -- isotonic
+    fixes the shape of the map, the prior shift fixes its level -- and neither
+    subsumes the other.
+
+    **And on this data the estimator fails, while the correction it feeds
+    works.** Given the observed prior, re-weighting produces the best-calibrated
+    probabilities in the table: that is the ``prior_shifted_oracle`` row, and it
+    is an oracle because it is told the answer. Asked to estimate the prior
+    instead, the EM converges to roughly two and a half times the truth. It is
+    not a convergence failure -- the fixed point is unique and reached from
+    every starting value -- and it is not an implementation fault, because the
+    same routine returns validation's own prior to the digit when validation is
+    both source and target. It is the known bias of this estimator under a
+    weakly separating classifier: ``fixed_point_at_observed_prior`` records the
+    number that produces it, the mean re-weighted posterior at the true prior,
+    which sits above the true prior and so gives the iteration somewhere to
+    climb.
+
+    ``quantifier_diagnostics`` records why nothing can be done about that here.
+    Two candidate posteriors could feed the EM, and on the target period they
+    disagree wildly; the one that is nearly exact on test is the one that
+    collapses to zero on validation, so **the choice that looks best on
+    validation is the one that fails worst on test**. Selecting the other would
+    be selecting on test, which is the single thing this project does not do.
+    So the prior shift is recorded, in full, and not recommended.
+
+    The prior shift is monotone and provably cannot reorder anything. Isotonic
+    can and does: it collapses 17 247 distinct scores to 127, and average
+    precision is tie-sensitive, so it costs about 4% of PR-AUC. That is the
+    price of the calibration and it is recorded rather than absorbed -- every
+    row carries its PR-AUC, and a test asserts the prior shift leaves it exactly
+    alone.
+    """
+    validation, test = parts["validation"], parts["test"]
+    calibrator = fit_calibrator(fits[variant], validation)
+
+    raw = fits[variant].predict(test)
+    calibrated = np.asarray(calibrator.predict(raw), dtype=float)
+
+    # The prior the calibrated posteriors carry is validation's, not the
+    # training split's: isotonic maps scores onto validation-period
+    # frequencies, so that is the source the EM has to correct *from*. Using
+    # the training base rate here would ask the EM to undo a shift that the
+    # calibrator has already partly undone, and it would overshoot.
+    source_prior = base_rate(validation[LABEL])
+    estimated, iterations = estimate_prior(calibrated, source_prior)
+    shifted = apply_prior_shift(calibrated, source_prior, estimated)
+
+    observed = base_rate(test[LABEL])
+    report: dict[str, Any] = {
+        "method": CALIBRATION_METHOD,
+        "fitted_on": "validation",
+        "applied_to": "test",
+        "calibrated_variant": variant,
+        "bins": CALIBRATION_BINS,
+        "bin_strategy": "quantile",
+        "train_prior": base_rate(parts["train"][LABEL]),
+        "source_prior": source_prior,
+        "estimated_target_prior": estimated,
+        "em_iterations": iterations,
+        # Recorded to be read *against* the estimate, never used to produce it.
+        # estimate_prior() takes no labels; the test period's answer appears in
+        # this block only as a score of things that were computed without it.
+        "observed_target_prior": observed,
+        "prior_estimate_error": estimated - observed,
+        # The number that explains the overshoot. A correct estimate is a fixed
+        # point of `mean(reweight(p, prior)) == prior`; this is the left side
+        # evaluated at the true prior, and it sits above it, so the iteration
+        # has somewhere to climb.
+        "fixed_point_at_observed_prior": float(
+            apply_prior_shift(calibrated, source_prior, observed).mean()
+        ),
+        "quantifier_diagnostics": _quantifier_diagnostics(fits, parts),
+        "recommended": "calibrated",
+        "recommendation_note": (
+            "Isotonic on validation halves the calibration error and is worth "
+            "shipping. The prior shift is not: its EM estimate of the target "
+            "prior is badly biased here, and no choice among the candidate "
+            "quantifiers can be made on validation. See "
+            "quantifier_diagnostics."
+        ),
+        "variants": {},
+    }
+    entries = {
+        "raw_weighted": (
+            fits["weighted"].predict(test),
+            "the model ML-05 specifies, uncalibrated",
+        ),
+        "raw_unweighted": (raw, "the recommended model, uncalibrated"),
+        "calibrated": (
+            calibrated,
+            f"{CALIBRATION_METHOD} fitted on validation, applied to test",
+        ),
+        "calibrated_prior_shifted": (
+            shifted,
+            "and re-weighted to the prior EM estimates on the target period",
+        ),
+        # A ceiling, not a configuration. It is told the test period's base
+        # rate, so it cannot be deployed and must never be quoted as a result;
+        # it is here to separate "the correction is wrong" from "the estimate
+        # is wrong", and it says the second.
+        "prior_shifted_oracle": (
+            apply_prior_shift(calibrated, source_prior, observed),
+            "NOT SHIPPABLE: re-weighted to the observed test prior, to show "
+            "what the correction is worth when the estimate is right",
+        ),
+    }
+    for name, (predictions, note) in entries.items():
+        report["variants"][name] = _calibration_entry(test[LABEL], predictions, note)
+    report["variants"]["prior_shifted_oracle"]["uses_test_labels"] = True
+    return report
+
+
+def _quantifier_diagnostics(
+    fits: Mapping[str, "Fit"], parts: Mapping[str, pd.DataFrame]
+) -> dict[str, Any]:
+    """Whether validation can pick the model that estimates the prior best.
+
+    It cannot, and that is the reason the prior shift is not recommended. Two
+    posteriors could feed the EM: the unweighted model's, which carry the
+    training prior, and the weighted model's, which carry 0.5 because weighting
+    the positive class by the negative-to-positive ratio *is* training at a
+    balanced prior.
+
+    Each is asked to recover a prior it was not given, twice: validation's,
+    which is a shift it could be selected on, and test's, which is the one that
+    matters. The errors are recorded for both. If the ranking of the two agreed
+    across the periods, the better quantifier could be chosen honestly on
+    validation and used on test; ``validation_picks_the_better_quantifier``
+    records that it does not.
+    """
+    train_prior = base_rate(parts["train"][LABEL])
+    candidates = {
+        # The unweighted model is fitted on the split as it stands, so its
+        # posteriors carry the training prior.
+        "unweighted": ("unweighted", train_prior),
+        # scale_pos_weight at the observed negative-to-positive ratio is
+        # training at a balanced prior, so its posteriors carry 0.5.
+        "weighted": ("weighted", 0.5),
+    }
+    rows: dict[str, Any] = {}
+    for name, (variant, source) in candidates.items():
+        row: dict[str, Any] = {"posteriors_from": variant, "source_prior": source}
+        for period in ("validation", "test"):
+            estimated, iterations = estimate_prior(
+                fits[variant].predict(parts[period]), source
+            )
+            row[period] = {
+                "estimated": estimated,
+                "observed": base_rate(parts[period][LABEL]),
+                "error": estimated - base_rate(parts[period][LABEL]),
+                "iterations": iterations,
+            }
+        rows[name] = row
+
+    best_on = {
+        period: min(rows, key=lambda name: abs(rows[name][period]["error"]))
+        for period in ("validation", "test")
+    }
+    return {
+        "candidates": rows,
+        "closest_on_validation": best_on["validation"],
+        "closest_on_test": best_on["test"],
+        "validation_picks_the_better_quantifier": (
+            best_on["validation"] == best_on["test"]
+        ),
+    }
+
+
 def save_models(
     fits: Mapping[str, "Fit"],
     block: Mapping[str, Any],
@@ -392,6 +662,12 @@ def train_model(
         other["pr_auc"] > specified["pr_auc"] and other["brier"] < specified["brier"]
     )
     block["recommended_variant"] = "unweighted" if better else "weighted"
+    # After the recommendation, because it is the recommended model that gets
+    # calibrated, and before returning, so metrics.json cannot carry a model
+    # block without the account of what its probabilities are worth.
+    block["calibration"] = calibration_report(
+        fits, parts, variant=block["recommended_variant"]
+    )
     return block, fits
 
 

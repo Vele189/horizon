@@ -88,6 +88,10 @@ from machine_learning.baselines import (  # noqa: E402
 from machine_learning.evaluation import (  # noqa: E402
     ANOMALY_THRESHOLD,
     ANOMALY_THRESHOLDS,
+    # Defined beside the prior-shift correction that also reads it, so the
+    # figure this module draws and the calibration error ML-10 records cannot
+    # end up binning differently.
+    CALIBRATION_BINS,
     MIN_HELD_OUT_POSITIVES,
     MIN_HELD_OUT_ROWS,
     Score,
@@ -129,11 +133,6 @@ log = logging.getLogger(__name__)
 
 REPO_ROOT: Final[Path] = Path(__file__).resolve().parent.parent
 FIGURE_DIR: Final[Path] = REPO_ROOT / "docs" / "images"
-
-#: Quantile bins for the reliability curve. Ten over 8 506 test rows is ~850 a
-#: bin, which is enough for the observed rate in each to mean something; twenty
-#: would draw a jagged line and invite reading noise as miscalibration.
-CALIBRATION_BINS: Final[int] = 10
 
 #: Borrowed from ``render_lineage.py`` so the project's figures look like one
 #: project rather than five.

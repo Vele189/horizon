@@ -106,6 +106,10 @@ log = logging.getLogger(__name__)
 #: table, the per-city breakdown, and the per-metric verdict.
 #: 5. ML-07 added ``explainability``, written by ``explain.py``: the SHAP
 #: ranking, the both-tails response, and the two explained predictions.
+#: 8. ML-10 added ``model.calibration``, written by ``train.py``: the expected
+#: calibration error and reliability curve of the raw, calibrated and
+#: prior-shifted probabilities, the class prior EM estimates on the target
+#: period, and the diagnostics saying why that estimate is not shipped.
 #: 7. ML-09 added ``lift_over_persistence`` beside ``lift`` on every scored
 #: entry, and a top-level ``threshold_sensitivity`` block written by
 #: ``evaluate.py --thresholds``: the whole evaluation re-run at |Z| 2.0, 2.5 and
@@ -115,7 +119,7 @@ log = logging.getLogger(__name__)
 #: with that city removed entirely, scored against that city's own persistence
 #: baseline. A file may legitimately lack it, since it costs one training run
 #: per city and is not part of every evaluation.
-METRICS_SCHEMA_VERSION: Final[int] = 7
+METRICS_SCHEMA_VERSION: Final[int] = 8
 
 #: The baseline every other predictor is reported against, beside the base rate.
 #:
@@ -579,11 +583,17 @@ def write_metrics(payload: Mapping[str, Any], path: Path | None = None) -> Path:
     payload = dict(payload)
     if destination.exists():
         previous = json.loads(destination.read_text())
+        # Every block another module writes into this file. A block missing
+        # from this tuple is silently dropped the next time the baselines are
+        # rebuilt, and the loss looks exactly like never having run that
+        # module: the file is valid, the numbers that remain are correct, and
+        # the absent one is indistinguishable from a step nobody took.
         downstream = (
             "model",
             "evaluation",
             "explainability",
             "leave_one_city_out",
+            "threshold_sensitivity",
         )
         carried = {key: previous[key] for key in downstream if key in previous}
         if carried:

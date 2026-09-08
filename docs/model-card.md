@@ -193,6 +193,25 @@ is wrong in the direction that matters for a warning system: it says "quiet"
 more often than it should. **`risk_score` must be recalibrated before any
 reader sees it as a percentage.**
 
+ML-10 measured what recalibration is worth. Isotonic regression fitted on
+validation, never on test, halves the expected calibration error, from 0.049 to
+0.025, and moves the mean prediction from 0.066 to 0.090 against the 0.115 that
+occurs. It costs 4% of PR-AUC, because isotonic collapses 17 247 distinct
+scores into 127 flat runs and average precision is tie-sensitive. That trade is
+worth making for a number a reader sees as a percentage and not for one they
+see as a rank, which is why it is recorded rather than applied: the Risk
+Horizon view shows rank bands, and BI-08 is the ticket that decides what a
+calibrated probability is shown as.
+
+Prior-shift correction on top of it — re-estimating the target period's class
+prior by EM over the model's own posteriors, with no labels — is the method
+that ought to handle a shift of exactly this kind, and here its estimator
+returns 0.299 against an observed 0.115. Given the right prior the correction
+is the best row in the table at ECE 0.019, so the fault is the estimate and not
+the adjustment; and no choice among the candidate quantifiers can be made on
+validation, because the one that is nearly exact on test collapses to zero
+there. It is recorded in full, in `model.calibration`, and not shipped.
+
 ### 2. It is not a forecast
 
 No pressure fields, no upper-air data, no NWP output, no teleconnection

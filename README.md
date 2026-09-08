@@ -221,7 +221,11 @@ the training period and 11.50% in the test period, so a model fitted on the
 early record is calibrated to a world that has since warmed. Ranking is sound
 and observed risk rises monotonically across the deciles, but the level is not.
 The Risk Horizon view therefore shows rank bands rather than raw probabilities.
-Detrending the climatology does not fix it — see below.
+Detrending the climatology does not fix it — see below — and neither does
+prior-shift correction, whose EM estimator returns a target prior of 0.299
+against an observed 0.115. Isotonic regression fitted on validation does help,
+halving the calibration error for 4% of the ranking, and is recorded in
+`model.calibration` for BI-08 to decide what to do with.
 
 **One city's baseline is too thin to trust.** Sydney has eighteen scored days,
 and on a five-observation baseline it flags 16.7% of them against 1.0-2.0% in

@@ -78,6 +78,7 @@ from machine_learning.features import (  # noqa: E402
 
 __all__ = [
     "ANOMALY_THRESHOLD",
+    "CALIBRATION_BINS",
     "ANOMALY_THRESHOLDS",
     "MIN_HELD_OUT_POSITIVES",
     "MIN_HELD_OUT_ROWS",
@@ -94,12 +95,16 @@ __all__ = [
     "assert_city_is_held_out",
     "assert_splits_are_ordered",
     "base_rate",
+    "apply_prior_shift",
     "boundary_report",
     "drop_scorable_gaps",
+    "estimate_prior",
+    "expected_calibration_error",
     "evaluation_frame",
     "hold_out_city",
     "lift_over",
     "reflag",
+    "reliability_points",
     "scorable_cities",
     "score",
     "split_frame",
@@ -268,6 +273,176 @@ def score(labels: pd.Series, predictions) -> Score:
         brier=float(brier_score_loss(truth, values)),
         lift=pr_auc / rate,
     )
+
+
+#: Bins for a reliability curve and for the calibration error computed from it.
+#:
+#: Ten over 18 100 test rows is ~1 800 a bin, which is enough for the observed
+#: rate in each to mean something; twenty would draw a jagged line and invite
+#: reading noise as miscalibration.
+CALIBRATION_BINS: Final[int] = 10
+
+
+def reliability_points(
+    labels: pd.Series,
+    predictions,
+    *,
+    bins: int = CALIBRATION_BINS,
+    strategy: str = "quantile",
+) -> pd.DataFrame:
+    """Observed rate against predicted rate, with the weight of each bin.
+
+    **Quantile bins, not equal-width, and the choice changes the number.** This
+    model's predictions pile between 0.01 and 0.30; equal-width bins put nearly
+    every row in the first one and reduce a reliability curve to two points and
+    eight empty boxes, and the calibration error computed from it to a single
+    comparison of two means. Quantile bins spend the resolution where the rows
+    are. The cost is that the figure is not the textbook ECE, so ``strategy`` is
+    carried into ``metrics.json`` beside every number computed from it: a
+    calibration error quoted without its binning is not comparable with anyone
+    else's.
+
+    ``weight`` is the share of rows in each bin, and it is what makes the error
+    below an expectation rather than an average over bins. Equal-count bins make
+    those weights nearly equal, which is another reason to prefer them: an
+    unweighted mean over equal-width bins lets a bin holding nine rows count as
+    much as one holding nine thousand.
+    """
+    truth = positives(labels).to_numpy()
+    values = np.asarray(predictions, dtype=float)
+    if len(values) != len(truth):
+        raise ValueError(f"{len(truth)} labels against {len(values)} predictions.")
+    if strategy == "quantile":
+        # duplicates="drop": a predictor emitting three distinct values has
+        # three usable bins, not ten, and asking for ten is an error rather
+        # than a reason to fail. Persistence is exactly that predictor.
+        edges = pd.qcut(values, bins, duplicates="drop", labels=False)
+    elif strategy == "uniform":
+        edges = pd.cut(values, bins, labels=False, include_lowest=True)
+    else:
+        raise ValueError(f"unknown binning strategy {strategy!r}.")
+
+    frame = pd.DataFrame({"bin": edges, "truth": truth, "predicted": values})
+    grouped = frame.groupby("bin", sort=True)
+    points = grouped.agg(
+        predicted=("predicted", "mean"),
+        observed=("truth", "mean"),
+        rows=("truth", "size"),
+    ).reset_index(drop=True)
+    points["weight"] = points["rows"] / len(frame)
+    return points
+
+
+def expected_calibration_error(
+    labels: pd.Series,
+    predictions,
+    *,
+    bins: int = CALIBRATION_BINS,
+    strategy: str = "quantile",
+) -> float:
+    """How far the predicted probabilities sit from the rates they claim.
+
+    The row-weighted mean of ``|observed - predicted|`` across the bins of
+    :func:`reliability_points`. Zero is perfect; the base rate itself scores
+    zero on a single bin and is still useless, which is why this is reported
+    beside PR-AUC and never instead of it.
+
+    Brier already notices a probability is wrong, so this is not a replacement
+    for it either. Brier is a proper scoring rule and mixes calibration with
+    discrimination: a model can improve it by ranking better while staying just
+    as badly calibrated, which is exactly what happens here. This isolates the
+    half ML-10 is about.
+    """
+    points = reliability_points(labels, predictions, bins=bins, strategy=strategy)
+    gap = (points["observed"] - points["predicted"]).abs()
+    return float((gap * points["weight"]).sum())
+
+
+def apply_prior_shift(predictions, source_prior: float, target_prior: float):
+    """Re-weight posteriors from one class prior to another.
+
+    The correction underneath ML-10. A model fitted where positives are 7% of
+    rows emits posteriors that carry that 7% inside them; scored on a period
+    where positives are 11.5%, every probability is too low by a factor that
+    depends on the probability itself, not by a constant. Under the standard
+    label-shift assumption -- the class-conditional feature distribution
+    p(x | y) is unchanged and only p(y) moves -- the fix is Bayes' rule applied
+    twice, and it is exact:
+
+        p'(1|x) = w1 p(1|x) / (w1 p(1|x) + w0 p(0|x))
+
+    with ``w1 = target/source`` and ``w0 = (1-target)/(1-source)``.
+
+    It is **monotone in p**, so it cannot change a ranking: PR-AUC is identical
+    before and after, and a test asserts that. Everything it moves is the
+    level, which is the only thing that was wrong.
+    """
+    for name, value in (("source", source_prior), ("target", target_prior)):
+        if not 0.0 < value < 1.0:
+            raise ValueError(
+                f"the {name} prior must be strictly between 0 and 1, got {value}. "
+                "A prior of 0 or 1 asserts the class cannot occur, and the "
+                "re-weighting divides by it."
+            )
+    values = np.asarray(predictions, dtype=float)
+    positive = (target_prior / source_prior) * values
+    negative = ((1.0 - target_prior) / (1.0 - source_prior)) * (1.0 - values)
+    total = positive + negative
+    return np.divide(
+        positive, total, out=np.full_like(values, target_prior), where=total > 0
+    )
+
+
+def estimate_prior(
+    predictions,
+    source_prior: float,
+    *,
+    max_iterations: int = 200,
+    tolerance: float = 1e-10,
+) -> tuple[float, int]:
+    """Estimate the target period's class prior from predictions alone. No labels.
+
+    Saerens, Latinne & Decaestecker (2002): EM over the target sample, holding
+    the model fixed. Each step re-weights the posteriors to the current prior
+    estimate and takes their mean as the next estimate, which is the M-step of
+    a mixture whose components are the two class-conditionals.
+
+    **This function takes no labels, and that is the guarantee rather than a
+    convenience.** It cannot be fitted on the test answers because it is not
+    given them; the strongest statement available about a leak is that the
+    signature makes it impossible. What it does read is the test period's
+    *predictions*, which is transductive and deliberate: in deployment the
+    recent weeks are exactly the data you have without their labels, and
+    estimating the prior on them is the operation the method exists to perform.
+    Calling that leakage would be calling deployment leakage.
+
+    Args:
+        predictions: Posteriors on the target period, from a model calibrated
+            to ``source_prior``. After isotonic regression that is the
+            *validation* base rate and not the training one, because isotonic
+            maps scores onto validation-period frequencies.
+        source_prior: The prior those posteriors currently carry.
+
+    Returns:
+        The estimated prior and the iterations it took. The count is returned
+        rather than logged because an estimate that ran to ``max_iterations``
+        has not converged, and a reader of ``metrics.json`` should be able to
+        see that without rerunning anything.
+    """
+    values = np.asarray(predictions, dtype=float)
+    if values.size == 0:
+        raise ValueError("cannot estimate a prior from no predictions.")
+    prior = float(source_prior)
+    for iteration in range(1, max_iterations + 1):
+        updated = float(apply_prior_shift(values, source_prior, prior).mean())
+        # Clipped away from the boundary: an estimate that reaches exactly 0 or
+        # 1 makes the next re-weighting divide by zero, and a prior of 0 is a
+        # claim no finite sample supports.
+        updated = min(max(updated, 1e-12), 1.0 - 1e-12)
+        if abs(updated - prior) < tolerance:
+            return updated, iteration
+        prior = updated
+    return prior, max_iterations
 
 
 def lift_over(result: Score, reference: Score) -> dict[str, float]:
