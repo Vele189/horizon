@@ -1,7 +1,7 @@
 """Tests for the chronological split harness.
 
 The second of the project's two leakage traps, and the one that most often
-survives into a published repository unnoticed — because a random split does
+survives into a published repository unnoticed, because a random split does
 not look wrong. It produces a training set, a test set, and a number, and the
 number is simply too good for a reason nothing in the code points at.
 
@@ -20,7 +20,7 @@ So the harness is checked in three ways, weakest to strongest:
 
 The converse is tested too, and deliberately: a validation row's rolling window
 *does* reach back into the training period, and must. That is not leakage, it
-is deployment — a model predicting on 2019-01-01 in production has all of 2018
+is deployment: a model predicting on 2019-01-01 in production has all of 2018
 behind it. A test asserts the backward reach exists so that nobody later
 "fixes" it.
 """
@@ -83,7 +83,7 @@ def test_the_periods_are_the_ones_the_proposal_specifies() -> None:
 
 def test_every_split_is_present_even_when_empty() -> None:
     """A caller iterating the splits must not silently skip a missing one."""
-    parts = split_frame(labelled_span(days=400))  # 1995–1996 only
+    parts = split_frame(labelled_span(days=400))  # 1995-1996 only
     assert set(parts) == {"train", "validation", "test"}
     assert parts["validation"].empty
     assert parts["test"].empty
@@ -162,7 +162,7 @@ def test_the_purge_costs_exactly_the_horizon_at_each_boundary() -> None:
 
 def test_the_boundary_report_shows_the_purge_as_a_number() -> None:
     report = boundary_report(split_frame(labelled_span())).set_index("boundary")
-    assert list(report.index) == ["train → validation", "validation → test"]
+    assert list(report.index) == ["train -> validation", "validation -> test"]
     assert (report["gap_days"] > HORIZON_DAYS).all()
     assert report["reach_clears"].all()
 
@@ -177,7 +177,7 @@ def test_rewriting_the_validation_era_leaves_the_training_split_untouched() -> N
 
     Every observation from 2019-01-01 onwards is replaced with nonsense, the
     features and the label are rebuilt from scratch, and the training split
-    must come back identical — every rolling window, every lag, every label.
+    must come back identical: every rolling window, every lag, every label.
     This does not inspect how any window is written, so a window that reaches
     forward fails it however cleverly it is expressed.
     """
@@ -227,14 +227,14 @@ def test_without_the_purge_the_future_does_reach_the_training_split() -> None:
 def test_a_validation_feature_does_reach_back_into_training() -> None:
     """Backward reach across a boundary is deployment, not leakage.
 
-    A 30-day mean on 2019-01-05 is built from December 2018 — and must be. A
+    A 30-day mean on 2019-01-05 is built from December 2018, and must be. A
     model predicting that day in production has all of 2018 behind it, and
     blanking it here would measure a system nobody is going to run. This test
     asserts the reach exists so it is not later "fixed" into a harness that
     reports a worse number for a better-sounding reason.
     """
     gold = spanning()
-    # Rewrite 2018 only — entirely inside training — and leave validation's own
+    # Rewrite 2018 only, entirely inside training, and leave validation's own
     # observations alone, so anything that moves there moved by reaching back.
     disturbed = rewrite_from(gold, "2018-01-01", until="2018-12-31")
     baseline = split_frame(scored_population(gold))["validation"]
@@ -244,7 +244,7 @@ def test_a_validation_feature_does_reach_back_into_training() -> None:
     opening = baseline.head(WARMUP_DAYS)[columns]
     assert not opening.equals(rebuilt.head(WARMUP_DAYS)[columns]), (
         "a validation row's rolling window no longer reaches back across the "
-        "boundary — which would mean the harness is measuring a model with no "
+        "boundary, which would mean the harness is measuring a model with no "
         "history at prediction time, and that is not the model being deployed"
     )
 
@@ -337,7 +337,7 @@ def test_no_random_splitter_appears_anywhere_in_the_codebase() -> None:
     ]
 
     assert not offenders, (
-        "a random splitter reached the codebase — a shuffled split leaks the "
+        "a random splitter reached the codebase: a shuffled split leaks the "
         f"future through every rolling feature: {offenders}"
     )
 
@@ -395,8 +395,8 @@ def test_the_real_split_reports_a_rising_positive_rate(population) -> None:
 def test_the_embargo_would_not_change_the_verdict(population) -> None:
     """The measurement behind leaving it off.
 
-    Holding back a month at the start of each later split — which is what
-    removing every shared feature window would take — moves test PR-AUC by
+    Holding back a month at the start of each later split, which is what
+    removing every shared feature window would take, moves test PR-AUC by
     about a thousandth, and *upward*. The sample-correlation optimism an
     embargo exists to remove is not present at this window length, so paying
     for it in realism would buy nothing.

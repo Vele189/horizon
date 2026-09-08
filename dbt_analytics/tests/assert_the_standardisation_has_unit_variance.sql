@@ -5,7 +5,7 @@
 -- column of numbers, and all of them show up here as a spread that is not one.
 --
 -- Only cities with a full reference period are checked. A baseline built from
--- three years — Tokyo, mid-backfill — legitimately over-disperses, and holding
+-- three years (Tokyo, mid-backfill) legitimately over-disperses, and holding
 -- it to the same bar would fail on a sample-size effect rather than a defect.
 with spread as (
 

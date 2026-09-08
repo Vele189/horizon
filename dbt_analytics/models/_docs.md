@@ -1,11 +1,11 @@
 {# Shared column descriptions. Defined once and referenced with doc(), because
    city_id appears in nine models and a description that drifts between them is
-   worse than none — a reviewer cannot tell which one to believe. #}
+   worse than none, because a reviewer cannot tell which one to believe. #}
 
 {% docs col_city_id %}
 Slug from `config/cities.yml`, and the join key to every dimension and fact.
-Not a foreign key in bronze — that layer must land even if the city config
-changes — but constrained by a `relationships` test from gold onwards.
+Not a foreign key in bronze, since that layer must land even if the city
+config changes, but constrained by a `relationships` test from gold onwards.
 {% enddocs %}
 
 {% docs col_observation_time %}
@@ -22,7 +22,7 @@ that is already a UTC day upstream, not a timezone conversion.
 {% docs col_ingested_at %}
 When this pipeline landed the row. One timestamp per extraction run, so rows
 from one run tie rather than ordering by how long the `COPY` took to reach
-them — which is what makes silver's deduplication deterministic.
+them, which is what makes silver's deduplication deterministic.
 {% enddocs %}
 
 {% docs col_batch_id %}
@@ -41,7 +41,7 @@ Longitude of the grid cell that answered. See `api_latitude`.
 {% enddocs %}
 
 {% docs col_api_elevation_m %}
-Elevation of the grid cell that answered, in metres — not the city's own
+Elevation of the grid cell that answered, in metres, not the city's own
 elevation, which `dim_cities` holds. London's 11 m resolves to a 16 m cell.
 {% enddocs %}
 
@@ -59,7 +59,7 @@ Daily minimum 2 m air temperature, °C.
 {% enddocs %}
 
 {% docs col_apparent_temperature %}
-Apparent ("feels like") temperature, °C — air temperature adjusted for
+Apparent ("feels like") temperature, °C: air temperature adjusted for
 humidity, wind and radiation. Diverges most from the dry-bulb reading in the
 humid tropics, where it runs several degrees higher.
 {% enddocs %}
@@ -70,11 +70,11 @@ rounding, which a singular test allows for and nothing more.
 {% enddocs %}
 
 {% docs col_relative_humidity %}
-Relative humidity, per cent. Bounded 0–100 by an `accepted_range` test.
+Relative humidity, per cent. Bounded 0-100 by an `accepted_range` test.
 {% enddocs %}
 
 {% docs col_surface_pressure %}
-Pressure at the grid cell's own elevation, hPa — **not** reduced to sea level.
+Pressure at the grid cell's own elevation, hPa, and **not** reduced to sea level.
 Johannesburg at 1753 m reads 822 hPa while its sea-level pressure is 998, which
 is why this column carries a looser lower bound than `pressure_msl`.
 {% enddocs %}
@@ -87,7 +87,7 @@ and what pressure tendency is computed on.
 {% docs col_wind_speed %}
 Wind speed at 10 m, km/h. Stored in km/h as ING-01 requests it; bounded in m/s
 through the `kmh_to_ms` macro, because physical limits for wind are quoted in
-m/s and a 0–120 bound read as km/h would fail on an ordinary winter storm.
+m/s and a 0-120 bound read as km/h would fail on an ordinary winter storm.
 {% enddocs %}
 
 {% docs col_wind_gusts %}
@@ -100,7 +100,7 @@ present and both mean north.
 {% enddocs %}
 
 {% docs col_precipitation %}
-Total precipitation, mm — rain plus the water equivalent of snow.
+Total precipitation, mm: rain plus the water equivalent of snow.
 {% enddocs %}
 
 {% docs col_cloud_cover %}

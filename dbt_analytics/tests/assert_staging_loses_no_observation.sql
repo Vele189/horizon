@@ -1,6 +1,6 @@
 -- Deduplication must remove duplicates and nothing else.
 --
--- A partition key typo — partitioning by city_id alone, say — would collapse
+-- A partition key typo, partitioning by city_id alone say, would collapse
 -- an entire city to one row and still pass every uniqueness test, because the
 -- result would indeed be unique. This counts distinct keys on both sides and
 -- fails if silver holds fewer observations than bronze knows about.

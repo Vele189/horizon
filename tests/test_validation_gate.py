@@ -1,8 +1,8 @@
-"""VALIDATION GATE — DBT-11.
+"""VALIDATION GATE: DBT-11.
 
 Seven cities in `config/cities.yml` carry a dated, documented extreme-weather
 event. If those dates do not surface as anomalies, the climatology is wrong and
-everything downstream — features, labels, model, dashboard — is built on sand.
+everything downstream (features, labels, model, dashboard) is built on sand.
 
 This is the automated form of that check. It reads the events from the registry
 rather than restating them, so a change to an event date is a change to a test,
@@ -10,7 +10,7 @@ which is what `cities.py` promises.
 
 **A missing city skips with a reason; it does not pass.** The daily backfill is
 quota-bound across days, and a gate that silently goes green on absent data is
-worse than no gate at all — it is the specific failure this ticket exists to
+worse than no gate at all: it is the specific failure this ticket exists to
 prevent, wearing the costume of success.
 """
 
@@ -137,7 +137,7 @@ def test_the_documented_event_surfaces_as_an_anomaly(engine, city_id, event) -> 
 def test_the_event_is_the_most_extreme_of_its_season(engine, city_id, event) -> None:
     """A stronger claim than the flag: the documented day should stand out.
 
-    Flagging is necessary but not sufficient — a climatology that flagged every
+    Flagging is necessary but not sufficient: a climatology that flagged every
     other day in the month would also flag this one. The event should rank near
     the top of its own ±15-day neighbourhood across the whole record.
     """
@@ -197,7 +197,7 @@ def test_the_gate_reports_how_much_of_itself_it_could_run(engine) -> None:
 
 
 def test_phoenix_july_2023_is_the_record_month_in_the_data(engine) -> None:
-    """The event is present and correctly extreme — as a *duration*.
+    """The event is present and correctly extreme, as a *duration*.
 
     The ticket asks for Phoenix's 31-day July 2023 streak to flag. It does not,
     and the investigation says why rather than the threshold being lowered to
@@ -205,8 +205,8 @@ def test_phoenix_july_2023_is_the_record_month_in_the_data(engine) -> None:
     streak departs far from its own seasonal normal. The peak was Z = +1.97.
 
     What was unprecedented is how long it lasted, and a single-day Z-score
-    cannot express duration by construction. The data has it right — 2023 is
-    rank 1 of 32 for days at or above 43.3 °C — so this is a limit of the
+    cannot express duration by construction. The data has it right, since 2023
+    is rank 1 of 32 for days at or above 43.3 °C, so this is a limit of the
     detector, not a defect in the climatology, and the honest response is to
     record it rather than to tune the threshold until it passes.
     """
@@ -239,7 +239,7 @@ def test_phoenix_july_2023_is_the_record_month_in_the_data(engine) -> None:
 def test_delhi_late_may_2024_is_hot_but_not_the_record(engine) -> None:
     """The other event the ticket names and the registry does not carry.
 
-    29 May 2024 scored Z = +2.22 — hot, and under the threshold. That is
+    29 May 2024 scored Z = +2.22, hot and under the threshold. That is
     proportionate: in this grid cell 2024 was the second-warmest late May in
     thirty-two years, behind 1998. A detector that called the second-warmest
     such day a 2.5-sigma extreme would be miscalibrated.

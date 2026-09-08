@@ -2,7 +2,7 @@
 
 This is the only module that drives the others. The planner decides what to
 request, the client makes the request, the archive holds the payload, and the
-loader lands it — this ties them into one loop that can be killed at any moment
+loader lands it. This ties them into one loop that can be killed at any moment
 and picked up again without losing or re-fetching work.
 
 Per unit, in this order and no other:
@@ -130,7 +130,7 @@ class BackfillResult:
             f"{self.rows_loaded:,} rows, {self.requests_made} requests "
             f"({self.weight_spent:,.0f} weighted calls), "
             f"{self.units_from_cache} from cache, "
-            f"{_humanise(self.seconds)} wall clock — {self.stopped_because}"
+            f"{_humanise(self.seconds)} wall clock, {self.stopped_because}"
         )
 
 
@@ -142,8 +142,8 @@ class BackfillResult:
 class _Interruptible:
     """Turns SIGINT into a flag checked between units.
 
-    The default KeyboardInterrupt lands wherever the interpreter happens to be
-    — quite possibly mid-COPY or between the warehouse commit and the manifest
+    The default KeyboardInterrupt lands wherever the interpreter happens to
+    be, quite possibly mid-COPY or between the warehouse commit and the manifest
     write, which is the one window where a crash costs correctness rather than
     time. Catching the signal and finishing the unit in flight closes it. A
     second press restores the default handler, so an operator who really means
@@ -163,7 +163,7 @@ class _Interruptible:
         self.requested = True
         signal.signal(signal.SIGINT, self._previous)
         log.warning(
-            "interrupt received — finishing the unit in flight, then stopping. "
+            "interrupt received; finishing the unit in flight, then stopping. "
             "Press Ctrl-C again to stop immediately."
         )
 
@@ -226,7 +226,7 @@ def run_backfill(
         units_planned=len(plan.units),
     )
     if not plan.units:
-        log.info("nothing pending — the manifest covers every planned window")
+        log.info("nothing pending: the manifest covers every planned window")
         return result
 
     log.info(
@@ -433,8 +433,8 @@ def bronze_coverage(
     step = dt.timedelta(days=1) if grain == "daily" else dt.timedelta(hours=1)
 
     # The acceptance report wants every row ever landed and passes nothing.
-    # Asking "what did *this* run land" — or inspecting one run while another is
-    # still writing — needs the filter.
+    # Asking "what did *this* run land", or inspecting one run while another
+    # is still writing, needs the filter.
     scoped = batch_ids is not None
     batches = [str(b) for b in (batch_ids or ())]
     predicate = "where batch_id = any(cast(:batches as uuid[]))" if scoped else ""
@@ -481,7 +481,7 @@ def bronze_coverage(
         last_day = last.date() if last else None
         # Measured against the range that was *asked for*, not against the
         # city's own last row. Clipping to last_day would report a city holding
-        # only 1995 as 100% complete — 365 days observed out of 365 expected —
+        # only 1995 as 100% complete (365 days observed out of 365 expected),
         # which is precisely the state this gate exists to catch.
         window_start = start or first_day
         expected = 0
@@ -515,7 +515,7 @@ STORM_DYNAMICS_COLUMNS: Final[tuple[str, ...]] = (
     "surface_pressure",
 )
 
-#: Neon's free plan. Bronze never goes there — only gold marts are promoted —
+#: Neon's free plan. Bronze never goes there, since only gold marts are promoted,
 #: but the hourly table is the largest thing the pipeline builds, so it is the
 #: number worth checking a design against.
 NEON_STORAGE_BUDGET_BYTES: Final[int] = 500 * 1000 * 1000
@@ -546,8 +546,8 @@ def duplication(
 ) -> Duplication:
     """Count rows against distinct ``(city_id, observation_time)`` pairs.
 
-    Duplicates are legal here — bronze is append-only and silver deduplicates
-    (DBT-02) — so this is a measurement, not a check. It is worth surfacing
+    Duplicates are legal here, because bronze is append-only and silver
+    deduplicates (DBT-02), so this is a measurement, not a check. It is worth surfacing
     because it is the observable symptom of the one gap in run-level
     idempotency: a crash between the warehouse commit and the manifest write
     leaves rows recorded nowhere, and the next run lands them again.
@@ -591,7 +591,7 @@ class TableSize:
     index_bytes: int
     dead_rows: int = 0
     #: (column, average bytes) for the widest column, and the row's total
-    #: payload — enough to say where the space actually goes.
+    #: payload, enough to say where the space actually goes.
     widest_column: tuple[str, float] | None = None
     payload_bytes: float = 0.0
 
@@ -604,7 +604,7 @@ class TableSize:
         """Rows deleted or updated but not yet vacuumed.
 
         ``pg_total_relation_size`` counts them, so a table that has been loaded
-        and cleared a few times reads far larger than it is — 31 MB against a
+        and cleared a few times reads far larger than it is: 31 MB against a
         true 12 MB, in the first measurement taken here.
         """
         total = self.rows + self.dead_rows
@@ -740,7 +740,7 @@ def _print_report(
     present = {c.city_id for c in coverage}
     missing = [city.id for city in registry if city.id not in present]
 
-    print(f"bronze_raw.{TABLE_BY_GRAIN[grain]} — {len(present)}/{len(registry)} cities\n")
+    print(f"bronze_raw.{TABLE_BY_GRAIN[grain]}: {len(present)}/{len(registry)} cities\n")
     width = max((len(c.city_id) for c in coverage), default=10)
     print(
         f"  {'city'.ljust(width)}  {'rows':>8}  {'days':>7}  {'first':10}  "
@@ -785,7 +785,7 @@ def _print_report(
         print(
             f"  {repeated.duplicate_rows:,} of them ({repeated.share:.1%}) are a "
             f"second copy of an observation already present.\n"
-            "  Legal — bronze is append-only and silver deduplicates (DBT-02) — "
+            "  Legal, since bronze is append-only and silver deduplicates (DBT-02), "
             "but it means a\n  window was ingested twice: a deleted manifest, or "
             "a crash between the warehouse\n  commit and the manifest write."
         )
@@ -827,7 +827,7 @@ def _print_report(
     if size.dead_share > 0.1:
         print(
             f"  {size.dead_rows:,} dead rows ({size.dead_share:.0%}) are counted "
-            f"in that figure — run VACUUM FULL {size.table} for the true size"
+            f"in that figure; run VACUUM FULL {size.table} for the true size"
         )
     if size.widest_column and size.payload_bytes:
         column, average = size.widest_column
@@ -838,7 +838,7 @@ def _print_report(
     print(
         f"  {size.share_of_neon_budget():.1%} of Neon's "
         f"{_bytes(NEON_STORAGE_BUDGET_BYTES)} free-plan allowance "
-        "— bronze stays local, this is the yardstick only"
+        "(bronze stays local, this is the yardstick only)"
     )
 
     # The table is rarely full when someone asks how big it will be.
@@ -875,7 +875,7 @@ def _main(argv: list[str] | None = None) -> int:
         default=None,
         dest="anchor",
         help="the date the trailing hourly window ends at; same thing as "
-             "--end, named for what it does. Pass it for a reproducible plan — "
+             "--end, named for what it does. Pass it for a reproducible plan; "
              "left to the default, 'the trailing 24 months' names a different "
              "window tomorrow",
     )
@@ -949,7 +949,7 @@ def _main(argv: list[str] | None = None) -> int:
             f"{plan.weight:,.0f} weighted calls"
         )
         print(f"  {len(plan.skipped)} already in the manifest")
-        print(f"  {cached} already archived — no request needed")
+        print(f"  {cached} already archived, no request needed")
         print(f"  budget {args.max_weight:,.0f} calls covers "
               f"{len(plan.within_daily_quota())} of them")
         print(f"  paced runtime ~{_humanise(plan.estimated_seconds)}")

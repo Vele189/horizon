@@ -2,7 +2,7 @@
     Unit conversions, as macros rather than inline SQL.
 
     ING-01 asks the API for metric units explicitly and asserts them on every
-    response, so almost nothing needs converting here — silver's job is to
+    response, so almost nothing needs converting here; silver's job is to
     assert, not to convert. These exist for the two places where the source's
     own units are internally inconsistent or where an assertion is naturally
     expressed in a different unit from the stored one.
@@ -15,7 +15,7 @@
 {% macro cm_to_mm(column) -%}
     {#
         Open-Meteo reports `snowfall_sum` in centimetres while every other
-        depth in the same row — precipitation_sum, rain_sum — is millimetres.
+        depth in the same row (precipitation_sum, rain_sum) is millimetres.
         That is the source's inconsistency, not ours, and it is the single most
         likely place for a downstream model to add two numbers that are not in
         the same unit. Silver publishes the millimetre form alongside so no

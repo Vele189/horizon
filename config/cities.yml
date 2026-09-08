@@ -1,5 +1,5 @@
 # =============================================================================
-# Target cities — single source of truth
+# Target cities: single source of truth
 # =============================================================================
 # Nothing downstream may hardcode a city name, coordinate, or timezone. Read
 # this file through `cities.load_cities()`, which validates it on load.
@@ -8,14 +8,14 @@
 # D2 of docs/proposal.md, and each property does specific work:
 #
 #   15 cities, 10 northern / 5 southern   hemisphere-aware season mapping
-#   Köppen Af → Dfb                       every major climate regime
-#   64.15°N (Reykjavik) → 36.85°S (Auckland)
-#   10 m (Lagos) → 1753 m (Johannesburg)  elevation as a real covariate
+#   Köppen Af -> Dfb                       every major climate regime
+#   64.15°N (Reykjavik) -> 36.85°S (Auckland)
+#   10 m (Lagos) -> 1753 m (Johannesburg)  elevation as a real covariate
 #
 # Seven cities carry a `validation_event`. These are the Day 8 gate: if a dated
 # event does not surface as a |Z| > 2.5 anomaly, the climatology is wrong and
 # everything downstream is built on sand (§7.2). This file is therefore a test
-# fixture as well as a config file — treat a change to an event date as a
+# fixture as well as a config file, so treat a change to an event date as a
 # change to a test.
 #
 # Coordinates are city-centre reference points. Open-Meteo resolves them to the
@@ -28,7 +28,7 @@ version: 1
 cities:
 
   # ---------------------------------------------------------------------------
-  # Northern hemisphere — 10
+  # Northern hemisphere: 10
   # ---------------------------------------------------------------------------
 
   - id: singapore
@@ -90,7 +90,7 @@ cities:
     koppen: BWh
     season_model: four_season
     role: >-
-      Hot desert with a wide diurnal range and near-zero precipitation — the
+      Hot desert with a wide diurnal range and near-zero precipitation, the
       arid counterpart to Singapore's humidity.
 
   - id: phoenix
@@ -144,7 +144,7 @@ cities:
       direction: hot
       description: >-
         2021 Pacific Northwest heat dome, third and hottest day. Portland
-        reached 46.7 °C, beating its previous all-time record by 5 °C — an
+        reached 46.7 °C, beating its previous all-time record by 5 °C, an
         anomaly so far outside the historical distribution that it is the
         single strongest test of the baseline in this file.
       observed_c: 46.7
@@ -208,7 +208,7 @@ cities:
       an offset for part of the year.
 
   # ---------------------------------------------------------------------------
-  # Southern hemisphere — 5
+  # Southern hemisphere: 5
   # ---------------------------------------------------------------------------
 
   - id: sao_paulo
@@ -228,7 +228,7 @@ cities:
       description: >-
         2021 Brazilian cold wave and frost. An Antarctic air mass pushed frost
         far north of its usual limit, devastating the coffee crop. The only
-        negative anomaly among the seven — it proves the Z-score detects cold
+        negative anomaly among the seven, and it proves the Z-score detects cold
         departures, not just heat.
       observed_c: 6.5
 
@@ -245,7 +245,7 @@ cities:
     season_model: four_season
     role: >-
       Highest elevation in the set at 1753 m, which suppresses absolute
-      temperature independently of latitude — the reason elevation is carried
+      temperature independently of latitude, which is the reason elevation is carried
       as a feature rather than treated as metadata.
 
   - id: sydney
@@ -266,8 +266,8 @@ cities:
       date: 2020-01-04
       direction: hot
       description: >-
-        Peak of the 2019–20 Australian bushfire season heat. Penrith, in
-        western Sydney, reached 48.9 °C — the hottest place on Earth that day
+        Peak of the 2019-20 Australian bushfire season heat. Penrith, in
+        western Sydney, reached 48.9 °C, the hottest place on Earth that day
         and the highest temperature recorded in the Sydney basin.
       observed_c: 48.9
 
@@ -304,5 +304,5 @@ cities:
     season_model: four_season
     role: >-
       Southernmost city in the set. Timezone trap: southern-calendar DST, and
-      a UTC+12/+13 offset that puts its local day ahead of UTC — the case most
+      a UTC+12/+13 offset that puts its local day ahead of UTC, the case most
       likely to expose an off-by-one-day join.

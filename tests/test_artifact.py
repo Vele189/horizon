@@ -5,17 +5,17 @@ matrix whose columns are in the wrong order and return a confident probability
 for every row, so the tests here are mostly about the ways a loaded model can
 be wrong while looking right:
 
-* the **feature order** — selected by name rather than trusted, and a bare
+* the **feature order**, selected by name rather than trusted, and a bare
   array refused outright because its order cannot be checked against anything;
-* the **tree range** — early stopping leaves 68 trees in a booster that scores
+* the **tree range**, since early stopping leaves 68 trees in a booster that scores
   on 18, and a pickle that loses that range is a different model under the same
   name;
-* the **file itself** — verified against the SHA-256 in the sidecar, so an
+* the **file itself**, verified against the SHA-256 in the sidecar, so an
   artefact that changed after the metrics were written cannot be loaded under
   them.
 
-The size gate is here too. Committing the model is deliberate — Streamlit
-Community Cloud cannot reach the warehouse to retrain — and git cannot express
+The size gate is here too. Committing the model is deliberate, since Streamlit
+Community Cloud cannot reach the warehouse to retrain, and git cannot express
 "only while it is small", so a test does.
 """
 
@@ -300,7 +300,7 @@ def test_a_lost_tree_range_is_caught(saved) -> None:
     """Early stopping keeps trees the model does not use.
 
     A booster that has lost the range excluding them scores with all of them
-    and is a different model under the same filename — the same failure that
+    and is a different model under the same filename, the same failure that
     made the first SHAP values explain a model nobody runs.
     """
     import joblib
@@ -381,7 +381,7 @@ def test_every_tracked_model_is_small_enough_to_belong_in_git() -> None:
     Committing the model is deliberate: Streamlit Community Cloud cannot reach
     the warehouse it is trained from, so an artefact outside the repository
     means the deployed dashboard has no model. Past the threshold that trade
-    stops paying — git history is forever and a binary does not diff — and the
+    stops paying, because git history is forever and a binary does not diff, and the
     file belongs in a release asset instead.
     """
     oversized = [

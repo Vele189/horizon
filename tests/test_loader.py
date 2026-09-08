@@ -119,7 +119,7 @@ def test_nothing_is_coerced_to_float() -> None:
 
     weather_code is the one that shows it: the API sends WMO codes as integers
     and the column is smallint, so a silent widening to 51.0 would be rejected
-    by COPY — or worse, accepted somewhere it should not be.
+    by COPY, or worse, accepted somewhere it should not be.
     """
     payload = daily_payload(DAYS, START)
     payload["daily"]["weather_code"] = [51, 3, 61]
@@ -197,7 +197,7 @@ def test_a_value_copy_cannot_cast_names_itself(conn) -> None:
 
     A float where the schema declares smallint means the API changed how it
     represents an integer. Landing 98.0 as 98 would hide that, and the payload
-    is already archived — so nothing is lost by refusing, only delayed.
+    is already archived, so nothing is lost by refusing, only delayed.
     """
     payload = daily_payload(DAYS, START)
     payload["daily"]["weather_code"] = [51.5, 3.5, 61.5]

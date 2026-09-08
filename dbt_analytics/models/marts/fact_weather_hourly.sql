@@ -12,7 +12,7 @@
 -- nothing else.
 --
 -- Thirty years at this grain would be over four million rows for no analytical
--- benefit — the storm view reads a rolling window, and the climatology is
+-- benefit: the storm view reads a rolling window, and the climatology is
 -- built from the daily grain. It would also be the single largest object the
 -- pipeline produces, which matters because gold is the only layer promoted to
 -- Neon's 0.5 GB allowance.
@@ -62,7 +62,7 @@ with_tendency as (
         --
         -- The frame is RANGE over an interval, not `lag(n)`. `lag(pressure, 3)`
         -- counts *rows*, so a single missing hour makes it reach four hours
-        -- back and report the result as a three-hour change — a fabricated
+        -- back and report the result as a three-hour change: a fabricated
         -- storm signal, from data that merely had a hole. RANGE asks for the
         -- reading exactly three hours earlier and returns null when there
         -- isn't one, which is the honest answer. Silver has no gaps today;

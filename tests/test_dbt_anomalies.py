@@ -1,7 +1,7 @@
 """Tests for the Z-score anomaly flags.
 
 Both tails matter. `z > 2.5` reads naturally, passes review, and silently
-discards every cold extreme — Phoenix would lose 125 of its 145 flagged days,
+discards every cold extreme. Phoenix would lose 125 of its 145 flagged days,
 and a warm-only project would report the coldest city in the set as one of the
 calmest. The flag is on `abs(z)`, and the direction is asserted against the
 sign so an inverted branch cannot flag the right days and label them backwards.
@@ -147,7 +147,7 @@ def test_the_direction_matches_the_sign(engine, built) -> None:
 
 
 def test_neither_tail_dominates_absurdly(engine, built) -> None:
-    """Individual cities skew — Phoenix cold, Cairo hot — but not the whole set."""
+    """Individual cities skew (Phoenix cold, Cairo hot) but not the whole set."""
     hot, cold = query(
         engine,
         f"""select count(*) filter (where anomaly_direction = 'hot'),
@@ -236,7 +236,7 @@ def test_a_high_rate_is_explained_by_a_small_baseline(engine, built) -> None:
     Only four years have backfilled, so leave-one-out leaves three, and a sigma
     from 45 points is noisy enough to push the tail. That is a sample-size
     artefact rather than a data defect, and it resolves as the backfill
-    completes — so it is asserted as an explanation rather than tolerated as an
+    completes, so it is asserted as an explanation rather than tolerated as an
     exception.
     """
     outliers = query(
@@ -293,7 +293,7 @@ def test_a_skewed_city_skews_the_direction_it_should(engine, full_record) -> Non
 def test_a_warming_trend_runs_through_the_record(engine, full_record) -> None:
     """Positive corr(year, Z) everywhere, +0.05 to +0.38.
 
-    Real signal, not artefact — but it means the flag conflates "unusual for
+    Real signal, not artefact, but it means the flag conflates "unusual for
     this day of year" with "warmer than the thirty-year mean because the
     climate has warmed". ML-05 will need to make that distinction deliberately,
     so it is recorded here rather than discovered there.
@@ -320,7 +320,7 @@ def test_moscow_has_cold_anomalies(engine, built) -> None:
     """Skips rather than passes while Moscow is still backfilling.
 
     A check that silently passes on absent data is worse than one that says it
-    is waiting — and this is the specific check the ticket names, so a false
+    is waiting, and this is the specific check the ticket names, so a false
     green here would be the worst kind.
     """
     landed = query(

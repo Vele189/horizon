@@ -7,7 +7,7 @@
 -- the end so a spine rebuilt less often than the data still covers it.
 --
 -- Seasons are NOT here as a single column, because a season is not a property
--- of a date — December is summer in Sydney and winter in London. Both
+-- of a date: December is summer in Sydney and winter in London. Both
 -- four-season answers are carried side by side, and dim_city_season resolves
 -- the right one per city including the two tropical regimes.
 {#
@@ -50,7 +50,7 @@ attributes as (
         -- `day_of_year` is 1..366, so 1 March is day 60 in a common year and
         -- day 61 in a leap year. Grouping a thirty-year climatology by
         -- day_of_year therefore mixes 1 March with 29 February and shifts
-        -- every day after February by one in three years out of four — a
+        -- every day after February by one in three years out of four: a
         -- systematic error that looks like a seasonal signal.
         --
         -- month_day is the join key that does not have that problem: it is
@@ -66,7 +66,7 @@ attributes as (
         -- The climatology axis: day-of-year as it would be in a leap year, so
         -- every month_day has exactly one number and 29 February gets its own
         -- (60) rather than sharing. This is what a circular +/-7 day window is
-        -- measured on — raw day_of_year cannot serve, because 31 December is
+        -- measured on. Raw day_of_year cannot serve, because 31 December is
         -- 365 in a common year and 366 in a leap one, so a window around it
         -- would draw on different days depending on the year.
         {{ climatology_day_of('date_day') }} as climatology_day,

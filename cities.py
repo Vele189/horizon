@@ -1,7 +1,7 @@
 """Typed loader for `config/cities.yml`.
 
 `config/cities.yml` is the single source of truth for the fifteen target
-cities. Nothing downstream may hardcode a city name, coordinate, or timezone —
+cities. Nothing downstream may hardcode a city name, coordinate, or timezone:
 ingestion, dbt seeds, feature construction, and the dashboard all read through
 here.
 
@@ -153,7 +153,7 @@ class City:
         # data rather than an error.
         if self.lat == 0.0 and self.lon == 0.0:
             raise CityConfigError(
-                f"{self.id}: coordinates are (0, 0) — almost certainly a "
+                f"{self.id}: coordinates are (0, 0), almost certainly a "
                 "missing value rather than a real location."
             )
 
@@ -193,7 +193,7 @@ class City:
 
     @property
     def hemisphere(self) -> Literal["north", "south"]:
-        """Derived, never configured — the coordinate is the only truth."""
+        """Derived, never configured; the coordinate is the only truth."""
         return "north" if self.lat >= 0 else "south"
 
     @property
@@ -256,7 +256,7 @@ def _build_city(raw: Any, index: int) -> City:
         )
 
     # A field with no default is required; `role` and `validation_event`
-    # default to None and are optional. Note MISSING, not None — a field
+    # default to None and are optional. Note MISSING, not None: a field
     # without a default has `default is MISSING`, and testing against None
     # here would silently require nothing at all.
     required = {
@@ -385,7 +385,7 @@ if __name__ == "__main__":
     north, south = registry.northern(), registry.southern()
     events = registry.with_validation_events()
 
-    print(f"{len(registry)} cities — {len(north)} north / {len(south)} south\n")
+    print(f"{len(registry)} cities: {len(north)} north / {len(south)} south\n")
     header = f"  {'id':14} {'lat':>8} {'lon':>9} {'elev':>6}  {'koppen':6} {'timezone':28} event"
     print(header)
     print("  " + "-" * (len(header) - 2))
@@ -400,12 +400,12 @@ if __name__ == "__main__":
     elevs = [c.elevation_m for c in registry]
     print(
         f"\n  latitude   {max(lats):.2f}°N ({max(registry, key=lambda c: c.lat).id})"
-        f" → {abs(min(lats)):.2f}°S ({min(registry, key=lambda c: c.lat).id})"
+        f" -> {abs(min(lats)):.2f}°S ({min(registry, key=lambda c: c.lat).id})"
     )
     print(
         f"  elevation  {min(elevs):.0f} m ({min(registry, key=lambda c: c.elevation_m).id})"
-        f" → {max(elevs):.0f} m ({max(registry, key=lambda c: c.elevation_m).id})"
+        f" -> {max(elevs):.0f} m ({max(registry, key=lambda c: c.elevation_m).id})"
     )
     print(f"  koppen     {sorted({c.koppen for c in registry})}")
     print(f"  seasons    {sorted({c.season_model for c in registry})}")
-    print(f"  events     {len(events)} — {', '.join(c.id for c in events)}")
+    print(f"  events     {len(events)}: {', '.join(c.id for c in events)}")

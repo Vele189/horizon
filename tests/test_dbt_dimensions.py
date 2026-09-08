@@ -138,7 +138,7 @@ def test_hemisphere_matches_the_sign_of_the_latitude(dimension) -> None:
 def test_both_derivations_agree(engine, dimension) -> None:
     """Python computes it from lat >= 0 and seeds it; SQL recomputes it.
 
-    Neither is authoritative, which is the point — a disagreement means one has
+    Neither is authoritative, which is the point: a disagreement means one has
     drifted, and a silent drift inverts summer and winter for the five southern
     cities in every season mapping downstream.
     """

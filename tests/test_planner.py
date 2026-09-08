@@ -1,7 +1,7 @@
 """Tests for the backfill planner.
 
-Entirely offline. The planner's whole job is arithmetic and bookkeeping — what
-to request, in what order, and what has already landed — so there is nothing
+Entirely offline. The planner's whole job is arithmetic and bookkeeping: what
+to request, in what order, and what has already landed. So there is nothing
 here that needs the network. The one thing worth stating as a test rather than
 a comment is Open-Meteo's billing model, because every default in the module
 is derived from it.
@@ -124,7 +124,7 @@ def test_the_observed_429_is_consistent_with_the_formula() -> None:
     """Measured 2026-09-07: 1, 2, 5 and 10-year requests, then a refusal.
 
     Four HTTP requests is nowhere near 600/min, but their weighted cost crosses
-    600 on the fourth — which is where the fifth was refused.
+    600 on the fourth, which is where the fifth was refused.
     """
     weights = [
         api_call_weight(days=365 * years, variables=len(DAILY_VARIABLES))
@@ -592,7 +592,7 @@ def test_the_hourly_window_is_anchored_not_relative_to_today(
     )
     assert built.units[0].start == dt.date(2024, 9, 2)
     assert built.units[-1].end == anchor
-    # Same anchor, same plan — whatever the clock says.
+    # Same anchor, same plan, whatever the clock says.
     again = plan_backfill(
         grains=("hourly",), cities=[load_cities()[CITY]], end=anchor,
         manifest=manifest, settings=settings,

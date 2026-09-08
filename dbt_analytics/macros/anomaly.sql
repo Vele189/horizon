@@ -13,7 +13,7 @@
         it to `none` would quietly assert something the data cannot support,
         and would count those days in the denominator of every anomaly rate.
     *   **Division by sigma.** Guarded by nullif, though DBT-09 asserts sigma is
-        never zero — the guard is for the day that assertion is relaxed rather
+        never zero. The guard is for the day that assertion is relaxed rather
         than for today.
 #}
 

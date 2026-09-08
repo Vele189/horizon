@@ -35,7 +35,7 @@ def _forbid_accidental_network(request, monkeypatch):
     The retry tests are the ones most worth trusting and the hardest to trust:
     a 503-then-success path that quietly reached the real API would pass for
     the wrong reason, and would pass differently on a bad day. Rather than
-    assert that no test calls out, this makes the call fail — so the guarantee
+    assert that no test calls out, this makes the call fail, so the guarantee
     is enforced rather than reviewed.
 
     Only :class:`requests.adapters.HTTPAdapter` is blocked. The scripted

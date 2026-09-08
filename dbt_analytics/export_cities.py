@@ -1,7 +1,7 @@
 """Writes `seeds/cities.csv` from `config/cities.yml`.
 
-dbt needs the city metadata in the warehouse — above all each city's IANA
-timezone, so a local-time view is possible without re-deriving it — and
+dbt needs the city metadata in the warehouse, above all each city's IANA
+timezone, so a local-time view is possible without re-deriving it, and
 `cities.yml` is the single source of that. Rather than maintain a second copy
 by hand, this generates the seed and a test asserts the two agree.
 
@@ -24,8 +24,8 @@ from cities import load_cities  # noqa: E402
 SEED = Path(__file__).resolve().parent / "seeds" / "cities.csv"
 
 #: Ordered deliberately: identity, geography, then classification. `hemisphere`
-#: is derived from the latitude rather than configured — the coordinate is the
-#: only truth — but it is materialised here because a season mapping needs it
+#: is derived from the latitude rather than configured, since the coordinate is
+#: the only truth, but it is materialised here because a season mapping needs it
 #: and re-deriving `lat >= 0` in every model invites one of them to get it
 #: backwards.
 FIELDS = (

@@ -8,7 +8,7 @@ There is nothing to configure first if ``.env`` already has
 ``SERVING_DATABASE_URL``; see :mod:`dashboard.database` for the full order in
 which a connection string is looked for.
 
-This file arranges. It holds no SQL, no colours, and no analysis — those belong
+This file arranges. It holds no SQL, no colours, and no analysis. Those belong
 to :mod:`dashboard.database`, :mod:`dashboard.theme` and the view modules
 respectively, and keeping them out is what lets a view be rewritten in BI-03
 without touching navigation.
@@ -18,7 +18,7 @@ read by people who cannot fix it and will not read a traceback, and the three
 ways this one can fail are all ordinary rather than exceptional: the app may be
 deployed before its secret is set, Neon may be asleep, and it may be deployed
 before the marts have been promoted into it. Each gets a panel that says what
-happened, what it means, and what to do — and, for the second, a button to try
+happened, what it means, and what to do, plus for the second a button to try
 again, because "the database was waking up" is a condition that resolves on its
 own.
 
@@ -114,7 +114,7 @@ def _sidebar_controls() -> None:
     """The escape hatch the six-hour cache needs.
 
     A promotion is otherwise invisible for up to six hours. This is cheaper
-    than a shorter TTL — it costs a wake-up only when someone asks for one,
+    than a shorter TTL: it costs a wake-up only when someone asks for one,
     where a shorter TTL costs one on a timer whether anyone is looking or not.
     """
     st.sidebar.divider()
@@ -136,7 +136,7 @@ def _render_config_error(exc: DashboardConfigError) -> None:
     st.markdown(str(exc))
     st.caption(
         "No connection string is stored in this repository, and none ever has "
-        "been — which is why one has to be supplied."
+        "been, which is why one has to be supplied."
     )
 
 
@@ -165,13 +165,13 @@ def _render_query_failure(exc: SQLAlchemyError, source: Source) -> None:
 
     Nearly always one thing: the app is pointed at a database the gold marts
     have not been promoted into yet. That is a deployment step, not a fault a
-    visitor can wait out, so there is no retry button here — a message and the
+    visitor can wait out, so there is no retry button here. A message and the
     host it is talking to is all that can honestly be offered.
     """
     st.error("The warehouse answered, but the query did not.", icon=":material/database_off:")
     st.markdown(
         "This usually means the gold marts have not been promoted into this "
-        "database yet — `python serving/promote.py` is what puts them there."
+        "database yet. `python serving/promote.py` is what puts them there."
     )
     with st.expander("Details"):
         st.caption(f"Reading `{source.host}`, configured by **{source.origin}**.")

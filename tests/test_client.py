@@ -2,8 +2,8 @@
 
 Everything except the final section runs offline. The transport is a scripted
 ``requests`` adapter mounted on a real :class:`requests.Session`, so the whole
-stack the client actually uses — parameter encoding, the timeout tuple, header
-handling — is exercised rather than mocked away.
+stack the client actually uses (parameter encoding, the timeout tuple, header
+handling) is exercised rather than mocked away.
 
 ``tenacity``'s sleep is replaced with a recorder. That makes the retry tests
 instant and, more usefully, turns the backoff itself into something assertable:
@@ -305,7 +305,7 @@ def test_a_timeout_retries_then_raises_once_the_cap_is_reached(
     """Both halves in one test: it does retry, and it does eventually give up.
 
     After the cap the caller sees the transport failure itself, not tenacity's
-    RetryError wrapper — so a backfill can tell a dead socket from a rate limit
+    RetryError wrapper, so a backfill can tell a dead socket from a rate limit
     and decide whether resuming is worth anything.
     """
     session, adapter = session_for(
@@ -560,7 +560,7 @@ def test_a_long_body_is_truncated_in_the_message(settings) -> None:
         fetch([responds(400, text="x" * 5000)], settings)
     body = excinfo.value.body
     assert body.count("x") == 500
-    assert body.endswith("…")
+    assert body.endswith("...")
     assert body in str(excinfo.value)
 
 
@@ -779,12 +779,12 @@ def test_every_observation_column_is_requested(table, variables) -> None:
 
 @pytest.fixture(scope="module")
 def live_settings() -> Settings:
-    """One attempt only — an offline test run should skip, not back off."""
+    """One attempt only; an offline test run should skip, not back off."""
     return dataclasses.replace(get_settings(), max_retry_attempts=1)
 
 
 #: Reasons the API is unavailable that say nothing about this code. A spent
-#: quota is as much an "unreachable" as a dead socket — the backfill routinely
+#: quota is as much an "unreachable" as a dead socket: the backfill routinely
 #: exhausts the hourly allowance, and a test run afterwards must skip, not fail.
 UNAVAILABLE = (ArchiveTransportError, ArchiveRateLimited)
 

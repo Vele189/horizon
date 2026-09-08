@@ -21,7 +21,7 @@
 -- already seen its own answer. The metrics come out flattering and the model
 -- is worse than they say.
 --
--- With ~30 reference years the leakage is roughly 1/30 of the signal — small
+-- With ~30 reference years the leakage is roughly 1/30 of the signal: small
 -- enough to be invisible in a spot check and large enough to matter in a
 -- ranking. It is left as `climatology_exclude_own_year`, defaulting to true,
 -- so the leaky variant can be built deliberately for comparison rather than
@@ -148,7 +148,7 @@ select
 
     -- How much the exclusion actually removed. Zero is legitimate and common
     -- at the edges of the record: a year that contributed nothing to this
-    -- day's window has nothing to exclude — 2026 reaches only to the archive
+    -- day's window has nothing to exclude. 2026 reaches only to the archive
     -- edge, so it is absent from every window centred after early September.
     -- Carried so that "the exclusion did nothing here" is distinguishable from
     -- "the exclusion is broken", which is otherwise the same number.

@@ -9,7 +9,7 @@ thirty-year climatology is quietly computed over twenty-eight.
 Every gap is placed in exactly one category:
 
 ``archive boundary``
-    Outside what the source can serve — before ERA5 begins, or after the edge
+    Outside what the source can serve: before ERA5 begins, or after the edge
     the archive currently reaches. Nothing can fill it.
 ``not ingested``
     Inside the servable range, and no completed unit in the manifest covers
@@ -17,9 +17,9 @@ Every gap is placed in exactly one category:
     in progress; a defect once it reports complete.
 ``api limitation``
     A unit the manifest records as complete, whose recorded row count is short
-    of the window it covers. Structurally prevented — the client asserts the
-    row count against the requested range before parsing and the loader
-    asserts it again — so a non-empty result here means one of those assertions
+    of the window it covers. Structurally prevented, since the client asserts
+    the row count against the requested range before parsing and the loader
+    asserts it again, so a non-empty result here means one of those assertions
     has been weakened.
 ``unexplained``
     Inside the servable range, covered by a completed unit, and missing
@@ -152,7 +152,7 @@ class CityReconciliation:
 
         A surplus, not coverage: real observations this range did not ask for.
         Named rather than absorbed, because a row count above expectations is
-        as much a discrepancy as one below — and it is a different one from a
+        as much a discrepancy as one below, and it is a different one from a
         duplicate, which is why both are counted separately.
         """
         return max(0, self.distinct_all - self.distinct)
@@ -266,7 +266,7 @@ def _categorise(
             )
     inside_pieces = _subtract(inside, short_units)
 
-    # 3. Inside, never fetched — the backfill has not reached it.
+    # 3. Inside, never fetched: the backfill has not reached it.
     for piece in inside_pieces:
         for uncovered in _subtract(piece, covered):
             gaps.append(
@@ -489,7 +489,7 @@ def to_markdown(report: Report, accepted: dict[str, str] | None = None) -> str:
     lines: list[str] = []
     add = lines.append
 
-    add(f"# Ingestion reconciliation — `{report.grain}`")
+    add(f"# Ingestion reconciliation: `{report.grain}`")
     add("")
     add(
         f"Generated {report.generated_at.strftime('%Y-%m-%d %H:%M UTC')} "
@@ -519,14 +519,14 @@ def to_markdown(report: Report, accepted: dict[str, str] | None = None) -> str:
         "distinct observation times inside the range, which is what `delta` "
         "compares against `expected`. The two diverge for two separate "
         "reasons, reported separately below: the same observation landed twice "
-        "— legal, since bronze is append-only and silver deduplicates — or the "
+        "(legal, since bronze is append-only and silver deduplicates), or the "
         "row falls outside the range this report asked about."
     )
     add("")
 
     surplus = [c for c in report.cities if c.outside_range]
     if surplus:
-        add("**Rows outside the reconciled range** — a surplus, not a gap:")
+        add("**Rows outside the reconciled range**, a surplus, not a gap:")
         add("")
         add("| city | rows outside |")
         add("|---|---:|")
@@ -534,7 +534,7 @@ def to_markdown(report: Report, accepted: dict[str, str] | None = None) -> str:
             add(f"| `{city.city_id}` | {city.outside_range:,} |")
         add("")
         add(
-            "Real observations the range did not ask about — usually a wider "
+            "Real observations the range did not ask about, usually a wider "
             "window ingested earlier. They do not count towards `delta` and "
             "are not a defect; downstream models filter by range."
         )
@@ -579,7 +579,7 @@ def to_markdown(report: Report, accepted: dict[str, str] | None = None) -> str:
             add("")
             continue
 
-        add(f"### {category} — {len(found)} gap(s)")
+        add(f"### {category}: {len(found)} gap(s)")
         add("")
         if category in accepted:
             add(accepted[category])
@@ -589,7 +589,7 @@ def to_markdown(report: Report, accepted: dict[str, str] | None = None) -> str:
         for gap in sorted(found, key=lambda g: (g.city_id, g.start))[:200]:
             add(f"| `{gap.city_id}` | {gap.start} | {gap.end} | {gap.days:,} |")
         if len(found) > 200:
-            add(f"| … | | | {len(found) - 200} more |")
+            add(f"| ... | | | {len(found) - 200} more |")
         add("")
 
     add("## Verdict")
@@ -605,7 +605,7 @@ def to_markdown(report: Report, accepted: dict[str, str] | None = None) -> str:
         add(
             "**No gap is unexplained.** Every one is either outside what the "
             "archive can serve, or inside a range the backfill has not reached "
-            "yet — and the latter shrinks to nothing as the backfill "
+            "yet, and the latter shrinks to nothing as the backfill "
             "completes."
         )
     add("")
@@ -627,7 +627,7 @@ ACCEPTED: Final[dict[str, str]] = {
         "Accepted while the backfill is in progress. The daily grain costs "
         "~26 000 weighted API calls against a free-tier allowance of 10 000 a "
         "day, so it completes across roughly three days. Every range here is "
-        "pending, not lost — the manifest resumes rather than restarts."
+        "pending, not lost; the manifest resumes rather than restarts."
     ),
     API_LIMITATION: (
         "Structurally prevented rather than merely absent: the client asserts "

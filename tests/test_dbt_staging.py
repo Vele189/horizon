@@ -8,7 +8,7 @@ Worth stating plainly, because it is the reason two of the dbt tests exist:
 uniqueness proves *one* row survives per key and says nothing about *which*.
 Reversing the sort order to `ingested_at asc` leaves every uniqueness test
 green and silently serves the oldest copy of every observation. Verified by
-mutation — with the order flipped, `unique_combination_of_columns`,
+mutation: with the order flipped, `unique_combination_of_columns`,
 `unique_id` and `assert_staging_loses_no_observation` all pass, and only
 `assert_daily_keeps_the_newest_ingest` fails, on 731 rows.
 """
@@ -291,7 +291,7 @@ def test_wind_is_bounded_in_metres_per_second(staging_yml, model, column) -> Non
     """Stored km/h, bounded 0-120 m/s through the macro rather than restated."""
     declared = ranges_for(staging_yml, model)[column]
     assert (declared["min_value"], declared["max_value"]) == (0, 120)
-    # The macro call, not rendered arithmetic — which is the checklist's
+    # The macro call, not rendered arithmetic, which is the checklist's
     # requirement that conversions are macros rather than inline SQL.
     assert declared["expression"] == "{{ kmh_to_ms('" + column + "') }}"
     assert "/ 3.6" not in declared["expression"]
@@ -300,7 +300,7 @@ def test_wind_is_bounded_in_metres_per_second(staging_yml, model, column) -> Non
 def test_a_naive_kmh_bound_would_pass_today_and_break_later(engine) -> None:
     """Why the conversion is there, stated as a fact about the data.
 
-    The largest gust on record here is 119.9 km/h — 0.1 under a bound of 120
+    The largest gust on record here is 119.9 km/h, 0.1 under a bound of 120
     read as km/h. That bound looks correct until an ordinary winter storm, and
     then fails on data that is fine. The conversion protects against a false
     alarm, not a missed one, which is the opposite of the usual reason.

@@ -1,16 +1,16 @@
-"""Tests for the gold → Neon promotion.
+"""Tests for the gold -> Neon promotion.
 
 Two kinds, and the split is deliberate. The first kind never touches a
 database: what DDL is rendered, what counts as drift, what reconciles, what a
 run costs. Those are the decisions, and they should be checkable in
 milliseconds by someone who has neither warehouse.
 
-The second kind promotes for real — from the local gold marts into a scratch
+The second kind promotes for real, from the local gold marts into a scratch
 database on the *same local server*. That exercises the whole path (introspect,
 create, COPY, index, comment, reconcile, re-run) against real marts with real
 types, without spending a single second of Neon's free compute allowance. The
 one thing it cannot cover is Neon itself, and the run against Neon is recorded
-in the README rather than asserted here, because a test that bills a quota is a
+in the build log rather than asserted here, because a test that bills a quota is a
 test nobody runs.
 """
 
@@ -93,7 +93,7 @@ def _executable_strings(source: str) -> list[str]:
 
     Docstrings are skipped and comments never reach the tree, so what is left
     is the strings that can become SQL, identifiers, or error messages. That is
-    the set the boundary has to hold over — a schema named in a paragraph
+    the set the boundary has to hold over. A schema named in a paragraph
     explaining why it stays local is the documentation working, not a leak.
     """
     tree = ast.parse(source)
@@ -386,7 +386,7 @@ def scratch_target(local_url: str):
     reproduce a schema and move rows between two Postgres connections, and that
     is fully exercised by two databases. What a second *host* would add is
     latency and a Neon major version, and the Neon run is measured rather than
-    asserted — see this module's docstring.
+    asserted; see this module's docstring.
     """
     parts = split_database_url(local_url)
     name = f"horizon_promote_{uuid.uuid4().hex[:8]}"
@@ -435,7 +435,7 @@ def test_plan_refuses_a_typo_rather_than_promoting_less(local_conn):
 def test_the_predictions_table_keeps_its_semantics_in_the_rendered_ddl(local_conn):
     """The check constraints are the grain, so they have to survive the copy.
 
-    ``fact_ml_predictions`` encodes its whole contract in constraints — the
+    ``fact_ml_predictions`` encodes its whole contract in constraints: the
     horizon starts the day after the forecast date, the label is the score
     against the threshold. A serving copy without them would accept a row the
     local table would reject, which is the one difference between the two
@@ -588,7 +588,7 @@ def test_drift_stops_a_promotion_instead_of_reshaping_the_target(
 ):
     """A mart that gained a column must not be promoted by accident.
 
-    The target is deliberately damaged — a column dropped on the serving side —
+    The target is deliberately damaged, a column dropped on the serving side,
     and the promotion must refuse. Reshaping a serving database is a thing to
     do on purpose, with ``--recreate``, not a side effect of a routine run.
     """

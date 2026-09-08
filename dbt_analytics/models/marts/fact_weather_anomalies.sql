@@ -22,7 +22,7 @@
 -- in the set.
 --
 -- **A null Z is not a quiet day.** Where the leave-one-year-out baseline has
--- no observations left — a city with a single reference year — sigma is null,
+-- no observations left (a city with a single reference year) sigma is null,
 -- Z is null, and so are the flags. "Unknown" is the honest answer; coercing to
 -- `none` would assert the day was ordinary on no evidence, and would put those
 -- days in the denominator of every anomaly rate.
@@ -86,7 +86,7 @@ select
     excludes_own_year,
 
     -- Departure in degrees as well as in sigmas. The Z-score answers "how
-    -- unusual"; this answers "how much", and a dashboard needs both — 2.6
+    -- unusual"; this answers "how much", and a dashboard needs both: 2.6
     -- sigma is a headline in Singapore at 1.8 °C and in Moscow at 20 °C.
     (temperature_2m_mean - mean_temperature_2m_mean) as departure_c,
 

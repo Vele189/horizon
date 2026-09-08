@@ -5,7 +5,7 @@ test rather than a comment:
 
 *   **Schema routing.** dbt's default ``generate_schema_name`` builds
     ``<target.schema>_<custom>``, so a mart configured into ``gold_marts``
-    would land in ``public_gold_marts`` — beside the empty ``gold_marts`` that
+    would land in ``public_gold_marts``, beside the empty ``gold_marts`` that
     ``ingestion/schema.sql`` created, with nothing to say which is real.
 *   **Credentials in the profile.** A literal host or password in
     ``profiles.yml.example`` would be committed. Every field must be an

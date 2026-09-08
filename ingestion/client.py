@@ -1,6 +1,6 @@
 """HTTP client for the Open-Meteo historical archive (ERA5).
 
-One public function — :func:`fetch_observations` — takes a city, a date range,
+One public function, :func:`fetch_observations`, takes a city, a date range,
 and a grain, and returns one validated :class:`ArchiveResponse`. Chunking a
 30-year backfill into requests is ING-02's job; landing rows is ING-04's. This
 module owns exactly one thing: getting a single request to succeed, or failing
@@ -8,13 +8,13 @@ in a way that says why.
 
 Why this file is more defensive than a wrapper around ``requests.get``:
 
-*   **The backfill is long.** Fifteen cities × thirty years of daily data plus
+*   **The backfill is long.** Fifteen cities x thirty years of daily data plus
     twenty-four months of hourly is hundreds of requests running for hours. At
     that length, a transient 502 is not a possibility but a certainty, and a
     run that dies at hour three with no diagnosis costs a day.
 *   **Silence is worse than failure.** Open-Meteo's defaults are local time and
     metric units. A request that forgets ``timezone=UTC`` still returns 200 and
-    still looks like weather — it just has the day boundaries shifted, which
+    still looks like weather; it just has the day boundaries shifted, which
     would poison a 30-year climatological baseline in a way no downstream test
     would obviously catch. So every unit and the timezone are asked for
     explicitly *and* verified on the way back.
@@ -22,7 +22,7 @@ Why this file is more defensive than a wrapper around ``requests.get``:
     told to. A connection that opens and then stops sending would block the
     run forever, with no traceback to show for it.
 
-Error model — one family, so ING-02 catches :class:`ArchiveError` and nothing
+Error model: one family, so ING-02 catches :class:`ArchiveError` and nothing
 else::
 
     ArchiveError
@@ -30,7 +30,7 @@ else::
     │   ├── ArchiveTransportError connection refused, timeout, truncated body
     │   ├── ArchiveServerError    5xx
     │   └── ArchiveRateLimited    429, carries Retry-After
-    ├── ArchiveRequestError       4xx — a bug in the request, never retried
+    ├── ArchiveRequestError       4xx, a bug in the request, never retried
     └── ArchiveResponseError      200, but not the data we asked for
 
 Usage::
@@ -122,7 +122,7 @@ DAILY_UNITS: Final[Mapping[str, str]] = MappingProxyType(
         "apparent_temperature_mean": "°C",
         "precipitation_sum": "mm",
         "rain_sum": "mm",
-        "snowfall_sum": "cm",  # centimetres, not millimetres — the one trap here
+        "snowfall_sum": "cm",  # centimetres, not millimetres, the one trap here
         "precipitation_hours": "h",
         "wind_speed_10m_max": "km/h",
         "wind_speed_10m_mean": "km/h",
@@ -175,7 +175,7 @@ _UNIT_PARAMS: Final[Mapping[str, str]] = MappingProxyType(
         "wind_speed_unit": "kmh",
         "precipitation_unit": "mm",
         "timeformat": "iso8601",
-        # Coastal cities — Singapore, Lagos, Sydney, Cape Town — sit next to
+        # Coastal cities (Singapore, Lagos, Sydney, Cape Town) sit next to
         # sea cells whose temperature series is materially different. "land"
         # is the default, but it is the parameter that decides whether Lagos
         # is Lagos or the Bight of Benin.
@@ -201,13 +201,13 @@ MAX_RETRY_AFTER_SECONDS: Final[float] = 300.0
 # on 2026-09-07: Open-Meteo rate-limits on *weighted* API calls rather than
 # HTTP requests, and answers an overrun with a bare 429 whose body reads
 # "Minutely API request limit exceeded. Please try again in one minute." No
-# header, so the ordinary exponential backoff applied — and 2s, 6s, 10s, 16s
+# header, so the ordinary exponential backoff applied, and 2s, 6s, 10s, 16s
 # never spans the minute the server is actually asking for, which burns every
 # attempt for nothing. A rate limit is not a transient blip to feel out
 # gradually; the server has stated its window, so wait it out.
 RATE_LIMIT_FALLBACK_SECONDS: Final[float] = 60.0
 
-# The body also says *which* allowance was spent — minutely, hourly, or daily —
+# The body also says *which* allowance was spent (minutely, hourly, or daily)
 # and that changes what to do about it. A minute is worth waiting out inside
 # the request. An hour is not: the backfill's manifest makes resuming free, so
 # four sixty-second retries only delay the inevitable stop by four minutes and
@@ -261,12 +261,12 @@ class ArchiveRateLimited(ArchiveRetryableError):
     """The API returned 429.
 
     ``retry_after`` is the parsed header in seconds, or ``None`` when the
-    response omitted it or sent something unparseable — in which case the wait
+    response omitted it or sent something unparseable, in which case the wait
     strategy falls back to :data:`RATE_LIMIT_FALLBACK_SECONDS` rather than to
     exponential backoff. Open-Meteo sends no header, so this is the usual path
     rather than the exotic one.
 
-    ``limit_window`` is which allowance the body says was spent — ``minutely``,
+    ``limit_window`` is which allowance the body says was spent: ``minutely``,
     ``hourly``, ``daily``, or ``None`` when it does not say. Only a minutely
     limit is worth waiting out inside the request.
     """
@@ -297,7 +297,7 @@ class ArchiveRequestError(ArchiveError):
     A bad coordinate, an unknown variable, or a date outside the archive will
     fail identically on every attempt, so this is raised on the first one. The
     response body is carried in the message because Open-Meteo's ``reason``
-    field is genuinely diagnostic — it names the offending parameter.
+    field is genuinely diagnostic: it names the offending parameter.
     """
 
     def __init__(self, message: str, *, status_code: int, url: str, body: str) -> None:
@@ -330,11 +330,11 @@ class ArchiveResponse:
     start: dt.date
     end: dt.date
     #: The exact request URL, query string included. One value per response,
-    #: not per row — bronze does not store it, and
+    #: not per row; bronze does not store it, and
     #: :func:`ingestion.archive.source_url_for` rebuilds it for a landed row.
     url: str
     #: The ERA5 grid cell that actually answered, which is not the coordinate
-    #: that was asked for — London's 51.5074/-0.1278 resolves to
+    #: that was asked for: London's 51.5074/-0.1278 resolves to
     #: 51.4938/-0.1630 at 16 m.
     latitude: float
     longitude: float
@@ -354,7 +354,7 @@ class ArchiveResponse:
         return tuple(self.values)
 
     def null_counts(self) -> dict[str, int]:
-        """Nulls per variable — how a partial grid cell announces itself."""
+        """Nulls per variable: how a partial grid cell announces itself."""
         return {
             name: sum(1 for v in series if v is None)
             for name, series in self.values.items()
@@ -367,7 +367,7 @@ class ArchiveResponse:
         ``batch_id`` belong to the run, not the response, and are added by the
         loader. :attr:`url` is deliberately *not* repeated here: it is one value
         for the whole response, it is on this object already, and bronze does
-        not store it — see :func:`ingestion.archive.source_url_for`.
+        not store it; see :func:`ingestion.archive.source_url_for`.
         """
         for index, observation_time in enumerate(self.times):
             row: dict[str, Any] = {
@@ -536,7 +536,7 @@ def _body_excerpt(response: requests.Response) -> str:
         text = response.text or "<empty body>"
     text = " ".join(text.split())
     if len(text) > _BODY_EXCERPT_CHARS:
-        text = text[:_BODY_EXCERPT_CHARS] + "…"
+        text = text[:_BODY_EXCERPT_CHARS] + "..."
     return text
 
 
@@ -571,7 +571,7 @@ def _raise_for_status(response: requests.Response) -> None:
         body = _body_excerpt(response)
         raise ArchiveRequestError(
             f"HTTP {status} from {url}: {body}. This will fail identically on "
-            "every retry — the request itself is wrong.",
+            "every retry; the request itself is wrong.",
             status_code=status,
             url=url,
             body=body,
@@ -617,7 +617,7 @@ def _get(
         payload = response.json()
     except ValueError as exc:
         # A 200 whose body will not decode is a truncated or proxied response,
-        # not a malformed API — worth another attempt.
+        # not a malformed API, so it is worth another attempt.
         raise ArchiveTransportError(
             f"could not decode JSON from {response.url}: {exc}"
         ) from exc
@@ -645,14 +645,14 @@ def _get(
 # ---------------------------------------------------------------------------
 # parse_payload is public because it has two callers, not one: the live path
 # below, and ING-03's replay rebuilding bronze from archived payloads. Sharing
-# it is the point — a parsing bug fixed here is fixed for replay by
+# it is the point: a parsing bug fixed here is fixed for replay by
 # construction, rather than fixed twice and drifting.
 
 
 def _parse_timestamp(raw: str, grain: Grain) -> dt.datetime:
     """Interpret an API timestamp as UTC.
 
-    Open-Meteo returns naive local strings and states the offset separately —
+    Open-Meteo returns naive local strings and states the offset separately,
     which is exactly why the offset is checked to be zero before this runs. The
     result is timezone-aware, matching the timestamptz columns in bronze and
     the midnight-UTC / top-of-hour check constraints on them.
@@ -743,7 +743,7 @@ def parse_payload(
             raise ArchiveResponseError(
                 f"{city_id}: {grain}.{name} came back in {actual_unit!r}, not "
                 f"the {expected_unit!r} this client requests and the bronze "
-                "schema documents. Refusing to land it — the values would be "
+                "schema documents. Refusing to land it: the values would be "
                 "numerically wrong under a correct-looking column name."
             )
 
@@ -886,7 +886,7 @@ def fetch_observations(
 
     Args:
         city: A :class:`~cities.City`, or a city id resolved through
-            ``config/cities.yml``. Coordinates are never passed in directly —
+            ``config/cities.yml``. Coordinates are never passed in directly;
             the registry is the only source of them.
         start: First day of the range, inclusive.
         end: Last day, inclusive. Both are calendar dates in UTC.
@@ -898,7 +898,7 @@ def fetch_observations(
             not cost a re-pull of thirty years, which it would if the payload
             only reached disk after the code that has the bug in it. It runs
             outside the retry loop, so failed attempts are never archived, and
-            an exception from it propagates — a response fetched and then
+            an exception from it propagates, because a response fetched and then
             dropped on the floor is worse than a loud failure.
         session: Reuse one across a backfill. A private session is created and
             closed per call when omitted, which is fine for one-off use and
@@ -909,7 +909,7 @@ def fetch_observations(
         A validated :class:`ArchiveResponse`.
 
     Raises:
-        ValueError: The arguments cannot describe a valid request — checked
+        ValueError: The arguments cannot describe a valid request, checked
             before any network call, because a round trip to learn that
             ``end`` precedes ``start`` is a wasted one.
         ArchiveRequestError: The API rejected the request with a 4xx. Raised on
@@ -994,7 +994,7 @@ def _main(argv: list[str] | None = None) -> int:
         return 1
 
     expected = _expected_count(start, end, args.grain)
-    print(f"{city.name}, {city.country} — {args.grain} {start}..{end}\n")
+    print(f"{city.name}, {city.country}: {args.grain} {start}..{end}\n")
     print(f"  requested     {city.lat:.4f}, {city.lon:.4f} at {city.elevation_m:.0f} m")
     print(
         f"  grid cell     {response.latitude:.4f}, {response.longitude:.4f} at "

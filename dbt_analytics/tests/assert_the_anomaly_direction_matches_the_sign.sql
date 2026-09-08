@@ -1,7 +1,7 @@
 -- hot means warmer than the baseline, cold means colder.
 --
 -- An inverted branch would flag the right days and label every one of them
--- backwards — which every count-based test would pass, and which would put
+-- backwards, which every count-based test would pass, and which would put
 -- Moscow's January in the heatwave column.
 select
     city_id,

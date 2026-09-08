@@ -12,9 +12,9 @@
     this generates.
 
     The ordering is `ingested_at desc, id desc`, and the tiebreaker is not
-    decoration. The loader stamps one ingested_at per run — deliberately, so
+    decoration. The loader stamps one ingested_at per run, deliberately, so
     that rows from one run tie rather than being ordered by how long the COPY
-    took to reach them — so two copies of a window landed by the *same* run
+    took to reach them, so two copies of a window landed by the *same* run
     would tie here and row_number() would pick between them arbitrarily,
     differently on each build. `id desc` breaks the tie with the surrogate key,
     which is monotonic per insert, so the model is deterministic.
@@ -32,7 +32,7 @@
 {#
     dbt renders every model twice: once at parse time to build the DAG, and
     again at execute time to produce SQL. Warehouse introspection only works in
-    the second pass — during parsing `adapter.get_columns_in_relation` returns
+    the second pass: during parsing `adapter.get_columns_in_relation` returns
     nothing at all, and an unguarded column list is silently empty. Guarding on
     `execute` is the canonical shape, and skipping it here produced a
     compilation error naming the model's own relation rather than the source's.

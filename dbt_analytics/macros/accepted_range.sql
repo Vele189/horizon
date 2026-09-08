@@ -1,5 +1,5 @@
 {#
-    A numeric bounds test, written here rather than pulled from dbt_utils —
+    A numeric bounds test, written here rather than pulled from dbt_utils:
     same reasoning as `unique_combination_of_columns`.
 
     Two properties matter and neither is the default anywhere:
@@ -8,8 +8,8 @@
         null is an absence of measurement, not an out-of-range value. A test
         that failed on them would make preserving nulls impossible.
     *   **`expression` overrides the column.** A bound is sometimes natural in
-        a different unit from the stored one — wind is stored in km/h and
-        bounded in m/s — and the conversion belongs in a macro rather than
+        a different unit from the stored one (wind is stored in km/h and
+        bounded in m/s) and the conversion belongs in a macro rather than
         retyped as inline arithmetic per entry.
 
     Returns the offending values so a failure says what was out of range, not

@@ -1,7 +1,7 @@
 # Development and CI only. Kept out of requirements.txt so the Streamlit
 # Community Cloud deployment does not install a test runner.
 #
-# Pulls the pipeline file, which pulls the deployment file — so one install
+# Pulls the pipeline file, which pulls the deployment file, so one install
 # gets everything, and the layering is expressed once rather than repeated.
 -r requirements-pipeline.txt
 pytest==8.3.4

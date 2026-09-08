@@ -8,10 +8,10 @@ lets a parsing fix be re-run against thirty years of history in minutes.
 **Bronze's job is faithful landing, not cleaning.** Nothing here converts a
 unit, shifts a timezone, fills a gap, or deduplicates a row. Every one of those
 is a decision, and a decision belongs in dbt where it is SQL, version
-controlled, and covered by tests — not buried in a Python loader where it is
+controlled, and covered by tests, not buried in a Python loader where it is
 invisible to anyone reading the models. What this module adds to a row is the
 two things the payload cannot know: when it was ingested, and which run it
-belonged to. The request URL is not among them — it was measured at over 80%
+belonged to. The request URL is not among them: it was measured at over 80%
 of the row payload for one of a few hundred distinct strings, and
 :func:`ingestion.archive.source_url_for` derives it from the archive instead.
 
@@ -88,8 +88,8 @@ TABLE_BY_GRAIN: Final[Mapping[str, str]] = {
 #: recording which ERA5 cell actually answered.
 #:
 #: ``source_url`` is not among them. §5.2 asked for it per row; it measured 712
-#: bytes on a daily row and 466 on an hourly one — over 80% of the payload,
-#: roughly 300 MB across the backfill — for one of a few hundred distinct
+#: bytes on a daily row and 466 on an hourly one, over 80% of the payload and
+#: roughly 300 MB across the backfill, for one of a few hundred distinct
 #: strings. :func:`ingestion.archive.source_url_for` derives it instead.
 PROVENANCE_COLUMNS: Final[tuple[str, ...]] = (
     "city_id",
@@ -151,8 +151,8 @@ def build_frame(
     """One parsed response as a frame whose columns match the bronze table.
 
     Built with ``dtype=object`` deliberately. Left to itself pandas would widen
-    any column holding a null to ``float64`` and replace the null with ``NaN``
-    — so ``weather_code`` would arrive as ``51.0`` and, worse, a missing value
+    any column holding a null to ``float64`` and replace the null with
+    ``NaN``, so ``weather_code`` would arrive as ``51.0`` and, worse, a missing value
     would land as the float NaN rather than as SQL NULL. Holding everything as
     objects means the values that reach ``COPY`` are the values that came out
     of the JSON, and Postgres does the one cast that should happen: the
@@ -182,8 +182,8 @@ def _csv_buffer(rows: Iterable[Sequence[Any]]) -> io.StringIO:
     """Render rows as CSV for ``COPY``. None is the only unquoted empty field.
 
     Postgres reads an unquoted empty CSV field as NULL and a quoted one as an
-    empty string, so the two must not render alike. ``QUOTE_MINIMAL`` — the
-    default — writes both as nothing at all, which would silently turn any
+    empty string, so the two must not render alike. ``QUOTE_MINIMAL``, the
+    default, writes both as nothing at all, which would silently turn any
     empty string into a NULL. ``QUOTE_NOTNULL`` quotes everything that is not
     None, which is precisely the distinction Postgres is looking for.
 
@@ -224,7 +224,7 @@ def _copy_insert(table, conn, keys: list[str], data_iter) -> int:
             # Deliberately not coerced. A smallint column refusing "98.0" means
             # the API changed how it represents an integer, and bronze landing
             # it quietly as 98 would hide that. The payload is already archived,
-            # so nothing is lost by stopping — only delayed.
+            # so nothing is lost by stopping, only delayed.
             raise LoadError(
                 f"{qualified} refused a value COPY could not cast. Bronze does "
                 f"not convert types, so this means the payload's representation "
@@ -270,7 +270,7 @@ def load_response(
 ) -> int:
     """Land one parsed response. Returns the number of rows written.
 
-    Appends. Bronze permits duplicates by design — re-ingesting a window
+    Appends. Bronze permits duplicates by design: re-ingesting a window
     inserts a second copy and silver takes the most recent ``ingested_at`` per
     ``(city_id, observation_time)``. A loader that deduplicated here would be
     making that decision twice, in two languages, and only one of them tested.

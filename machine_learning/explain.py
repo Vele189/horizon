@@ -1,15 +1,16 @@
 """SHAP values for the classifier: what it uses, and why it said what it said.
 
 Computed with XGBoost's own TreeSHAP (``pred_contribs=True``) rather than the
-``shap`` package. Not to avoid the dependency for its own sake — the values are
-*bit-identical*, and a test asserts that against the reference implementation —
-but because the package pulls a compiler toolchain into an application that
+``shap`` package. Not to avoid the dependency for its own sake, since the
+values are *bit-identical* and a test asserts that against the reference
+implementation, but because the package pulls a compiler toolchain into an
+application that
 deploys to Streamlit Community Cloud, and the numbers it would contribute are
 already in the model.
 
 **The values are log-odds, not probabilities.** A contribution of +2.49 does not
 mean "adds 249% risk"; it means the model's logit moved 2.49 from a base of
-−2.90, which is 5.2% to 40%. Anything that puts these numbers in front of a
+-2.90, which is 5.2% to 40%. Anything that puts these numbers in front of a
 reader has to say which space they are in, or a dashboard will report an
 explanation that does not add up to the probability printed beside it.
 
@@ -22,8 +23,8 @@ Three artefacts:
 
 * a **beeswarm** of the top features across the test split, showing the
   direction each pushes as well as how far;
-* two **individual predictions** explained side by side — the most confident
-  true positive and the most confident false positive — chosen at the same
+* two **individual predictions** explained side by side, the most confident
+  true positive and the most confident false positive, chosen at the same
   validation-tuned threshold the F1 in the evaluation table uses;
 * a **top-ten ranking** recorded in ``metrics.json``.
 
@@ -83,7 +84,7 @@ log = logging.getLogger(__name__)
 #: contributes a sixth of what the second does.
 TOP_N: Final[int] = 10
 
-#: Features that are constant within a city. They are not meteorology — a model
+#: Features that are constant within a city. They are not meteorology: a model
 #: leaning on them is looking up which city it is, and city base rates in this
 #: set run from 5.2% to 23.7%. Named so the ranking can say that out loud
 #: rather than leaving a reader to notice that latitude does not vary.
@@ -127,8 +128,8 @@ class Contributions:
 def contributions(fit, frame: pd.DataFrame) -> Contributions:
     """Exact TreeSHAP contributions in log-odds, plus the bias column.
 
-    XGBoost returns one extra column holding the base value — the model's
-    output with no features — and it is kept separate rather than folded in,
+    XGBoost returns one extra column holding the base value, the model's
+    output with no features, and it is kept separate rather than folded in,
     because the base value is not an explanation of anything and a beeswarm
     that included it would rank "being a city-day at all" first.
 
@@ -138,7 +139,7 @@ def contributions(fit, frame: pd.DataFrame) -> Contributions:
     disagree: the first draft of this module explained a Delhi day at margin
     0.56 while the model it was explaining had scored the same day at 0.695,
     which is margin 0.82. The explanation would have been of a model nobody
-    runs — internally consistent, since the contributions still summed to the
+    runs: internally consistent, since the contributions still summed to the
     fuller model's own margin, and wrong. :func:`Contributions.margins` is
     asserted against ``predict_proba`` for exactly this reason.
     """
@@ -152,7 +153,7 @@ def contributions(fit, frame: pd.DataFrame) -> Contributions:
 def global_importance(shap: Contributions) -> pd.DataFrame:
     """Rank features by mean absolute contribution, with the direction.
 
-    ``mean_abs`` is the ranking — how much this feature moves the answer. It
+    ``mean_abs`` is the ranking: how much this feature moves the answer. It
     says nothing about *which way*, so two more columns come with it:
     ``mean_signed`` is the average push, and ``correlation`` is between the
     feature's value and its contribution. A feature can matter enormously and
@@ -165,7 +166,7 @@ def global_importance(shap: Contributions) -> pd.DataFrame:
         values = shap.matrix.iloc[:, index].to_numpy(dtype=float)
         # Both sides need to vary. A feature the model never split on has a
         # constant zero contribution, and a feature constant within the frame
-        # has no spread of its own — correlation is undefined either way, and
+        # has no spread of its own, so correlation is undefined either way, and
         # numpy answers with a nan and a warning rather than a refusal.
         varies = values.std() > 0 and column.std() > 0
         rows.append(
@@ -225,7 +226,7 @@ def tail_response(shap: Contributions, feature: str = "z_temperature_2m_mean"):
     The label is ``abs(z) > 2.5``. Nothing told the model that; it saw a binary
     column. If it has understood its target it will push risk *up* at both ends
     of the Z distribution and *down* in the middle, and this is where that
-    shows — or does not.
+    shows, or does not.
     """
     values = shap.matrix[feature].to_numpy(dtype=float)
     bands = pd.cut(values, list(Z_BINS))
@@ -421,7 +422,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(ranking.to_string())
     print(
         f"\nstatic per-city features are {report['static_city_share']:.1%} of the "
-        "total contribution — that is the model looking up which city it is."
+        "total contribution: that is the model looking up which city it is."
     )
 
     print("\nboth tails? mean contribution of z_temperature_2m_mean by band")
@@ -452,7 +453,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             destination.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
             print(f"wrote {destination}")
     else:
-        print("\n(not written — pass --write for figures and metrics.json)")
+        print("\n(not written; pass --write for figures and metrics.json)")
     return 0
 
 

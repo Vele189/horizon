@@ -1,11 +1,11 @@
 """What every view has in common.
 
-:class:`ViewMeta` is the part the shell needs from each view — its title, its
+:class:`ViewMeta` is the part the shell needs from each view: its title, its
 place in the navigation, the question it answers, the one-line caption the
 acceptance criteria require, and the gold mart it reads.
 
 It carried a second dataclass until BI-06. ``PendingView`` rendered a stub
-page — the question, the key it would use, and a live probe of its mart — so
+page with the question, the key it would use, and a live probe of its mart, so
 that the connection layer BI-02 built was exercised from every page rather than
 left unproven until the charts arrived. All four views are built now, so it is
 gone: a scaffold kept after the building is finished is just something else to
@@ -30,7 +30,7 @@ __all__ = ["ViewMeta", "current_mode"]
 def current_mode() -> theme.Mode:
     """The palette mode matching the viewer's Streamlit theme.
 
-    Views painted on their own dark surface — the map — do not use this; the
+    Views painted on their own dark surface, meaning the map, do not use this: the
     ramp follows the surface it sits on, not the theme of the page around it.
     """
     return theme.resolve_mode(getattr(st.context.theme, "type", None))

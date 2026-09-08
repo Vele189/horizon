@@ -16,7 +16,7 @@ must leave the fitted model identical.
 The class-imbalance handling is checked rather than assumed. ``scale_pos_weight``
 is asserted to come from the observed ratio, no resampler is allowed anywhere in
 the repository, and the probability inflation the weighting causes is pinned as
-a number — because the ticket asks for the weighting on the grounds that it
+a number, because the ticket asks for the weighting on the grounds that it
 protects the probabilities a dashboard shows a reader, and it does the opposite.
 """
 
@@ -139,7 +139,7 @@ def test_no_resampler_appears_anywhere_in_the_codebase() -> None:
         if name in text
     ]
     assert not offenders, (
-        "a resampler reached the codebase — duplicating or discarding rows "
+        "a resampler reached the codebase: duplicating or discarding rows "
         "distorts the predicted probabilities the dashboard shows directly: "
         f"{offenders}"
     )
@@ -289,7 +289,7 @@ def test_the_saved_artefact_predicts_what_the_fit_predicted(
     synthetic_parts, tmp_path
 ) -> None:
     """Serialisation itself is covered in ``test_artifact.py``; this is the
-    one property the trainer owns — what came back out predicts what went in."""
+    one property the trainer owns: what came back out predicts what went in."""
     from machine_learning.artifact import load_model, save_artifact
 
     train = synthetic_parts["train"]
@@ -408,7 +408,7 @@ def test_the_specified_weighting_inflates_the_probabilities(trained) -> None:
     The ticket asks for ``scale_pos_weight`` in preference to resampling
     because resampling distorts the probabilities the dashboard shows. But
     weighting the positive class by *k* is oversampling it *k*-fold, so it
-    distorts them the same way — and here it costs ranking as well.
+    distorts them the same way, and here it costs ranking as well.
     """
     _, _, block, _fits = trained
     weighted = block["variants"]["weighted"]["test"]
@@ -417,7 +417,7 @@ def test_the_specified_weighting_inflates_the_probabilities(trained) -> None:
 
     assert weighted["mean_predicted"] > 3 * base, (
         "the weighted model no longer inflates its probabilities; the argument "
-        "recorded in the README needs revisiting"
+        "recorded in the build log needs revisiting"
     )
     assert abs(unweighted["mean_predicted"] - base) < abs(
         weighted["mean_predicted"] - base

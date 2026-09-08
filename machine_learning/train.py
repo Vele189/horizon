@@ -17,11 +17,11 @@ probability.** The ticket asks for it in preference to resampling, on the
 grounds that synthetic oversampling and undersampling distort the predicted
 probabilities the Risk Horizon view shows a reader directly. The premise is
 half right: those methods do distort probabilities. But ``scale_pos_weight``
-is arithmetically the same operation — weighting the positive class by *k* is
-oversampling it *k*-fold — so it distorts them the same way, for the same
+is arithmetically the same operation, since weighting the positive class by
+*k* is oversampling it *k*-fold, so it distorts them the same way, for the same
 reason. At the
 observed ratio of 17.15 this model's mean predicted probability is 0.478
-against a true test base rate of 0.136 — it tells the dashboard reader that
+against a true test base rate of 0.136: it tells the dashboard reader that
 almost every other week is extreme.
 
 Both are therefore trained and both are recorded. The weighted model is the one
@@ -202,7 +202,7 @@ def training_matrix(frame: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
     if matrix.isna().to_numpy().any():
         raise TrainingError(
             "the design matrix has nulls. The scored population is supposed to "
-            "have none — see evaluation_frame() — so this means the population "
+            "have none (see evaluation_frame()), so this means the population "
             "was built some other way."
         )
     return matrix, positives(frame[LABEL]).to_numpy()
@@ -384,7 +384,7 @@ def train_model(
             entry[split_name]["mean_predicted"] = float(predicted.mean())
         block["variants"][variant] = entry
 
-    # Recommended on validation, never on test — the same rule the search
+    # Recommended on validation, never on test, which is the same rule the search
     # follows. Better PR-AUC *and* better Brier, or the specified one stands.
     specified = block["variants"]["weighted"]["validation"]
     other = block["variants"]["unweighted"]["validation"]
@@ -406,8 +406,8 @@ def merge_into_metrics(
 
     The refusal is the point. ``metrics.json`` holds baseline scores that were
     committed before this model existed, and they are only a fixed target while
-    they describe the same data. If the warehouse has moved on — a city
-    backfilled, a day landed — the baselines have to be re-run and re-committed
+    they describe the same data. If the warehouse has moved on (a city
+    backfilled, a day landed) the baselines have to be re-run and re-committed
     first, and a model recorded against the stale ones would be reporting a
     comparison nobody made.
     """
@@ -490,7 +490,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     recommended = block["recommended_variant"]
     print("\n  specified:   weighted (scale_pos_weight = observed ratio)")
-    print(f"  recommended: {recommended}   — chosen on validation, never on test")
+    print(f"  recommended: {recommended}   (chosen on validation, never on test)")
     if recommended != block["specified_variant"]:
         weighted = block["variants"]["weighted"]["test"]
         print(
@@ -522,11 +522,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             if not record["committable"]:
                 print(
-                    f"  WARNING: over {MAX_COMMITTED_BYTES:,} bytes — too "
+                    f"  WARNING: over {MAX_COMMITTED_BYTES:,} bytes, too "
                     "large to commit; it belongs in a release asset."
                 )
     else:
-        print("\n(not written — pass --write to update metrics.json)")
+        print("\n(not written; pass --write to update metrics.json)")
     return 0
 
 

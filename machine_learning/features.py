@@ -4,13 +4,13 @@ Every column here is a statement about what was knowable at the end of day
 *t*. A feature that reaches forward by a single day is leakage, and leakage of
 this kind does not announce itself: it raises PR-AUC, survives review, and is
 only ever found by someone asking why the model is so good. The evaluation
-cannot catch it either — a chronological split protects against training on
+cannot catch it either: a chronological split protects against training on
 the future, not against a *feature* that already contains it.
 
 So the guarantee is structural rather than reviewed:
 
 * **The as-of convention.** A row dated *t* uses observations on days ``<= t``
-  and nothing else. Day *t* itself is included — the daily aggregate is
+  and nothing else. Day *t* itself is included, because the daily aggregate is
   complete at the end of the day, and discarding it would throw away the most
   informative value available. **The label must therefore start at t+1**:
   ML-02 builds "anomaly on any day in t+1 .. t+7", never "t .. t+6", or
@@ -36,11 +36,11 @@ discovered later:
 1. ``z_temperature_2m_mean`` and ``is_anomaly`` come from
    ``fact_weather_anomalies``, whose baseline is a ±7-day day-of-year window
    over every reference year *except the observation's own*. That removes the
-   leakage that matters — a day contributing to the baseline that labels it —
+   leakage that matters (a day contributing to the baseline that labels it),
    but the surviving years include years after *t*. A 2003 row is scored
    against a climatology that has seen 2020. It is a per-(city, day-of-year)
    constant rather than a path from the future to any particular day, and the
-   alternative — an expanding climatology that uses only prior years — would
+   alternative, an expanding climatology that uses only prior years, would
    give the early record a baseline of two or three years and a σ too noisy to
    score against. The trade is deliberate; :data:`temperature_2m_mean_z_trailing30`
    is the strictly-backward companion.
@@ -59,7 +59,7 @@ Usage::
 
 Run ``python machine_learning/features.py`` for a summary of the built matrix,
 ``--out features.csv`` to write it, or ``--city delhi --start 2020-01-01`` for
-a slice — the slice is padded backwards by the warm-up so a windowed request
+a slice. The slice is padded backwards by the warm-up so a windowed request
 is not silently degraded.
 """
 
@@ -115,7 +115,7 @@ GOLD_SCHEMA: Final[str] = "gold_marts"
 #: storm-development signal. *Sea-level*, not surface: surface pressure carries
 #: the grid cell's elevation, so a lag over it would be comparing Johannesburg
 #: at 822 hPa against London at 1013 the moment anything pooled across cities.
-#: Min and max temperature are deliberately not lagged — they are highly
+#: Min and max temperature are deliberately not lagged: they are highly
 #: collinear with the mean and would triple the matrix for very little.
 TEMPERATURE: Final[str] = "temperature_2m_mean"
 PRESSURE: Final[str] = "pressure_msl_mean"
@@ -133,11 +133,11 @@ TENDENCY_DAYS: Final[tuple[int, ...]] = (1, 3)
 #: mistake ``fact_climatology`` exists to avoid, one window smaller: with day
 #: *t* inside a 30-day mean it pulls that mean 1/30 of the way towards itself
 #: and inflates σ by its own deviation, so the Z of an extreme day comes out
-#: systematically too small. The window is t−30 .. t−1 — the recent past that
+#: systematically too small. The window is t-30 .. t-1, the recent past that
 #: *t* is unusual with respect to.
 TRAILING_Z_WINDOW: Final[int] = 30
 
-#: The anomaly-count window, in days, and it **includes day t** — today's flag
+#: The anomaly-count window, in days, and it **includes day t**: today's flag
 #: is known at the end of today, and the label starts at t+1.
 ANOMALY_COUNT_WINDOW: Final[int] = 30
 
@@ -168,7 +168,7 @@ REQUIRED_COLUMNS: Final[tuple[str, ...]] = (
 #:
 #: ``is_anomaly`` is the label source, and feeding a classifier the flag whose
 #: forward window it is predicting is the shortest path to a meaningless score.
-#: ``anomaly_days_scored30`` is the denominator of the anomaly count — a
+#: ``anomaly_days_scored30`` is the denominator of the anomaly count: a
 #: coverage fact about the warehouse, not about the weather, and a model
 #: allowed to learn from it learns which cities are half-backfilled.
 #: ``is_warmup``, ``history_days`` and ``has_missing_feature`` are the null
@@ -198,7 +198,7 @@ def feature_columns() -> tuple[str, ...]:
     """The model input columns, in a stable order.
 
     Built from the same constants the features are, so the list and the matrix
-    cannot drift apart — a test asserts the built frame carries exactly these
+    cannot drift apart. A test asserts the built frame carries exactly these
     plus :data:`PASSTHROUGH_COLUMNS`.
     """
     columns: list[str] = []
@@ -220,13 +220,13 @@ def day_of_year_common(dates: pd.Series) -> pd.Series:
     """Day of year on a 365-day axis, with 29 February folded onto 28.
 
     The second derivation of ``dim_date.day_of_year_common``, and asserted
-    equal to it against every date in the warehouse — the same arrangement
+    equal to it against every date in the warehouse. It is the same arrangement
     ``dim_cities.hemisphere`` has, for the same reason: the alternative is a
     join that exists only to fetch an integer that the date already determines.
 
     Raw ``day_of_year`` cannot serve as a cyclical axis. It is 1..366, so in a
     leap year every day after February is numbered one higher than the same
-    calendar day in a common year — a one-day phase shift in the sin/cos pair,
+    calendar day in a common year: a one-day phase shift in the sin/cos pair,
     in three years out of four, which reads to a model as a genuine seasonal
     difference between leap and common years.
     """
@@ -246,7 +246,7 @@ def gold_frame(
 
     Both joins are LEFT joins. An inner join would enforce referential
     integrity by *dropping* rows it could not match, which is the wrong
-    failure — a city-day missing its anomaly row would look exactly like a
+    failure: a city-day missing its anomaly row would look exactly like a
     city-day that was never observed, and the feature matrix would be short
     without saying so. A null Z arrives as a null Z.
 
@@ -254,7 +254,7 @@ def gold_frame(
         engine: Warehouse connection. Defaults to ``DATABASE_URL``.
         cities: Restrict to these ``city_id`` values. Default: all of them.
         start: Earliest ``date_key`` to read, inclusive. Note this is the raw
-            bound — :func:`load_features` is the one that pads it by the
+            bound; :func:`load_features` is the one that pads it by the
             warm-up.
         end: Latest ``date_key`` to read, inclusive.
 
@@ -316,7 +316,7 @@ def require_grain(
     offset, so both need the same three guarantees before they compute
     anything: the columns are there, no city-day repeats, and the rows are in
     order. One implementation, because two would be free to drift and the
-    drift would be silent — a duplicated city-day makes a "7-day" window span
+    drift would be silent: a duplicated city-day makes a "7-day" window span
     six days and still produces a plausible column of numbers.
 
     Raises:
@@ -334,7 +334,7 @@ def require_grain(
     if "is_anomaly" in frame.columns:
         # Nullable boolean, always. Left alone, this column arrives as `bool`
         # from a fully-scored city and as `object` from one with nulls, so the
-        # dtypes would depend on which cities had backfilled — and a frame
+        # dtypes would depend on which cities had backfilled, and a frame
         # built for one city would not concatenate cleanly with a frame built
         # for the next. `boolean` also keeps "unscored" distinguishable from
         # False, which is the distinction the anomaly counts and the label are
@@ -367,7 +367,7 @@ def city_roster(engine: Engine | None = None) -> tuple[list[str], list[str]]:
     surface.
 
     Here rather than in the evaluation or inference modules because both need
-    it and neither should own it — a second copy would be free to drift, and a
+    it and neither should own it: a second copy would be free to drift, and a
     drift would be silent, since both would still return a plausible list of
     city names.
     """
@@ -412,7 +412,7 @@ def build_features(observations: pd.DataFrame) -> pd.DataFrame:
             Order does not matter; duplicates are an error.
 
     Returns:
-        One row per **observed** city-day — the same count as the input — with
+        One row per **observed** city-day (the same count as the input) with
         :func:`feature_columns` and :data:`PASSTHROUGH_COLUMNS`, sorted by
         ``(city_id, date_key)`` with a fresh index. Rows inside a city's
         warm-up are present and flagged, not removed.
@@ -495,7 +495,7 @@ def on_daily_calendar(frame: pd.DataFrame) -> pd.DataFrame:
         reindexed.index.name = "date_key"
         reindexed["city_id"] = city_id
         reindexed["is_observed"] = reindexed["is_observed"].eq(True)
-        # Static per city, so the reindexed days inherit rather than blank —
+        # Static per city, so the reindexed days inherit rather than blank:
         # a city's latitude did not stop existing on a day it was not observed,
         # and leaving them null would only make the diagnostics noisier.
         for column in ("latitude", "elevation_m"):
@@ -521,9 +521,9 @@ def _rolling(grouped, window: int, statistic: str) -> pd.Series:
 def trailing_anomaly_counts(
     calendar: pd.DataFrame, window: int
 ) -> tuple[pd.Series, pd.Series]:
-    """Days flagged, and days scorable, over the trailing ``window`` — inclusive of t.
+    """Days flagged, and days scorable, over the trailing ``window``, inclusive of t.
 
-    A null ``is_anomaly`` is not a quiet day — it is a day with no baseline to
+    A null ``is_anomaly`` is not a quiet day. It is a day with no baseline to
     score against, and 1 095 of them exist for the three cities holding a
     single reference year. Counting a null as "not an anomaly" would assert the
     day was ordinary on no evidence, and would put it in the denominator of
@@ -535,7 +535,7 @@ def trailing_anomaly_counts(
     window, the count is exact; below it, the caller can see the count is
     partial rather than read a quiet month off a coverage gap.
 
-    Both require every calendar day of the window to be present in the record —
+    Both require every calendar day of the window to be present in the record:
     a window spanning a hole is null, the same rule the rollings follow.
 
     Args:
@@ -581,7 +581,7 @@ def _add_null_bookkeeping(features: pd.DataFrame) -> None:
     row is inside the first :data:`WARMUP_DAYS` days of its city's record, so
     some window has not filled yet and the nulls are expected and permanent.
     ``has_missing_feature`` is empirical: *some* model input is null on this
-    row, for whatever reason — a warm-up, a hole in the series, or a city with
+    row, for whatever reason: a warm-up, a hole in the series, or a city with
     no climatology baseline. Neither implies the other. A city with a gap has
     null features far outside its warm-up, and a fully-scored row inside the
     warm-up is still unusable.
@@ -590,7 +590,7 @@ def _add_null_bookkeeping(features: pd.DataFrame) -> None:
     than rows, so a series with a hole in it is not credited with days it does
     not have. It is a **lower bound**: measured from the earliest row this
     build was handed, which for a slice is the start of the slice's padded
-    window and not the start of the record. ``is_warmup`` is exact anyway —
+    window and not the start of the record. ``is_warmup`` is exact anyway:
     :func:`load_features` pads by :data:`WARMUP_DAYS`, so a row with enough
     real history always has enough history in the frame.
     """
@@ -607,8 +607,8 @@ def drop_warmup(features: pd.DataFrame) -> pd.DataFrame:
 
     :func:`build_features` never drops them. A feature module that quietly
     shortens the record hands the trainer a matrix whose row count does not
-    match the warehouse's, and the difference is discovered — if it is
-    discovered — as an unexplained gap in a metric.
+    match the warehouse's, and the difference is discovered, if it is
+    discovered at all, as an unexplained gap in a metric.
 
     Note this does **not** guarantee a null-free matrix: a hole in a city's
     series produces null windows well outside the warm-up, and a city with no
@@ -622,8 +622,8 @@ def drop_warmup(features: pd.DataFrame) -> pd.DataFrame:
 def missing_report(features: pd.DataFrame) -> pd.DataFrame:
     """Null counts per feature, split into warm-up and everything else.
 
-    The split is the point. Nulls inside the warm-up are arithmetic — a 30-day
-    window on day 3 — and need no explanation. Nulls outside it are a fact
+    The split is the point. Nulls inside the warm-up are arithmetic (a 30-day
+    window on day 3) and need no explanation. Nulls outside it are a fact
     about the data, and every one should have a name: a hole in the series, or
     a city whose leave-one-year-out baseline left nothing behind.
     """
@@ -653,7 +653,7 @@ def load_features(
 
     The padding is the reason this is not two calls at the call site. Asking
     for 2020 onwards and building features from exactly those rows gives the
-    first 30 days of 2020 the warm-up nulls of a series that begins in 2020 —
+    first 30 days of 2020 the warm-up nulls of a series that begins in 2020,
     except the series does not begin in 2020, the *request* does. The extra
     :data:`WARMUP_DAYS` of history are read, used, and trimmed off, so a slice
     and a full build agree on every row they share.

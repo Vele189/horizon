@@ -1,8 +1,8 @@
 -- 29 February is a row of its own, and its window is not short.
 --
 -- Under raw day_of_year it would collide with 1 March, so it is keyed on
--- month_day instead. Its *own* sample is a quarter the size of other days —
--- eight leap years in thirty-two — but the +/-7 day window around it is drawn
+-- month_day instead. Its *own* sample is a quarter the size of other days,
+-- eight leap years in thirty-two, but the +/-7 day window around it is drawn
 -- from 22 February to 7 March in every year, leap or not, so the baseline
 -- behind it is as strong as any other day's.
 --

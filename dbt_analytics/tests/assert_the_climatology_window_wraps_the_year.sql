@@ -1,7 +1,7 @@
 -- 1 January's window must reach back into December.
 --
 -- A non-circular window would build the year's first and last weeks from half
--- the observations of every other week — precisely where the northern winter
+-- the observations of every other week, precisely where the northern winter
 -- extremes sit, so the sigma there would be estimated from the thinnest data
 -- and the most extreme days would be scored against the least reliable
 -- baseline.

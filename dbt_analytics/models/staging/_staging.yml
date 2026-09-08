@@ -7,7 +7,7 @@ models:
       (city_id, observation_time), keeping the most recently ingested copy.
 
 
-      Bronze is append-only by design — re-ingesting a window inserts a second
+      Bronze is append-only by design: re-ingesting a window inserts a second
       copy rather than replacing the first, and there is no unique constraint
       on the natural key because one would reject a legitimate re-ingest. So
       deduplication is silver's job and this model is where it happens.
@@ -23,7 +23,7 @@ models:
 
 
       **Duplicates removed, measured 2026-09-07:** 61,127 bronze rows to
-      60,396 here — 731 removed, 1.20%. Those are one city-year landed twice by
+      60,396 here, 731 removed, 1.20%. Those are one city-year landed twice by
       an out-of-band loader run that bypassed the manifest, plus the overlap
       between an archival sample and the anchored window. Reproduce with:
 
@@ -247,11 +247,11 @@ models:
       (city_id, observation_time), newest ingest wins.
 
 
-      Trailing 24 months only — the storm dynamics view is the only consumer.
+      Trailing 24 months only; the storm dynamics view is the only consumer.
 
 
       **Duplicates removed, measured 2026-09-07:** 280,728 bronze rows to
-      274,920 here — 5,808 removed, 2.07%. All of it is `cairo` and `london`,
+      274,920 here, 5,808 removed, 2.07%. All of it is `cairo` and `london`,
       where an ING-03 archival sample took a calendar year and overlapped the
       later trailing-24-month window by 121 days each.
 

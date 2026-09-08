@@ -1,8 +1,8 @@
 # What Streamlit Community Cloud installs.
 #
 # This file is the deployed dashboard's runtime and nothing else. Everything
-# that builds the warehouse the dashboard reads — the API client, dbt, the
-# model — lives in requirements-pipeline.txt, because Cloud installs *this*
+# that builds the warehouse the dashboard reads (the API client, dbt, the
+# model) lives in requirements-pipeline.txt, because Cloud installs *this*
 # file on every deploy and none of that is imported by a page. Shipping it
 # anyway cost a 1.5 GB install to serve an app that imports three libraries,
 # and put dbt-core's transitive pins on the critical path of a deploy that has
@@ -22,23 +22,31 @@ SQLAlchemy==2.0.52
 
 # The charting library, from BI-03. Every figure is built with graph_objects
 # rather than plotly.express: express infers encodings from a frame's dtypes,
-# and this project decides them — which colour a Z-score takes and how large a
+# and this project decides them: which colour a Z-score takes and how large a
 # marker is are in dashboard/theme.py, measured, and under test.
 plotly==7.0.0
 
 # config/cities.yml is the city registry *and* the fixture the validation gate
 # reads its seven dated events from. The map offers those dates as jump
 # targets, so it loads the registry through cities.py rather than restating
-# them — which is what makes them one fact instead of two.
+# them, which is what makes them one fact instead of two.
 PyYAML==6.0.2
 
 # pandas requires numpy regardless; pinned so the deployment resolves to the
 # same version the marts were built and the model was trained against.
 numpy==2.5.3
 
+# The second dependency no import scan can see. pandas does not implement
+# Spearman itself: Series.corr(method="spearman") reaches into scipy.stats
+# from inside pandas, at call time, so the only literal `import scipy` in the
+# deploy is one pandas writes. BI-03's storm scatter ranks rather than fits,
+# which is the whole point of the V-shape, so every page load runs it, and a
+# deploy without this line dies on the visitor's screen, not in CI.
+scipy==1.18.1
+
 # The driver SQLAlchemy loads from a postgresql:// URL. Nothing imports it by
 # name, which is precisely why it is named here rather than left to the import
-# scan to notice — a dashboard with no driver fails at first query, in front
+# scan to notice: a dashboard with no driver fails at first query, in front
 # of a visitor, with a message about a missing dialect.
 psycopg2-binary==2.9.10
 

@@ -4,7 +4,7 @@
 -- The trap is a pipeline that infers a zone from a country or a longitude
 -- rather than reading the configured IANA name. Such a pipeline gives Phoenix
 -- America/Denver, and every Phoenix reading between March and November lands
--- an hour out — a shift small enough to look like weather.
+-- an hour out, a shift small enough to look like weather.
 --
 -- Asserted as an invariant rather than by comparing two chosen dates: across
 -- every US transition in the window, Phoenix's offset from UTC must never

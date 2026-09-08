@@ -3,12 +3,12 @@
 Separate from the baselines and from the model because all three have to be
 measured the same way. A baseline scored with one implementation of average
 precision and a model scored with another are not comparable, and the
-difference would live entirely in tie handling — where a rule-based baseline
+difference would live entirely in tie handling, where a rule-based baseline
 puts thousands of rows on the same score and a trained model puts none. So the
 metrics come from ``sklearn`` and are called from one place.
 
 **The split is chronological, and it is purged.** Train to 2018, validate
-2019–2021, test 2022 onwards, exactly as the proposal specifies. A random split
+2019-2021, test 2022 onwards, exactly as the proposal specifies. A random split
 would leak the future through every rolling feature and produce a meaningless
 score.
 
@@ -22,7 +22,7 @@ validation.
 
 **PR-AUC needs its no-skill line quoted beside it.** Average precision for a
 random ranker is the positive rate, and the positive rate here is 5.50% in
-train and 13.58% in test — so 0.20 is a good score on one and a poor one on the
+train and 13.58% in test, so 0.20 is a good score on one and a poor one on the
 other. Every :class:`Score` carries the base rate it was measured against, and
 :func:`score` also returns the lift over it, because a PR-AUC with no reference
 is the thing this whole ticket exists to prevent.
@@ -124,7 +124,7 @@ PERSISTENCE_COUNT: Final[str] = f"anomaly_days_trailing{PERSISTENCE_WINDOW}"
 #:
 #: Equal to the label horizon, because that is exactly how far a label reaches:
 #: a row dated 2018-12-31 is labelled by days up to 2019-01-07, which is
-#: validation. Purging is cheap here — seven rows per city per boundary — and
+#: validation. Purging is cheap here (seven rows per city per boundary) and
 #: the alternative is a training set that has been told the first week of the
 #: period it is about to be validated on.
 PURGE_DAYS: Final[int] = HORIZON_DAYS
@@ -134,7 +134,7 @@ PURGE_DAYS: Final[int] = HORIZON_DAYS
 #: one before it. Zero by default, and the default is the argued position.
 #:
 #: A validation row on 2019-01-01 has a 30-day rolling mean reaching back to
-#: 2018-12-03, which is training data. That is not leakage — it is deployment.
+#: 2018-12-03, which is training data. That is not leakage, it is deployment.
 #: A model predicting on 2019-01-01 in production has all of 2018 behind it,
 #: and blanking it here would measure a system nobody is going to run. Leakage
 #: is a *training* row reading forwards, which the backward-only features and
@@ -144,7 +144,7 @@ PURGE_DAYS: Final[int] = HORIZON_DAYS
 #: independence: the last training rows and the first validation rows share
 #: some of the same days inside their windows, so the two sets are mildly
 #: correlated and the score mildly optimistic. It is offered so that claim can
-#: be measured rather than argued, and the measurement is in the README —
+#: be measured rather than argued, and the measurement is in the build log:
 #: it moves test PR-AUC by less than a thousandth.
 EMBARGO_DAYS: Final[int] = 0
 
@@ -171,7 +171,7 @@ class Score:
 
 
 def base_rate(labels: pd.Series) -> float:
-    """The positive rate — and the PR-AUC a random ranker would score."""
+    """The positive rate, and the PR-AUC a random ranker would score."""
     return float(positives(labels).mean())
 
 
@@ -179,7 +179,7 @@ def score(labels: pd.Series, predictions) -> Score:
     """Average precision and Brier, with the base rate they are read against.
 
     Args:
-        labels: The nullable-boolean target. Must contain no nulls — an
+        labels: The nullable-boolean target. Must contain no nulls: an
             unlabelled row has no answer to be right or wrong about, and
             averaging over it would quietly change the denominator.
         predictions: Predicted probabilities in [0, 1], aligned to ``labels``.
@@ -245,7 +245,7 @@ def split_frame(
       period it is about to be validated on. This is leakage, and it is on.
     * ``embargo_days`` drops days from the **start** of a split, because a
       rolling feature reaches backward across the boundary. This is not
-      leakage — it is what deployment looks like — and it is off. See
+      leakage, it is what deployment looks like, and it is off. See
       :data:`EMBARGO_DAYS`.
 
     Args:
@@ -321,7 +321,7 @@ def assert_splits_are_disjoint(parts: Mapping[str, pd.DataFrame]) -> None:
         if reach >= after["date_key"].min():
             raise ValueError(
                 f"the {earlier} split ends {before['date_key'].max().date()}, "
-                f"whose label reaches {reach.date()} — into {later}, which "
+                f"whose label reaches {reach.date()}, into {later}, which "
                 f"starts {after['date_key'].min().date()}. Purge the boundary."
             )
 
@@ -356,8 +356,8 @@ def evaluation_frame(engine=None, **kwargs) -> pd.DataFrame:
     to prevent wearing a different hat.
 
     On this snapshot the two conditions leave a population with **no missing
-    feature at all** — the rows with a null feature outside the warm-up belong
-    to the three cities that are unlabelled anyway — and a test asserts it, so
+    feature at all**, because the rows with a null feature outside the warm-up
+    belong to the three cities that are unlabelled anyway, and a test asserts it, so
     a future city cannot quietly introduce a row the model must skip and the
     baseline scores.
     """
@@ -365,11 +365,11 @@ def evaluation_frame(engine=None, **kwargs) -> pd.DataFrame:
     return drop_warmup(drop_unlabelled(whole))
 
 def add_persistence_signal(frame: pd.DataFrame) -> pd.DataFrame:
-    """Add "was there an anomaly in t−6 .. t", as a nullable boolean.
+    """Add "was there an anomaly in t-6 .. t", as a nullable boolean.
 
     **Computed before the population is trimmed, and that ordering is the whole
     point.** The window looks back seven days, so a row needs seven days of
-    record behind it — which every row past a thirty-day feature warm-up has.
+    record behind it, which every row past a thirty-day feature warm-up has.
     Compute it on the trimmed population instead and the first six rows of each
     city lose a signal they are entitled to, because the window falls off the
     start of the *slice* rather than off the start of the record. It cost 36
@@ -425,7 +425,7 @@ def boundary_report(parts: Mapping[str, pd.DataFrame]) -> pd.DataFrame:
         last, first = before["date_key"].max(), after["date_key"].min()
         rows.append(
             {
-                "boundary": f"{earlier} → {later}",
+                "boundary": f"{earlier} -> {later}",
                 "last": last.date(),
                 "first": first.date(),
                 "gap_days": int((first - last).days),

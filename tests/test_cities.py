@@ -1,6 +1,6 @@
 """Tests for the city registry.
 
-`config/cities.yml` is a test fixture as much as a config file — the Day 8
+`config/cities.yml` is a test fixture as much as a config file: the Day 8
 validation gate reads its seven dated events. These tests cover two things:
 the invariants decision D2 fixed for the selection, and the loader's refusal to
 accept the mistakes that would silently corrupt a 30-year baseline.
@@ -45,7 +45,7 @@ def write_registry(tmp_path: Path, document: dict) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# The selection itself — decision D2
+# The selection itself: decision D2
 # ---------------------------------------------------------------------------
 
 

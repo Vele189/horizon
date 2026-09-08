@@ -13,7 +13,7 @@ is not one of them. Both boundaries are load-bearing:
   today's flag, and a label window that also started today would hand the
   classifier its own answer through a column that looks entirely innocent.
 * *t+7 is included* because "within a week" means seven days, not six. An
-  off-by-one here does not fail anything — it produces a slightly different
+  off-by-one here does not fail anything: it produces a slightly different
   positive rate and a model that is quietly answering a different question.
 
 ``tests/test_labels.py`` asserts both ends by putting a single anomaly into an
@@ -25,14 +25,14 @@ before it: not the day itself, not the eighth day back.
 ============================ ==========================================
 ``True``                     at least one day in the window is flagged
 ``False``                    no day is flagged **and all seven are scored**
-``<NA>``                     otherwise — the window is not fully knowable
+``<NA>``                     otherwise: the window is not fully knowable
 ============================ ==========================================
 
 That third row is where the last seven days of every city series go, and they
 go there by the same rule as everything else rather than by a special case: at
 the end of the record the forward window runs off the edge, fewer than seven
 days are scored, and the label is unknown. It is also where a hole in a series
-goes, and where the three cities with no climatology baseline go — all 365
+goes, and where the three cities with no climatology baseline go, all 365
 days of each, since a day that could never be flagged cannot make a window
 quiet. Coercing any of those to ``False`` would put days that were never
 measured into the negative class and deflate the positive rate with them.
@@ -105,7 +105,7 @@ LABEL: Final[str] = f"anomaly_within_{HORIZON_DAYS}d"
 
 #: The count of flagged days in the window. A *lower bound* wherever the window
 #: holds unscored days, and carried because the label throws away how bad the
-#: week was — useful for ML-05's severity work, and the column that makes an
+#: week was, useful for ML-05's severity work, and the column that makes an
 #: off-by-one in the window visible as a changed distribution rather than as a
 #: changed rate of a few tenths of a percent.
 FORWARD_COUNT: Final[str] = f"anomaly_days_forward{HORIZON_DAYS}"
@@ -130,7 +130,7 @@ def build_labels(observations: pd.DataFrame) -> pd.DataFrame:
             are an error.
 
     Returns:
-        One row per **observed** city-day — the same count as the input —
+        One row per **observed** city-day (the same count as the input)
         with ``city_id``, ``date_key`` and :data:`LABEL_COLUMNS`, sorted by
         ``(city_id, date_key)``. Unlabellable rows are present and null, not
         removed; :func:`drop_unlabelled` is the thing that removes them.
@@ -193,7 +193,7 @@ def load_labels(
 
     The padding is the mirror of :func:`~machine_learning.features.load_features`
     padding ``start``. Asking for labels up to 2020-12-31 and building them
-    from exactly those rows makes the last week of December unlabellable —
+    from exactly those rows makes the last week of December unlabellable,
     except the record does not end there, the request does.
     """
     padded = end
@@ -216,8 +216,8 @@ def training_frame(
     """Features and label on one row, read in a single pass over gold.
 
     One function rather than two calls the trainer joins itself, because the
-    join has exactly one correct form — an inner join on ``(city_id,
-    date_key)`` against frames of identical grain — and every incorrect form
+    join has exactly one correct form, an inner join on ``(city_id,
+    date_key)`` against frames of identical grain, and every incorrect form
     produces a frame that trains. A merge that silently dropped rows, or one
     that shifted the label by a day, would show up as a metric nobody can
     explain.
@@ -304,9 +304,9 @@ def single_feature_auc(frame: pd.DataFrame, columns: Sequence[str] | None = None
     The test for "no feature reconstructs the label" needs a measure, and exact
     reconstruction is the wrong one: on floating-point columns every value is
     unique, so *some* function maps each of them to the label and the check
-    passes vacuously. AUC asks the question that matters — could this column,
-    on its own, order the city-days so that every positive comes first — and
-    answers 1.0 for a leaked label and around 0.5 for noise.
+    passes vacuously. AUC asks the question that matters, which is whether
+    this column on its own can order the city-days so that every positive comes
+    first, and answers 1.0 for a leaked label and around 0.5 for noise.
 
     Computed by ranks rather than by thresholds, so it is invariant to any
     monotone transform: a leak does not escape by being logged or negated.

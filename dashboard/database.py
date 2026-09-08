@@ -15,7 +15,7 @@ is committed. A test parses this module and fails on any string literal that
 looks like a connection string, so "never hardcoded" is enforced rather than
 remembered.
 
-Locally there are no Streamlit secrets, and the fallback is ``config.py`` —
+Locally there are no Streamlit secrets, and the fallback is ``config.py``,
 still the only module in the project that reads the process environment. It is
 asked for ``SERVING_DATABASE_URL`` rather than ``DATABASE_URL``, because those
 two names mean different databases on a development machine: ``DATABASE_URL``
@@ -31,27 +31,28 @@ Neon scales compute to zero after five minutes idle and resumes on the next
 query, so a visitor arriving after a quiet afternoon is the *normal* case, not
 an edge case. It shows up in two different ways and both are handled here.
 
-**The wait.** Resuming costs roughly 1.2 s on top of the connection (§Promotion
-to Neon in the README has the measurements). That is a delay, not an error, and
-it needs to look like one: every cached query declares a spinner, which
-Streamlit shows only on a cache miss — precisely the path that can be slow.
+**The wait.** Resuming costs roughly 1.2 s on top of the connection (the
+promotion section of ``docs/build-log.md`` has the measurements). That is a
+delay, not an error, and it needs to look like one: every cached query declares
+a spinner, which Streamlit shows only on a cache miss, precisely the path that
+can be slow.
 
 **The dead socket.** This is the failure the ticket is really about. A pooled
 connection opened before the compute suspended is not gracefully closed; it is
 a file descriptor pointing at nothing, and the next ``execute`` on it raises
-``OperationalError`` from inside the driver — which, unhandled, is a red
+``OperationalError`` from inside the driver, which, unhandled, is a red
 traceback on a public URL. Three things stop that:
 
-* ``pool_pre_ping`` — SQLAlchemy tests a pooled connection before lending it
+* ``pool_pre_ping``. SQLAlchemy tests a pooled connection before lending it
   out and transparently replaces a dead one. This catches most of it.
-* ``pool_recycle`` below Neon's idle timeout — a connection is discarded before
+* ``pool_recycle`` below Neon's idle timeout, so a connection is discarded before
   it is old enough to have been suspended under it, so pre-ping usually has
   nothing to find.
 * An explicit retry, because the first two are not sufficient. Pre-ping's own
   probe can fail while compute is still coming back, and that raises the same
-  exception the query would have. So a transient failure disposes the pool —
-  dropping every stale socket, not just the one that failed — waits, and tries
-  again.
+  exception the query would have. So a transient failure disposes the pool,
+  dropping every stale socket rather than only the one that failed, then waits
+  and tries again.
 
 The retry is deliberately narrow. Only connection-shaped failures are retried;
 a syntax error or a missing column is raised on the first attempt, because
@@ -105,12 +106,12 @@ SECRET_KEY_SERVING: Final[str] = "SERVING_DATABASE_URL"
 # How long a query result stays good.
 #
 # The marts change only when `serving/promote.py` runs, which is a manual step
-# taken at most once a day — so staleness is not the constraint. Neon's free
+# taken at most once a day, so staleness is not the constraint. Neon's free
 # plan is: 100 compute-hours a month, and compute stays awake for five minutes
 # after each query. A query that misses the cache therefore costs a *five
 # minute* minimum of the allowance no matter how fast it runs, which makes the
 # meter count wake-ups rather than queries. Six hours between refreshes is four
-# wake-ups a day, twenty minutes of compute, about ten hours a month — a tenth
+# wake-ups a day, twenty minutes of compute, about ten hours a month: a tenth
 # of the allowance spent on keeping the dashboard current, and the rest left
 # for people actually looking at it. Streamlit's cache is per process and
 # Community Cloud runs one, so this is four wake-ups a day in total, not four
@@ -120,7 +121,7 @@ SECRET_KEY_SERVING: Final[str] = "SERVING_DATABASE_URL"
 # hours, so the sidebar carries a button that clears these caches.
 CACHE_TTL_SECONDS: Final[int] = 6 * 60 * 60
 
-# Dimensions — the fifteen cities, the date spine — change when the project
+# Dimensions (the fifteen cities, the date spine) change when the project
 # changes, not when it runs.
 CACHE_TTL_REFERENCE_SECONDS: Final[int] = 24 * 60 * 60
 
@@ -132,7 +133,7 @@ POOL_RECYCLE_SECONDS: Final[int] = 240
 COLD_START_ATTEMPTS: Final[int] = 3
 COLD_START_BACKOFF_SECONDS: Final[float] = 1.5
 
-SPINNER_MESSAGE: Final[str] = "Reading the warehouse — Neon resumes from idle in about a second…"
+SPINNER_MESSAGE: Final[str] = "Reading the warehouse. Neon resumes from idle in about a second..."
 
 
 class DashboardConfigError(RuntimeError):
@@ -165,7 +166,7 @@ def _secret(key: str) -> str | None:
     ``st.secrets`` raises rather than returning empty when no ``secrets.toml``
     exists anywhere, which is the ordinary state of a development machine. That
     is a missing file, not a missing secret, so it is caught and treated as
-    "not set" — otherwise every local run would fail before reaching the .env
+    "not set". Otherwise every local run would fail before reaching the .env
     that does have the answer.
     """
     try:
@@ -187,7 +188,7 @@ def resolve_database_url() -> Source:
        the only database that exists in the deployed environment.
     2. ``SERVING_DATABASE_URL`` in Streamlit secrets, so a deployment can use
        the same variable name the promotion script does.
-    3. ``SERVING_DATABASE_URL`` from ``config.py`` — Neon, on a development
+    3. ``SERVING_DATABASE_URL`` from ``config.py``: Neon, on a development
        machine, which is the target the dashboard must be developed against.
     4. ``DATABASE_URL`` from ``config.py``, **only** when ``ENVIRONMENT`` is
        ``serving``. That is the project's existing switch for "this machine's
@@ -217,9 +218,9 @@ def resolve_database_url() -> Source:
     raise DashboardConfigError(
         "No serving database is configured.\n\n"
         "Deployed: set DATABASE_URL in the app's Streamlit secrets "
-        "(Manage app → Settings → Secrets).\n"
+        "(Manage app -> Settings -> Secrets).\n"
         "Locally: set SERVING_DATABASE_URL in .env to the Neon connection "
-        "string — see .env.example and .streamlit/secrets.toml.example."
+        "string. See .env.example and .streamlit/secrets.toml.example."
     )
 
 
@@ -257,7 +258,7 @@ def _is_transient(exc: Exception) -> bool:
     """Is this the database being asleep, or the query being wrong?
 
     Only the former is worth retrying. ``OperationalError`` and
-    ``InterfaceError`` are the driver saying it could not talk to the server —
+    ``InterfaceError`` are the driver saying it could not talk to the server:
     a suspended compute, a dropped socket, a refused connection. A
     ``ProgrammingError`` for a column that does not exist is none of those and
     will fail identically on every attempt.
@@ -363,7 +364,7 @@ def warehouse_status() -> dict[str, Any]:
     """One round trip that answers "is it up, and how fresh is it".
 
     Deliberately a single query rather than one per fact. It runs on the first
-    render of a session, so it is the query that pays the cold start — making
+    render of a session, so it is the query that pays the cold start. Making
     it two would pay it twice for the same information.
     """
     frame = _execute(

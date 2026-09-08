@@ -1,4 +1,4 @@
-# Ingestion reconciliation — `daily`
+# Ingestion reconciliation: `daily`
 
 Generated 2026-09-07 01:26 UTC by `python ingestion/reconcile.py --grain daily`.
 
@@ -24,7 +24,7 @@ Range **1995-01-01 .. 2026-09-02**, 11,568 observations expected per city across
 | `sydney` | 11,568 | 365 | 365 | -11,203 | 2 |
 | `tokyo` | 11,568 | 0 | 0 | -11,568 | 1 |
 
-`actual` counts every row held for the city; `distinct` counts distinct observation times inside the range, which is what `delta` compares against `expected`. The two diverge for two separate reasons, reported separately below: the same observation landed twice — legal, since bronze is append-only and silver deduplicates — or the row falls outside the range this report asked about.
+`actual` counts every row held for the city; `distinct` counts distinct observation times inside the range, which is what `delta` compares against `expected`. The two diverge for two separate reasons, reported separately below: the same observation landed twice (legal, since bronze is append-only and silver deduplicates), or the row falls outside the range this report asked about.
 
 **7 cities absent entirely:** `tokyo`, `portland`, `moscow`, `sao_paulo`, `johannesburg`, `buenos_aires`, `auckland`
 
@@ -45,9 +45,9 @@ None.
 
 Accepted. The ERA5 archive begins 1940-01-01 and trails the present by several days; the planner already stops short of the edge, so anything here is a range that was asked for outside those bounds.
 
-### not ingested — 16 gap(s)
+### not ingested: 16 gap(s)
 
-Accepted while the backfill is in progress. The daily grain costs ~26 000 weighted API calls against a free-tier allowance of 10 000 a day, so it completes across roughly three days. Every range here is pending, not lost — the manifest resumes rather than restarts.
+Accepted while the backfill is in progress. The daily grain costs ~26 000 weighted API calls against a free-tier allowance of 10 000 a day, so it completes across roughly three days. Every range here is pending, not lost; the manifest resumes rather than restarts.
 
 | city | from | to | days |
 |---|---|---|---:|
@@ -82,5 +82,5 @@ Nothing should ever land here. A gap in this category means a completed unit cov
 
 ## Verdict
 
-**No gap is unexplained.** Every one is either outside what the archive can serve, or inside a range the backfill has not reached yet — and the latter shrinks to nothing as the backfill completes.
+**No gap is unexplained.** Every one is either outside what the archive can serve, or inside a range the backfill has not reached yet, and the latter shrinks to nothing as the backfill completes.
 

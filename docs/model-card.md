@@ -1,7 +1,7 @@
-# Model card — extreme temperature anomaly classifier
+# Model card: extreme temperature anomaly classifier
 
 **What it does.** Given a city and a date, it estimates the probability that at
-least one day in the following week is an extreme temperature anomaly — daily
+least one day in the following week is an extreme temperature anomaly, meaning daily
 mean temperature more than 2.5 standard deviations from that city's
 day-of-year climatology, in either direction.
 
@@ -20,7 +20,7 @@ training and evaluation loop against warehouse data, honestly measured.
 | Type | XGBoost gradient-boosted trees, binary classification |
 | Trained | 1995-01-31 to 2018-12-24, 45 069 city-days, 6 cities |
 | Evaluated | 2022-01-01 to 2026-09-01, 8 506 city-days, 5 cities |
-| Snapshot | 59 090 rows to 2026-09-01 — **the backfill is incomplete** |
+| Snapshot | 59 090 rows to 2026-09-01, and **the backfill is incomplete** |
 
 ---
 
@@ -66,13 +66,13 @@ baseline, and the ordering holds in every city individually.
 - **Operational or public-safety use.** Not for emergency planning, health
   advisories, agricultural decisions, insurance pricing, or anything where a
   person acts on the number. It is under-calibrated in the *dangerous*
-  direction — see Limitation 1.
+  direction; see Limitation 1.
 - **Any city not in the training set.** 13.7% of the model's decision weight is
   a per-city lookup, so it does not transfer.
 - **Displaying `risk_score` as a probability without recalibration.** The rank
   is meaningful; the level is not.
-- **Long-range or single-day forecasting.** It answers one question — "any
-  extreme day in the next seven" — and cannot say which day, how severe, or how
+- **Long-range or single-day forecasting.** It answers one question, "any
+  extreme day in the next seven", and cannot say which day, how severe, or how
   long an event will last.
 
 ---
@@ -80,16 +80,16 @@ baseline, and the ordering holds in every city individually.
 ## Data
 
 **Source.** ERA5 reanalysis via the Open-Meteo archive API. Gridded
-reanalysis, not station observations — the model sees whichever ~25 km grid
+reanalysis, not station observations: the model sees whichever ~25 km grid
 cell answers for a city's coordinates.
 
-**Target.** `|Z| > 2.5` on at least one day in `t+1 … t+7`, where Z is the
+**Target.** `|Z| > 2.5` on at least one day in `t+1 ... t+7`, where Z is the
 daily mean temperature against a ±7-day day-of-year climatology that **excludes
 the observation's own year**. Both tails: a 2.5σ cold outbreak counts.
 
 **Features.** 27, all strictly backward-looking from day *t* inclusive. The
-order is part of the contract — a caller who supplies the right columns in the
-wrong order gets a confident wrong answer — so the list is printed rather than
+order is part of the contract, because a caller who supplies the right columns
+in the wrong order gets a confident wrong answer, so the list is printed rather than
 described:
 
 1. `temperature_2m_mean`
@@ -137,13 +137,13 @@ Test split, against baselines fixed and committed before the model was trained.
 
 | | PR-AUC | lift | Brier | F1 |
 |---|---:|---:|---:|---:|
-| no-skill reference | 0.1358 | 1.00× | 0.1239 | 0.2391 |
-| climatology baseline | 0.1514 | 1.12× | 0.1245 | 0.2116 |
-| persistence baseline | 0.2293 | 1.69× | 0.1146 | 0.3807 |
-| **this model** | **0.3494** | **2.57×** | **0.1102** | **0.3863** |
+| no-skill reference | 0.1358 | 1.00x | 0.1239 | 0.2391 |
+| climatology baseline | 0.1514 | 1.12x | 0.1245 | 0.2116 |
+| persistence baseline | 0.2293 | 1.69x | 0.1146 | 0.3807 |
+| **this model** | **0.3494** | **2.57x** | **0.1102** | **0.3863** |
 
 It beats both baselines on all three metrics, and beats persistence in every
-city individually — 1.7× in Singapore to 5.9× in Delhi.
+city individually, from 1.7x in Singapore to 5.9x in Delhi.
 
 **Accuracy is not reported.** At a 13.58% base rate, always answering "no
 anomaly" scores 86.4% and predicts nothing.
@@ -161,8 +161,8 @@ one point, and that point is where persistence is strongest.
 ### 1. It under-states risk in the present climate
 
 The most important line in this card. The positive rate is **5.51% in the
-training period and 13.58% in the test period** — it roughly doubles, then
-doubles again — because the climatology baseline spans the whole record and the
+training period and 13.58% in the test period**, roughly doubling and then
+doubling again, because the climatology baseline spans the whole record and the
 climate has warmed within it. The model is correctly calibrated to a world that
 no longer exists.
 
@@ -177,7 +177,7 @@ reader sees it as a percentage.**
 No pressure fields, no upper-air data, no NWP output, no teleconnection
 indices. It knows a city's own history. Its most confident false positive is
 diagnostic: Cairo on 2026-02-16, eight days into a hot spell with a Z of 2.95,
-scored 0.683 — and the spell simply broke the next day. Its most confident
+scored 0.683, and the spell simply broke the next day. Its most confident
 correct call, Delhi on 2026-03-09, had *less* evidence. **At this horizon it
 can tell you a spell is running; it cannot tell you when it will end**, and
 nothing in the feature set could.
@@ -188,7 +188,7 @@ Trained on Cairo, Delhi, Lagos, Phoenix, Singapore and Tokyo. No mid-latitude
 maritime climate, no continental winter, no Southern Hemisphere. The pooled
 metrics are not representative of the intended fifteen-city set and will move
 when the backfill completes. Ten of fifteen cities cannot be scored at all
-today — six never ingested, four with no usable window.
+today: six never ingested, four with no usable window.
 
 ### 4. 13.7% of the model is a city lookup
 
@@ -212,27 +212,27 @@ Lagos. The model inherits that conflation intact.
 
 ### 7. The climatology feature is not strictly backward in time
 
-Every rolling and lag feature is strictly backward — proved by rebuilding after
+Every rolling and lag feature is strictly backward, proved by rebuilding after
 rewriting the future and requiring the past to come back bit-identical. The
 climatological Z is the exception: its baseline excludes the observation's own
 year but not the years *after* it. A 2003 row is scored against a climatology
 that has seen 2020. It is a per-(city, day-of-year) constant rather than a path
-from any particular future day, and the alternative — an expanding climatology
-— would give the early record a baseline of two or three years. The trade is
+from any particular future day, and the alternative, an expanding climatology,
+would give the early record a baseline of two or three years. The trade is
 deliberate.
 
 ### 8. A single-day Z cannot express duration
 
 Phoenix's July 2023 heat dome peaks at Z = +1.97 and flags **zero** days. What
 was unprecedented was how long it lasted, and a per-day threshold cannot say
-that by construction. The detector — and therefore this model — is blind to
+that by construction. The detector, and therefore this model, is blind to
 duration-defined events.
 
 ### 9. Seasonality is real but non-stationary
 
 Fitted and scored inside the training period, a (city, week-of-year) baseline
-is worth 2.47× no-skill. Carried across the split it is worth **less than
-nothing** — 0.91×. Fitted on the test period itself it is worth 2.53× again.
+is worth 2.47x no-skill. Carried across the split it is worth **less than
+nothing**, at 0.91x. Fitted on the test period itself it is worth 2.53x again.
 The seasonal structure is still there; it is *different* structure, because the
 anomaly mix flips from 347 cold / 224 hot in training to 61 / 231 in test.
 
@@ -250,8 +250,8 @@ fixed in advance" stops being true.
 | property | how it is enforced |
 |---|---|
 | No feature sees the future | Rewrite every day after a cut, rebuild, require the past bit-identical |
-| The label window is exactly t+1…t+7 | One anomaly in a quiet series must label exactly the seven rows before it |
-| No feature reconstructs the label | Max single-feature rank AUC 0.643 (`anomaly_days_trailing30` — the persistence signal, not a leak) |
+| The label window is exactly t+1...t+7 | One anomaly in a quiet series must label exactly the seven rows before it |
+| No feature reconstructs the label | Max single-feature rank AUC 0.643 (`anomaly_days_trailing30`, the persistence signal, not a leak) |
 | The split is chronological | `max(train) < min(validation)`, plus a 7-day purge, plus a repo-wide scan for random splitters |
 | No resampling | Repo-wide scan for `imblearn` and the oversamplers |
 | Reproducible | Seed 42, single thread; two runs in separate processes must produce identical metrics |
@@ -275,7 +275,7 @@ number, or recalibrate first.
 The second is scope. Extreme heat is a mortality risk, concentrated among
 people least able to avoid it. A model trained on six grid cells over a
 truncated record is a demonstration of method, and presenting it as anything
-else — in a dashboard, a portfolio, or a conversation — would be a
+else, in a dashboard, a portfolio, or a conversation, would be a
 misrepresentation regardless of how good the PR-AUC looked.
 
 ---

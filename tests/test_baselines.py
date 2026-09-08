@@ -6,7 +6,7 @@ split itself is defended in ``test_split.py``.
 
 The **metrics** must be the ones the model will be scored with. Average
 precision for a constant prediction is the base rate by construction, which
-makes a constant a free self-check on the implementation — and one test uses it
+makes a constant a free self-check on the implementation, and one test uses it
 that way.
 
 The **fit** must never see the future. Baselines are fitted on train only;
@@ -227,7 +227,7 @@ def test_the_smoothing_limit_is_exactly_the_city_rate(parts) -> None:
     """At infinity the week cells collapse, and they collapse cleanly.
 
     Approaching the limit with a large finite pseudo-count leaves a
-    rounding-sized week term that still breaks ties — and on this data it
+    rounding-sized week term that still breaks ties, and on this data it
     breaks them the wrong way. The limit is computed, not approached.
     """
     limit = ClimatologyBaseline(smoothing=float("inf")).fit(parts["train"])
@@ -337,7 +337,7 @@ def test_the_scored_population_has_no_missing_feature(population) -> None:
     """Baseline and model must be scored on identical rows.
 
     A baseline ignores features, so nothing stops it scoring a row the model
-    cannot use — and comparing the two would then be comparing different test
+    cannot use, and comparing the two would then be comparing different test
     sets. Labelled and past the warm-up happens to leave a population with no
     null feature at all; this is where a future city that breaks that shows up.
     """
@@ -377,7 +377,7 @@ def test_the_week_of_year_signal_does_not_survive_the_split(population) -> None:
     Fitted and scored inside the training period the (city, week) climatology
     is worth about 2.3x no-skill, so the seasonal structure is real and the
     baseline is not broken. Carried across the split it is worth *less than
-    nothing* — the unsmoothed version ranks below random — because the anomaly
+    nothing*, since the unsmoothed version ranks below random, because the anomaly
     mix flips from mostly cold to mostly hot, and hot extremes fall in
     different weeks than cold ones. Validation therefore shrinks the week term
     away entirely, and the surviving baseline is a per-city rate.
@@ -391,7 +391,7 @@ def test_the_week_of_year_signal_does_not_survive_the_split(population) -> None:
     assert out_of_sample.lift < 1.0, (
         f"the raw week climatology now ranks above random out of sample "
         f"({out_of_sample.lift:.2f}x); the regime-shift finding recorded in "
-        "the README needs revisiting"
+        "the build log needs revisiting"
     )
 
     tuned = ClimatologyBaseline.tuned(parts["train"], parts["validation"])
@@ -402,7 +402,7 @@ def test_the_week_of_year_signal_does_not_survive_the_split(population) -> None:
 
 
 def test_the_committed_metrics_match_a_fresh_run(population) -> None:
-    """The target was fixed in advance — against a snapshot, and it says which.
+    """The target was fixed in advance, against a snapshot, and it says which.
 
     The backfill is mid-flight, so these numbers will change. A test that
     silently passed on a rebuilt file would defeat the point of committing it,

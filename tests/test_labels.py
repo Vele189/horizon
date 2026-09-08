@@ -3,12 +3,12 @@
 Looking forward is correct here and nowhere else, so the tests are about the
 *boundary* rather than about the direction. The central one puts a single
 anomaly into an otherwise quiet series and asserts it labels exactly the seven
-rows before it — not the day itself, not the eighth day back. An off-by-one at
+rows before it: not the day itself, not the eighth day back. An off-by-one at
 either end does not fail anything on its own: it produces a slightly different
 positive rate and a model quietly answering a different question.
 
 The second thing being proved is that the label cannot be read off the feature
-matrix. Exact reconstruction is the wrong measure — on floating-point columns
+matrix. Exact reconstruction is the wrong measure, because on floating-point columns
 every value is unique, so a check for "some function maps this column to the
 label" passes vacuously. Rank AUC asks whether a column alone could order the
 city-days with every positive first, and answers 1.0 for a leaked label.
@@ -48,7 +48,7 @@ from machine_learning.labels import (  # noqa: E402
 )
 
 #: The daily |Z| > 2.5 rate a normal distribution would give. The ticket's
-#: 3–6% expectation is this number carried through the window; the measured
+#: 3-6% expectation is this number carried through the window; the measured
 #: daily rate is higher because real residuals have fatter tails, and
 #: `test_the_positive_rate_is_the_daily_rate_carried_forward` proves that is
 #: where the whole excess comes from.
@@ -84,7 +84,7 @@ def test_a_single_anomaly_labels_exactly_the_seven_days_before_it() -> None:
     """One anomaly, and the exact set of rows it makes positive.
 
     This is the whole specification of the module in one assertion. Day *t*
-    itself is not positive — it is a feature, and a window that included it
+    itself is not positive: it is a feature, and a window that included it
     would hand the classifier its own answer through
     ``anomaly_days_trailing30``. The eighth day back is not positive either,
     because the window is seven days and not eight.
@@ -112,7 +112,7 @@ def test_every_offset_inside_the_window_labels_the_row(offset: int) -> None:
 
 @pytest.mark.parametrize("offset", [0, WINDOW_END + 1, WINDOW_END + 2])
 def test_no_offset_outside_the_window_labels_the_row(offset: int) -> None:
-    """Offset 0 is today — a feature. Offset 8 is next week's problem."""
+    """Offset 0 is today, a feature. Offset 8 is next week's problem."""
     frame = quiet(days=60)
     frame.loc[frame.index[30 + offset], "is_anomaly"] = True
     labels = build_labels(frame)
@@ -261,8 +261,8 @@ def test_the_reconstruction_check_catches_a_leaked_label() -> None:
     """The AUC test can fail, and this is what failing looks like.
 
     Two leaks, because they fail differently: the label copied outright scores
-    exactly 1.0, and a single day of the window — the shape an accidental
-    ``shift(-1)`` would take — scores far above anything an honest feature
+    exactly 1.0, and a single day of the window, the shape an accidental
+    ``shift(-1)`` would take, scores far above anything an honest feature
     reaches.
     """
     rng = np.random.default_rng(3)
@@ -271,8 +271,8 @@ def test_the_reconstruction_check_catches_a_leaked_label() -> None:
     frame.loc[frame.index[marks], "is_anomaly"] = True
 
     labels = drop_unlabelled(build_labels(frame))
-    # The label copied outright, a count taken over the label's own window —
-    # the shape a stray `shift(-1)` in features.py would produce — and noise.
+    # The label copied outright, a count taken over the label's own window
+    # (the shape a stray `shift(-1)` in features.py would produce) and noise.
     labels["copied"] = positives(labels[LABEL]).astype(float)
     labels["window_count"] = labels[FORWARD_COUNT].astype(float)
     labels["noise"] = rng.normal(size=len(labels))
@@ -340,12 +340,12 @@ def test_no_feature_reconstructs_the_label(labelled) -> None:
 
 
 def test_the_positive_rate_is_the_daily_rate_carried_forward(labelled) -> None:
-    """6.93%, against a ticket expecting 3–6%. The gap is accounted for.
+    """6.93%, against a ticket expecting 3-6%. The gap is accounted for.
 
-    Under independence a daily rate *p* gives a weekly rate of 1−(1−p)⁷.
-    Anomalies cluster, so the observed rate is always below that — and the
+    Under independence a daily rate *p* gives a weekly rate of 1-(1-p)⁷.
+    Anomalies cluster, so the observed rate is always below that, and the
     ratio between them is what the window construction controls. Feed the same
-    arithmetic the Gaussian tail rate the 3–6% expectation was drawn from, and
+    arithmetic the Gaussian tail rate the 3-6% expectation was drawn from, and
     it lands inside the band. The excess is entirely that real residuals have
     fatter tails than a normal, which ``fact_weather_anomalies`` already
     measured at 1.65% a day against a theoretical 1.24%.
@@ -373,7 +373,7 @@ def test_every_city_rate_is_its_own_daily_rate_carried_forward(labelled) -> None
     Every city sits at the same fraction of its own independence bound, so the
     variation between them is the variation in their daily anomaly rates and
     nothing else. Tokyo is highest because only four years of it have
-    backfilled, so its σ is noisy and it flags 3.9% of days — which is recorded
+    backfilled, so its σ is noisy and it flags 3.9% of days, which is recorded
     against the ``fact_weather_anomalies`` finding rather than tolerated here.
     """
     rows = []
@@ -386,7 +386,7 @@ def test_every_city_rate_is_its_own_daily_rate_carried_forward(labelled) -> None
     for city_id, daily, observed, ratio in rows:
         assert 0.40 <= ratio <= 0.85, (
             f"{city_id} sits at {ratio:.2f} of its independence bound "
-            f"({observed:.2%} observed, {daily:.2%} daily) — every other city "
+            f"({observed:.2%} observed, {daily:.2%} daily). Every other city "
             "is between 0.49 and 0.72, so this one clusters differently"
         )
 
@@ -399,7 +399,7 @@ def test_the_base_rate_climbs_through_the_chronological_split(labelled) -> None:
     """A finding for ML-03, recorded so it cannot be met by surprise.
 
     The proposal splits on time: train to 2018, validate to 2021, test after.
-    The positive rate is not the same in the three periods — it roughly
+    The positive rate is not the same in the three periods: it roughly
     doubles, then doubles again. That is the warming trend expressed through a
     climatology whose baseline spans the whole record, which
     ``fact_weather_anomalies`` already found as a positive corr(year, Z) in

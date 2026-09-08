@@ -1,7 +1,7 @@
 """Synthetic gold frames for the machine-learning suites.
 
 Shared rather than copied because two suites assert things about the *same*
-pipeline — the split tests need exactly the frame the baseline tests use, or
+pipeline: the split tests need exactly the frame the baseline tests use, or
 "the training split did not move" is a claim about a different dataset than the
 one the baselines were fitted on.
 
@@ -107,8 +107,8 @@ def rewrite_from(
 def repository_sources(exclude: "set[Path] | None" = None):
     """Every ``.py`` file in the repository, for the absence scans.
 
-    Two tickets ask for something to be *absent* — a random splitter (ML-04)
-    and a resampler (ML-05) — and absence is only checked if something walks
+    Two tickets ask for something to be *absent*, a random splitter (ML-04)
+    and a resampler (ML-05), and absence is only checked if something walks
     the tree. Not just the machine-learning package: the failure worth catching
     is a quick shuffled split or an oversampler in a dashboard script, where
     nobody would think to look.

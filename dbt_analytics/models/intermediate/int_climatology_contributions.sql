@@ -6,9 +6,9 @@
 --
 -- Sums rather than a recomputed aggregate because the whole point is to
 -- subtract. Computing a leave-one-out mean directly would mean re-aggregating
--- the window once per excluded year — thirty-one passes over the same rows.
+-- the window once per excluded year: thirty-one passes over the same rows.
 -- With Σn, Σx and Σx² the exclusion is arithmetic, and the identity
--- σ² = (Σx² − (Σx)²/n) / (n−1) recovers the standard deviation. A test
+-- σ² = (Σx² - (Σx)²/n) / (n-1) recovers the standard deviation. A test
 -- cross-checks the result against Postgres's own stddev_samp on the case
 -- where nothing is excluded, so the algebra is verified rather than trusted.
 --
@@ -17,7 +17,7 @@
 -- staging -> marts -> intermediate -> marts, which is not a layering anyone
 -- can follow and not one dbt's own conventions describe. The calendar
 -- expressions it needs come from a macro instead, so the two derivations
--- cannot drift — and a drift would be quiet, since both would still produce a
+-- cannot drift, and a drift would be quiet, since both would still produce a
 -- number between 1 and 366.
 with observations as (
 

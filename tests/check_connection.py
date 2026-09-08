@@ -51,7 +51,7 @@ def check(target: str, *, cold: bool = False) -> bool:
 
     print(f"  url            {mask_secret(url)}")
     if target == "serving":
-        print(f"  pooled         {'yes' if '-pooler.' in url else 'NO — not the pooled endpoint'}")
+        print(f"  pooled         {'yes' if '-pooler.' in url else 'NO, not the pooled endpoint'}")
         print(f"  sslmode        {'require' if 'sslmode=require' in url else 'MISSING'}")
 
     started = time.perf_counter()

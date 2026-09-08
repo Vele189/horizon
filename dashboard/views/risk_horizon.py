@@ -1,4 +1,4 @@
-"""View 4 — Risk Horizon.
+"""View 4: Risk Horizon.
 
 Which cities are flagged for the coming week?
 
@@ -18,7 +18,7 @@ score does not vary within them.
 
 **Ten of fifteen cities have no prediction, and each absence has a reason.**
 Those reasons are read from the model's own ``metrics.json`` rather than
-guessed from missing rows — the model records which cities it scored, which
+guessed from missing rows. The model records which cities it scored, which
 were ingested but not scorable, and which were never ingested.
 
 **The drivers are the model's, recorded at evaluation time.** The top SHAP
@@ -99,7 +99,7 @@ def model_report() -> Mapping[str, Any]:
     """The committed evaluation record, read as data rather than imported.
 
     ``metrics.json`` is loaded straight from disk instead of through
-    ``machine_learning`` — importing that package would pull XGBoost and
+    ``machine_learning``, because importing that package would pull XGBoost and
     scikit-learn into a deployment whose only job is to read finished rows out
     of Postgres. The file is committed precisely so this is possible.
     """
@@ -121,7 +121,7 @@ def top_drivers(limit: int = 8) -> pd.DataFrame:
 def absence_reasons() -> dict[str, str]:
     """Why a city has no score, in the model's own words.
 
-    Three states, and they wait on different things — the same distinction the
+    Three states, and they wait on different things. It is the same distinction the
     map draws, taken from the evaluation record rather than inferred from which
     rows happen to be missing.
     """
@@ -172,11 +172,11 @@ def _cell_text(row: pd.Series, day: dt.date, reasons: Mapping[str, str]) -> str:
     verdict = "above threshold" if row["prediction_label"] else "below threshold"
     return (
         f"{head}"
-        f"<br><b>{row['risk_score']:.3f}</b> risk score — {verdict}"
+        f"<br><b>{row['risk_score']:.3f}</b> risk score, {verdict}"
         f"<br>threshold <b>{row['decision_threshold']:.4f}</b>"
         f"<br><span style='font-size:0.85em'>one score for "
         f"{int(row['horizon_days'])} days: "
-        f"{row['horizon_start']:%d %b} – {row['horizon_end']:%d %b}</span>"
+        f"{row['horizon_start']:%d %b} - {row['horizon_end']:%d %b}</span>"
     )
 
 
@@ -247,7 +247,7 @@ def _figure(frame: pd.DataFrame, days: Sequence[dt.date], mode: theme.Mode) -> g
 DISCLAIMER: Final[str] = (
     "**This is a demonstration model, not an operational forecast.** It is a "
     "gradient-boosted tree fitted to thirty years of reanalysis and scored "
-    "against a fixed test split — not numerical weather prediction, which is "
+    "against a fixed test split. It is not numerical weather prediction, which is "
     "what actual forecasting uses and what this could not compete with. Do not "
     "plan anything around these numbers."
 )
@@ -279,7 +279,7 @@ def render() -> None:
 
     st.caption(
         f"One score per city for the whole window "
-        f"{days[0]:%d %b} – {days[-1]:%d %b} — the band is that score, not "
+        f"{days[0]:%d %b} - {days[-1]:%d %b}. The band is that score, not "
         f"seven daily estimates. A row with no fill is a city the model does "
         f"not score; hover it for the reason."
     )

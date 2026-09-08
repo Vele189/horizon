@@ -3,7 +3,7 @@
 The fact is selected from silver rather than joined to the dimensions. An
 inner join would enforce referential integrity by *dropping* rows it could not
 match, and a fact silently missing a city looks exactly like a city with no
-weather. The relationships tests assert the same property and fail loudly —
+weather. The relationships tests assert the same property and fail loudly,
 verified by planting an orphan city, which trips both the foreign key test and
 the row-count test.
 """
@@ -251,7 +251,7 @@ def test_the_index_is_declared_in_the_model(engine) -> None:
 
 
 def test_the_grain_index_serves_a_dashboard_query(engine, columns) -> None:
-    """One city, one year — the shape the dashboard actually issues."""
+    """One city, one year: the shape the dashboard actually issues."""
     plan = "\n".join(
         r[0]
         for r in query(
@@ -362,7 +362,7 @@ def test_tendency_uses_a_range_frame_not_lag() -> None:
     """`lag(pressure, 3)` counts rows, not hours.
 
     One missing hour makes it reach four hours back and report the difference
-    as a three-hour change — a fabricated storm signal from data that merely
+    as a three-hour change: a fabricated storm signal from data that merely
     had a hole.
     """
     body = HOURLY_MODEL.read_text(encoding="utf-8")

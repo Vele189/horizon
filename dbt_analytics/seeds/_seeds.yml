@@ -4,7 +4,7 @@ seeds:
   - name: cities
     description: >
       The fifteen target cities, generated from config/cities.yml by
-      dbt_analytics/export_cities.py. Never edited by hand — a test asserts it
+      dbt_analytics/export_cities.py. Never edited by hand; a test asserts it
       matches the YAML, because two copies of the same list is one copy and one
       liability.
     config:

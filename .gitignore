@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Secrets — nothing in this block may ever be committed.
+# Secrets: nothing in this block may ever be committed.
 # ---------------------------------------------------------------------------
 .env
 .env.*
@@ -14,7 +14,7 @@ secrets.yaml
 .neon/
 
 # ---------------------------------------------------------------------------
-# Data — raw API payloads are gzipped to disk, never to git (see §5.4).
+# Data: raw API payloads are gzipped to disk, never to git (see §5.4).
 # ---------------------------------------------------------------------------
 data/
 !data/.gitkeep

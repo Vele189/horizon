@@ -1,7 +1,7 @@
 -- A null tendency is correct at the start of a city's series and nowhere else.
 --
 -- Exactly three nulls per city for the 3-hour column and twenty-four for the
--- 24-hour one. More than that means the frame stopped matching — a gap, or a
+-- 24-hour one. More than that means the frame stopped matching: a gap, or a
 -- partition key that lost a city.
 with nulls as (
 

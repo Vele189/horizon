@@ -4,8 +4,8 @@ Gap arithmetic is the kind of code that looks obviously right and is off by a
 day. These tests insert known holes and check that each is found, measured, and
 placed in the category that explains it.
 
-Rows are inserted directly rather than through the loader — what is under test
-is the arithmetic over what landed, not the landing — and every test uses a
+Rows are inserted directly rather than through the loader, because what is
+under test is the arithmetic over what landed rather than the landing, and every test uses a
 synthetic city id so the real warehouse, which holds a backfill in progress,
 cannot influence the result.
 """

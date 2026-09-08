@@ -11,7 +11,7 @@ which a reader can trust it.
 
 The rest is structural: the sections a model card is expected to have, the
 feature list matching what the model actually records, and the two claims the
-proposal specifically asks be made in writing — that this does not compete with
+proposal specifically asks be made in writing: that this does not compete with
 operational forecasting, and that accuracy is not being reported.
 """
 
@@ -145,7 +145,7 @@ def test_each_key_figure_matches_the_metrics(card, metrics, figure) -> None:
     """The card cannot outlive the model it describes.
 
     Compared at the precision the card states, so writing 0.3494 is checked to
-    four places rather than against the full float — the card is for reading.
+    four places rather than against the full float, because the card is for reading.
     """
     claimed = stated(card)[figure]
     actual = FIGURES[figure](metrics)

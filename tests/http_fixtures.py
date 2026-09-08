@@ -2,8 +2,8 @@
 
 The transport is a ``requests`` adapter mounted on a real
 :class:`requests.Session`, not a mock of the client. Everything the client
-actually relies on — parameter encoding, the timeout tuple, header handling,
-status codes — runs for real; only the socket is replaced.
+actually relies on (parameter encoding, the timeout tuple, header handling,
+status codes) runs for real; only the socket is replaced.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ class ScriptedAdapter(BaseAdapter):
 
     Each entry is either a response factory (a callable taking the prepared
     request) or an exception instance to raise. The script must be consumed
-    exactly — a test that expects three attempts and gets two fails loudly
+    exactly: a test that expects three attempts and gets two fails loudly
     rather than passing on a coincidence.
     """
 

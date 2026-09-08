@@ -5,7 +5,7 @@ semantics are the deliverable as much as the numbers are.
 
 **One row per city per forecast date.** ``forecast_date`` is the last day of
 *observed* data the score was computed from, and the score covers the days
-**after** it — day *t* is a feature, so a window including it would be scoring
+**after** it: day *t* is a feature, so a window including it would be scoring
 the model on something it was handed. The window is carried in the row rather
 than implied: ``horizon_start``, ``horizon_end``, ``horizon_days``. A reader of
 one row should not need this docstring to know which seven days it is about.
@@ -144,7 +144,7 @@ def score_horizon(
     """Score the most recent ``dates`` forecast dates for every scorable city.
 
     Returns the rows to write and a coverage record saying which cities were
-    scored and, for the rest, why not — a city missing from the output is a
+    scored and, for the rest, why not. A city missing from the output is a
     fact about the backfill or about its climatology, and a table that simply
     lacks the row says neither.
 
@@ -175,7 +175,7 @@ def score_horizon(
         if frame is None:
             latest = _latest_observation(engine)
             # Padded by the warm-up so the earliest scored date has its full
-            # history, then trimmed — the same trap as everywhere else in this
+            # history, then trimmed, the same trap as everywhere else in this
             # workstream: a window measured against the request, not the data.
             start = latest - pd.Timedelta(days=dates + WARMUP_DAYS + 5)
             frame = load_features(engine, start=start)
@@ -248,7 +248,7 @@ def coverage(
     Named reasons rather than one gap. "Not in the output" is not an answer: a
     city can be absent because it has never been ingested, because it has no
     climatology baseline and therefore a null feature, because it is still
-    inside its warm-up, or because its record stops before the scored window —
+    inside its warm-up, or because its record stops before the scored window,
     and those are four different things to do something about. The ticket asks
     for output verified across all fifteen cities, and five of them can be
     scored today; the report is where the other ten say why not.
@@ -271,7 +271,7 @@ def coverage(
         if bool(recent["is_warmup"].iloc[0]):
             reasons[city_id] = "inside the feature warm-up"
         elif bool(recent["has_missing_feature"].iloc[0]):
-            reasons[city_id] = "a feature is null — no climatology baseline"
+            reasons[city_id] = "a feature is null: no climatology baseline"
         else:
             reasons[city_id] = "no rows in the scored window"
 
@@ -384,7 +384,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"  {city_id:<14} {reason}")
 
         if args.dry_run:
-            print("\n(dry run — nothing written)")
+            print("\n(dry run: nothing written)")
             return 0
 
         apply_schema(engine)

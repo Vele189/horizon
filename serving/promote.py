@@ -1,6 +1,6 @@
 """Copies the finished gold layer from the local warehouse to Neon.
 
-This is the boundary. Bronze and silver never cross it — not because the
+This is the boundary. Bronze and silver never cross it, not because the
 promotion could not carry them, but because nothing on the other side has any
 use for them and Neon's free plan gives 0.5 GB for everything. Raw landings and
 thin deduplication views are working material; a dashboard reads finished
@@ -14,7 +14,7 @@ and every query here is scoped to it. There is no code path that reaches
     python serving/promote.py --recreate       # rebuild tables whose shape drifted
 
 **The DDL is read from the local catalog, never written by hand.** A second
-copy of the marts' shape — a ``serving_schema.sql`` beside the dbt models —
+copy of the marts' shape, a ``serving_schema.sql`` beside the dbt models,
 would be one more file to keep in step with seven models, and the day it fell
 behind the promotion would build yesterday's columns and fail in a COPY with a
 message about counts rather than about drift. The local warehouse is the
@@ -37,7 +37,7 @@ the rest of this module already has with the local catalog.
 joining ``fact_ml_predictions`` to ``dim_cities`` while a per-table promotion
 was halfway through would read a new fact against an old dimension and show a
 number that never existed. One transaction costs a longer ``ACCESS EXCLUSIVE``
-lock — the promotion is minutes, and the readers are a handful — and buys two
+lock, since the promotion is minutes and the readers are a handful, and buys two
 things worth more than that: the swap is atomic, and a failure at table six
 leaves Neon in exactly the state it was in before table one. That second
 property *is* the idempotency: re-running after a failure is not a repair, it
@@ -112,7 +112,7 @@ EXCLUDED_SUFFIXES: Final[tuple[str, ...]] = ("__dbt_tmp", "__dbt_backup")
 
 #: Neon scales an idle compute endpoint to zero after five minutes on the free
 #: plan. Those five minutes are billed, so a promotion's compute cost is its
-#: active time plus this tail — quoting only the active time would understate
+#: active time plus this tail; quoting only the active time would understate
 #: every run by the same fixed amount.
 SCALE_TO_ZERO_SECONDS: Final[int] = 300
 
@@ -179,10 +179,10 @@ class TableDefinition:
     """Everything about one mart that the serving copy has to reproduce.
 
     Constraints are restricted to primary keys, uniques and checks. Foreign
-    keys are deliberately not carried: there are none in gold — the facts
-    select from silver rather than joining the dimensions, precisely so that a
-    fact whose city is missing shows up as a broken relationship test instead
-    of vanishing — and carrying them would make the promotion order-dependent
+    keys are deliberately not carried: there are none in gold, because the
+    facts select from silver rather than joining the dimensions, precisely so
+    that a fact whose city is missing shows up as a broken relationship test
+    instead of vanishing, and carrying them would make the promotion order-dependent
     for no gain.
     """
 
@@ -264,7 +264,7 @@ def describe_table(conn, table: str) -> TableDefinition:
             for name, type_, not_null, default in cur.fetchall()
         )
         if not columns:
-            raise PromotionError(f"{qualified} has no columns — is it a table?")
+            raise PromotionError(f"{qualified} has no columns. Is it a table?")
 
         # Primary keys, uniques and checks travel with the table body so the
         # target is constrained from the moment it exists, not from whenever a
@@ -347,7 +347,7 @@ def create_table_sql(definition: TableDefinition) -> str:
 
 #: Renders every column of a row as text, hashes it to 32 bits, and sums the
 #: hashes. Summing rather than concatenating makes it independent of row order,
-#: so neither side needs a sort — which matters because the target would have
+#: so neither side needs a sort, which matters because the target would have
 #: to sort 263 000 rows over a serverless connection to produce one.
 #:
 #: What it compares is the *text rendering* of each row, which is exactly what
@@ -410,7 +410,7 @@ def drifted_columns(
 ) -> tuple[str, ...]:
     """Differences between the local mart and the serving copy, as sentences.
 
-    Column *order* is not drift — the COPY names its columns on both sides, so
+    Column *order* is not drift, because the COPY names its columns on both sides, so
     a target built by an older run loads fine. Names and types are, and both
     fail a COPY with a message about the data rather than about the schema,
     which is why they are checked here first.
@@ -455,14 +455,14 @@ def storage(conn) -> Storage | None:
     """Read the serving project's size and its hard cap from the server.
 
     ``pg_cluster_size()`` comes from Neon's own extension and reports the
-    project's synthetic storage — the number the free plan's 0.5 GB is measured
-    against — rather than one database's heap. ``neon.max_cluster_size`` is the
+    project's synthetic storage, the number the free plan's 0.5 GB is measured
+    against, rather than one database's heap. ``neon.max_cluster_size`` is the
     limit the server itself enforces. Both are read rather than assumed so the
     headroom reported here cannot disagree with the thing that refuses a write.
 
     Returns:
         ``None`` when the target is not a Neon endpoint. Nothing else in the
-        promotion is Neon-specific — the copy is plain Postgres — so a target
+        promotion is Neon-specific (the copy is plain Postgres) so a target
         without these is reported as unmeasured rather than treated as a
         failure. Availability is checked in the catalogue rather than by
         attempting the ``create`` and catching, because a failed statement
@@ -519,7 +519,7 @@ class TablePromotion:
 
     @property
     def reconciled(self) -> bool:
-        """Counts agree — and contents too, when they were checked.
+        """Counts agree, and contents too, when they were checked.
 
         Counts alone would pass a promotion that moved the right number of
         wrong rows. When ``--verify`` was asked for, agreement means agreement
@@ -579,8 +579,8 @@ class PromotionReport:
 def _copy_table(source, target, definition: TableDefinition) -> tuple[int, float, float]:
     """Extract one mart to a buffer, then load it. Returns bytes and timings.
 
-    The buffer spools to disk past 32 MB, so the largest mart — 50 MB of hourly
-    facts — never sits in memory whole, and a mart ten times that size would
+    The buffer spools to disk past 32 MB, so the largest mart, 50 MB of hourly
+    facts, never sits in memory whole, and a mart ten times that size would
     still promote on a laptop.
     """
     columns = definition.column_list
@@ -656,12 +656,12 @@ def promote(
         target: A connection to Neon. Left untouched when ``dry_run``.
         definitions: What to promote, from :func:`plan`.
         recreate: Drop and rebuild a target table whose shape has drifted.
-            Without it, drift raises — a promotion that quietly reshapes the
+            Without it, drift raises: a promotion that quietly reshapes the
             serving database is not something to do as a side effect.
         dry_run: Report the plan, the drift and the sizes; write nothing.
         verify: Compare the contents of each table as well as its row count.
             Costs one extra full scan on each side, and the target's scan is
-            the expensive one — see :func:`fingerprint`.
+            the expensive one; see :func:`fingerprint`.
         on_table: Called with each :class:`TablePromotion` as it completes, so
             a long run can print progress instead of going quiet.
 
@@ -805,7 +805,7 @@ def promote(
                     _, result.target_checksum = fingerprint(target, definition)
                     result.verify_seconds = time.perf_counter() - started
                     if source_rows != result.source_rows:
-                        # The local mart changed under the promotion — a dbt
+                        # The local mart changed under the promotion, a dbt
                         # run in another terminal. Everything copied is now of
                         # unknown vintage, so it does not get committed.
                         raise PromotionError(
@@ -903,7 +903,7 @@ def _print_report(report: PromotionReport, definitions: Sequence[TableDefinition
     if verified:
         verdict += " (rows and contents)" if report.verified else " (rows only)"
     else:
-        verdict += " (rows only — pass --verify to compare contents)"
+        verdict += " (rows only; pass --verify to compare contents)"
     print(f"  {'all tables':28}  {verdict}")
 
     print("\n=== indexes on the target ===")
@@ -919,13 +919,13 @@ def _print_report(report: PromotionReport, definitions: Sequence[TableDefinition
         elif result.target_indexes == expected:
             note = "  matches the local mart"
         else:
-            note = f"  MISMATCH — {expected} on the local mart"
+            note = f"  MISMATCH: {expected} on the local mart"
         print(f"  {result.table:28}{result.target_indexes:>3} index(es){note}")
 
     before, after = report.storage_before, report.storage_after
     if not (before and after):
         print("\n=== storage ===")
-        print("  not measured — the target is not a Neon endpoint "
+        print("  not measured: the target is not a Neon endpoint "
               "(no pg_cluster_size to read)")
     else:
         print("\n=== Neon storage ===")
@@ -1005,7 +1005,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"  crosses       {GOLD_SCHEMA}")
     print(f"  stays local   {', '.join(LOCAL_ONLY_SCHEMAS)}")
     if args.dry_run:
-        print("  mode          dry run — nothing will be written")
+        print("  mode          dry run, nothing will be written")
 
     source = psycopg2.connect(source_url)
     target = psycopg2.connect(target_url)

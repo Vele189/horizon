@@ -24,14 +24,14 @@ select
     observations.city_id,
 
     -- The dimensional key, and the grain. Daily aggregates are computed over
-    -- UTC calendar days upstream — ING-01 requests timezone=UTC and asserts
-    -- the offset is zero on every response — so this cast is a projection of a
+    -- UTC calendar days upstream, since ING-01 requests timezone=UTC and
+    -- asserts the offset is zero on every response, so this cast is a projection of a
     -- day that is already a UTC day, not a timezone conversion.
     (observations.observation_time at time zone 'UTC')::date as date_key,
 
     -- The exact instant, carried alongside the key. Eight bytes for the
     -- ability to join back to silver and bronze without reconstructing a
-    -- midnight, and for a timestamp that says which zone it is in — the date
+    -- midnight, and for a timestamp that says which zone it is in, which the date
     -- above does not.
     observations.observation_time,
 

@@ -1,4 +1,4 @@
-"""Decomposes the backfill into resumable city × window work units.
+"""Decomposes the backfill into resumable city x window work units.
 
 Three things live here: the arithmetic that turns "fifteen cities, thirty
 years" into a deterministic list of requests, an append-only manifest recording
@@ -8,8 +8,8 @@ budget. ING-04 executes the queue; this module only decides what the queue is.
 **Open-Meteo does not meter HTTP requests, it meters weighted API calls.** The
 documented rule is that a request costs ``(variables / 10) x (days / 14)``
 calls, each factor floored at 1. Measured against the live API on 2026-09-07:
-five HTTP requests for London — one, two, five, ten, and thirty years of daily
-data — were refused on the fifth with
+five HTTP requests for London (one, two, five, ten, and thirty years of daily
+data) were refused on the fifth with
 
     HTTP 429 ... Minutely API request limit exceeded.
 
@@ -23,13 +23,13 @@ Two consequences shape everything below.
 *   **Chunk size is quota-neutral above fourteen days.** Weight is proportional
     to days, so ten one-year units cost the same as one ten-year unit. Below
     fourteen days the floor makes short units cost a full call each, so smaller
-    is never cheaper — it only buys finer resume granularity and smaller
+    is never cheaper: it only buys finer resume granularity and smaller
     payloads. That frees the default to be chosen for legibility: one calendar
     year, which measures 47 KiB daily and 732 KiB hourly.
 *   **The full backfill does not fit in one day of free quota.** Thirty-one
     years of daily observations across fifteen cities is roughly 26 000
     weighted calls against an allowance of 10 000 per day. This is not a
-    problem to engineer around — it is the reason the manifest exists. Run
+    problem to engineer around; it is the reason the manifest exists. Run
     until the budget is spent, stop, resume tomorrow.
 
 Usage::
@@ -101,7 +101,7 @@ BACKFILL_START: Final[dt.date] = dt.date(1995, 1, 1)
 HOURLY_BACKFILL_MONTHS: Final[int] = 24
 
 #: The archive trails the present. Open-Meteo states its exact cut-off in the
-#: 400 it returns for a range beyond it — on 2026-09-07 that was yesterday —
+#: 400 it returns for a range beyond it (on 2026-09-07 that was yesterday),
 #: but ERA5 final data lags further, so plans stop short of the edge rather
 #: than planning units that may 400 on the day they run.
 ARCHIVE_LAG_DAYS: Final[int] = 5
@@ -123,7 +123,7 @@ DAILY_QUOTA_CALLS: Final[float] = 10_000.0
 
 #: Plan against a fraction of each allowance. The budget is shared with
 #: anything else on the same address, the weight formula is documented rather
-#: than guaranteed, and the cost of being wrong is a 429 — far more than the
+#: than guaranteed, and the cost of being wrong is a 429, far more than the
 #: seconds this headroom costs.
 MINUTELY_SAFETY_FACTOR: Final[float] = 0.5
 HOURLY_SAFETY_FACTOR: Final[float] = 0.9
@@ -168,9 +168,9 @@ def api_call_weight(days: int, variables: int) -> float:
 def delay_seconds_for(weight: float, floor: float) -> float:
     """Seconds to wait after a request of this weight.
 
-    Paces against weighted calls rather than request count — a fixed
+    Paces against weighted calls rather than request count, since a fixed
     one-second delay between one-year daily units would spend 3 300 calls a
-    minute against a 600 budget — and against **both** short allowances, not
+    minute against a 600 budget, and against **both** short allowances, not
     just the minutely one.
 
     Pacing on the minutely limit alone is what the first real backfill run got
@@ -181,7 +181,7 @@ def delay_seconds_for(weight: float, floor: float) -> float:
         HTTP 429 ... Hourly API request limit exceeded
 
     nineteen minutes in, having spent 5 059 calls. The hourly limit is the
-    binding one at any pace worth using, and it works out four times slower —
+    binding one at any pace worth using, and it works out four times slower:
     roughly 44 seconds between one-year daily units rather than 11.
 
     ``floor`` is the configured politeness minimum, applied even when a unit is
@@ -348,7 +348,7 @@ class Manifest:
     Completion is tested by **date coverage**, not by matching the window key.
     A unit is skipped when its whole range is already covered for that city and
     grain, however that coverage was assembled. This is what lets the chunk
-    size change between sessions — the natural response to a 429 or a timeout
+    size change between sessions: the natural response to a 429 or a timeout
     is to halve it, and re-fetching everything landed so far would be a harsh
     price for that.
     """
@@ -461,7 +461,7 @@ class Manifest:
     def compact(self) -> int:
         """Rewrite the manifest with unreadable lines dropped and spans merged.
 
-        Purely cosmetic — nothing depends on it. Useful after a long backfill
+        Purely cosmetic; nothing depends on it. Useful after a long backfill
         has accumulated hundreds of one-year records. Writes to a temporary
         file in the same directory and renames over the original, so an
         interruption leaves the previous manifest intact.
@@ -625,7 +625,7 @@ def plan_backfill(
 
     The order is city-major and then chronological, matching ``cities.yml``, so
     two runs of the same inputs produce byte-identical plans and a city becomes
-    complete — and therefore usable by the Day 8 validation gate — as early as
+    complete, and therefore usable by the Day 8 validation gate, as early as
     possible rather than every city finishing at once at the end.
     """
     resolved_settings = settings if settings is not None else get_settings()
@@ -707,7 +707,7 @@ def _mib(count: int) -> str:
 def _print_progress(manifest: Manifest, registry: CityRegistry) -> None:
     print(f"Manifest: {manifest.path}")
     if not len(manifest):
-        print("  empty — nothing has landed yet")
+        print("  empty: nothing has landed yet")
         return
     print(
         f"  {len(manifest)} records, {manifest.completed_rows():,} rows, "
@@ -796,7 +796,7 @@ def _main(argv: list[str] | None = None) -> int:
     print(f"  already landed  {len(plan.skipped)}")
     print(f"  pending         {len(plan.units)}")
     if not plan.units:
-        print("\n  nothing to do — the manifest covers every planned window.")
+        print("\n  nothing to do: the manifest covers every planned window.")
         return 0
 
     for grain in ("daily", "hourly"):
@@ -823,7 +823,7 @@ def _main(argv: list[str] | None = None) -> int:
     if plan.quota_days > 1:
         print(
             f"\n  This plan exceeds one day of free quota. Run it, let it stop at "
-            f"the budget,\n  and resume tomorrow — the manifest at {manifest.path}\n"
+            f"the budget,\n  and resume tomorrow: the manifest at {manifest.path}\n"
             "  makes that free."
         )
 

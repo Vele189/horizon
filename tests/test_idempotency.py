@@ -7,15 +7,15 @@ corrupts the warehouse a little further.
 The guarantee has two layers, and both are tested here because neither is
 sufficient alone:
 
-1.  **Run level — the manifest.** A unit recorded as landed is not planned
+1.  **Run level: the manifest.** A unit recorded as landed is not planned
     again, so a re-run makes no requests and writes no rows. This is the layer
     ``make run`` relies on, and it is exact: the row count after a re-run is
     the same number, not a similar one.
-2.  **Row level — append-only bronze, deduplicated in silver (DBT-02).** There
+2.  **Row level: append-only bronze, deduplicated in silver (DBT-02).** There
     is one window where layer 1 cannot hold: a crash between the warehouse
     commit and the manifest write leaves rows that nothing has recorded, and
-    the next run lands them again. That direction is deliberate — duplicates
-    are recoverable and holes are silent — and it is why deduplication is
+    the next run lands them again. That direction is deliberate, because
+    duplicates are recoverable and holes are silent, and it is why deduplication is
     deferred to SQL rather than relied on here.
 
 The last section runs the actual silver dedup over deliberately duplicated
@@ -254,7 +254,7 @@ def test_a_lost_manifest_duplicates_rather_than_leaving_a_hole(
     """A crash between the warehouse commit and the manifest write.
 
     The manifest is written last on purpose. Writing it first would let the
-    same crash leave a manifest claiming rows that are not there — a hole no
+    same crash leave a manifest claiming rows that are not there, a hole no
     downstream model would report. Duplicates are the recoverable direction.
     """
     units = planned(settings, manifest, cities=("london",))

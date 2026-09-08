@@ -9,7 +9,7 @@
         Meteorological seasons, which are whole months and not the astronomical
         solstice-to-solstice ones: DJF, MAM, JJA, SON in the north. The
         southern set is the same months shifted by six, so December is summer
-        in Sydney and winter in London — the same row of dim_date, two answers.
+        in Sydney and winter in London: the same row of dim_date, two answers.
     `wet_dry`
         Lagos. A tropical monsoon climate has no thermal season worth the name;
         what varies is rainfall. Forcing "winter" onto a Lagos December

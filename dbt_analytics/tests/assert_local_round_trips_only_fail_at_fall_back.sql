@@ -1,7 +1,7 @@
 -- Local time is a one-way view of UTC, and this bounds how lossy it is.
 --
 -- `AT TIME ZONE` returns a naive wall-clock reading, and at a daylight-saving
--- fall-back two different instants produce the same reading — so converting
+-- fall-back two different instants produce the same reading, so converting
 -- back cannot recover which. That is a property of clocks, not a bug, and it
 -- is why UTC is what silver stores and what everything joins on.
 --

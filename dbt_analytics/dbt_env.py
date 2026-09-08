@@ -2,7 +2,7 @@
 
 dbt's postgres adapter takes host, user, password, port and dbname as separate
 settings and has no way to accept a URL. The alternative to this file would be
-a second set of variables in ``.env`` that could drift from ``DATABASE_URL`` —
+a second set of variables in ``.env`` that could drift from ``DATABASE_URL``:
 one of them updated, the other not, and a dbt run quietly building against
 yesterday's database. So the URL stays the single source and this splits it.
 

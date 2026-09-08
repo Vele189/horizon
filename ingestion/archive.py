@@ -1,11 +1,11 @@
-"""Gzipped raw payloads on disk — the "raw" in bronze, without the storage bill.
+"""Gzipped raw payloads on disk: the "raw" in bronze, without the storage bill.
 
 One file per work unit, at ``data/raw/{grain}/{city_id}/{start}_{end}.json.gz``.
 What lands there is the response body exactly as it arrived: not re-serialised,
 not reordered, not validated. Nothing this project wrote has touched it.
 
-The point is a specific failure. A parsing bug found on day seven — a unit
-misread, a timestamp off by an hour, a column mapped to the wrong variable —
+The point is a specific failure. A parsing bug found on day seven (a unit
+misread, a timestamp off by an hour, a column mapped to the wrong variable)
 costs a re-run of the transformation if the payloads are on disk, and a
 2.7-day re-pull of the whole archive if they are not. So the write happens
 *before* the parse, through :func:`ingestion.client.fetch_observations`'s
@@ -100,7 +100,7 @@ def archive_path(
 ) -> Path:
     """Where one unit's payload lives.
 
-    The path carries the whole identity of the unit — grain, city, window — so
+    The path carries the whole identity of the unit (grain, city, window) so
     the directory tree is its own index. Nothing needs a sidecar file to know
     what is on disk, and a human can find one city's 1998 by looking.
     """
@@ -129,7 +129,7 @@ def write(
     Written to a temporary file in the destination directory, fsynced, then
     renamed over the target. A rename within one filesystem is atomic, so a
     reader never sees a half-written archive and a crash mid-write leaves the
-    previous file — or no file — rather than a corrupt one.
+    previous file, or no file, rather than a corrupt one.
 
     ``mtime=0`` and an empty ``filename`` keep the output byte-identical for
     identical input, which is what makes re-archiving a unit detectable as a
@@ -297,7 +297,7 @@ def replay_unit(
     Runs the archived payload through the same :func:`_validate` the live path
     uses, so a fix to the parser applies to replay without being applied twice.
     The ``source_url`` is reproduced by :func:`~ingestion.client.request_url`,
-    which prepares the identical string the request carried — the one thing
+    which prepares the identical string the request carried. It is the one thing
     here that reads ``config/cities.yml``, because the requested coordinates
     are not recoverable from a response that reports the snapped grid cell.
     """
@@ -346,15 +346,15 @@ def source_url_for(
     """The request URL that produced a given bronze row.
 
     Bronze deliberately does not store this. Measured at 712 bytes per daily
-    row and 466 per hourly one — 83% and 81% of the row payload, roughly 300 MB
-    across the full backfill — for a value that is one of a few hundred
+    row and 466 per hourly one, 83% and 81% of the row payload and roughly
+    300 MB across the full backfill, for a value that is one of a few hundred
     distinct strings, and that :func:`~ingestion.client.request_url` rebuilds
     exactly from the window it came from.
 
     The window is what the row does not carry, and the archive is the record of
     it: the file whose name spans this observation is, by construction, the one
     that was fetched. That makes the archive load-bearing for provenance as
-    well as for replay, which is the trade — 300 MB of warehouse against a
+    well as for replay, which is the trade: 300 MB of warehouse against a
     directory that must not be deleted.
 
     Raises:
@@ -443,7 +443,7 @@ class ArchiveStats:
         """Compressed size of an archive holding this many rows of each grain.
 
         Per grain, not blended. A daily row carries 21 variables and a hourly
-        row 12, and they compress at roughly 34 and 15 bytes per row — so a
+        row 12, and they compress at roughly 34 and 15 bytes per row, so a
         single average rate applied to a row count with a different daily/hourly
         mix than the sample is simply the wrong number. Grains whose rate has
         not been measured contribute nothing rather than a guess.
@@ -548,7 +548,7 @@ def _main(argv: list[str] | None = None) -> int:
     measured = stats(root, settings=settings)
     print(f"Archive: {root}")
     if not measured.files:
-        print("  empty — nothing archived yet")
+        print("  empty: nothing archived yet")
         return 0
 
     print(

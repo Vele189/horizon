@@ -113,7 +113,7 @@ def test_the_configured_root_is_used_when_none_is_given(settings, root) -> None:
 
 
 def test_what_comes_back_is_exactly_what_went_in(root: Path) -> None:
-    """Not re-serialised, not reordered — byte-identical."""
+    """Not re-serialised, not reordered: byte-identical."""
     raw = payload_bytes()
     archive.write(UNIT, raw, root)
     assert archive.read_bytes(UNIT, root) == raw
@@ -157,7 +157,7 @@ def test_rewriting_replaces_and_leaves_no_temporary_files(root: Path) -> None:
 
 
 def test_a_failed_write_leaves_no_partial_file(root: Path, monkeypatch) -> None:
-    """A crash mid-write must leave the previous file, or none — never a stub."""
+    """A crash mid-write must leave the previous file, or none, but never a stub."""
     archive.write(UNIT, payload_bytes(), root)
     good = archive.archive_path(UNIT, root).read_bytes()
 
@@ -183,7 +183,7 @@ def test_a_failed_write_leaves_no_partial_file(root: Path, monkeypatch) -> None:
 def test_the_payload_is_archived_before_it_is_parsed(settings, root) -> None:
     """The whole ticket in one test.
 
-    This response is well-formed JSON that fails validation — the units come
+    This response is well-formed JSON that fails validation: the units come
     back in Fahrenheit. If archival ran after parsing, the payload would be
     lost and the fix would cost a re-pull.
     """
@@ -285,7 +285,7 @@ def no_network(monkeypatch):
 
 
 def test_replay_reproduces_the_live_response(settings, root, no_network) -> None:
-    """Identical rows, identical provenance — from disk, with the socket shut."""
+    """Identical rows, identical provenance, from disk with the socket shut."""
     live, _ = fetch(
         [responds(json_body=daily_payload(DAYS, START))],
         settings,

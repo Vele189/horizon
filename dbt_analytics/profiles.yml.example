@@ -1,5 +1,5 @@
 # =============================================================================
-# dbt connection profile — TEMPLATE
+# dbt connection profile: TEMPLATE
 # =============================================================================
 # Copy to profiles.yml, which is git-ignored:
 #
@@ -10,14 +10,14 @@
 #
 # Every field is read from the environment. Nothing is hardcoded and nothing is
 # committed. The variables are derived from DATABASE_URL and
-# SERVING_DATABASE_URL rather than being a second set to keep in step —
+# SERVING_DATABASE_URL rather than being a second set to keep in step.
 # `dbt_env.py` splits the URL and exports them:
 #
 #     eval "$(python dbt_analytics/dbt_env.py)"   # then dbt run
 #     python dbt_analytics/dbt_env.py -- dbt run  # or inject and exec
 #
 # `dev` is the local Docker warehouse and the default. `prod` is Neon, and is
-# only used to promote gold marts (§5.4) — the backfill and all dbt iteration
+# only used to promote gold marts (§5.4). The backfill and all dbt iteration
 # run against dev, because a multi-hour job against a serverless database is
 # slow and wastes the free compute allowance.
 # =============================================================================

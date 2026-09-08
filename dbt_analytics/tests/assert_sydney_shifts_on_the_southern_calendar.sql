@@ -1,7 +1,7 @@
 -- Sydney's clocks go forward in October and back in April.
 --
--- The trap is a pipeline that hardcodes the northern calendar — March forward,
--- October back — which for Sydney is not merely wrong but inverted: it would
+-- The trap is a pipeline that hardcodes the northern calendar, March forward
+-- and October back, which for Sydney is not merely wrong but inverted: it would
 -- add an hour exactly when an hour should be subtracted, doubling the error.
 --
 -- Asserted by checking that Sydney's UTC offset really does take both values

@@ -12,8 +12,8 @@ prediction is 0.07 classifies nothing at 0.5 and would post F1 = 0.00 while
 ranking better than everything else in the table. The threshold is chosen on
 validation, and a test requires rewriting the test split to leave it alone.
 
-**The picture.** A precision–recall curve drawn as straight lines between its
-points shows operating points that do not exist — persistence has two of them,
+**The picture.** A precision-recall curve drawn as straight lines between its
+points shows operating points that do not exist. Persistence has two of them,
 and joining them draws a diagonal that integrates to roughly twice the average
 precision the same predictor scores. The curve is drawn as a step function, and
 a test integrates the drawn points and requires the result to equal the
@@ -75,7 +75,7 @@ def test_accuracy_is_absent_from_the_codebase() -> None:
         if name in text
     ]
     assert not offenders, (
-        "accuracy reached the codebase — at a 13.6% base rate, always "
+        "accuracy reached the codebase: at a 13.6% base rate, always "
         f"answering 'no anomaly' scores 86.4%: {offenders}"
     )
 
@@ -97,7 +97,7 @@ def test_the_threshold_maximises_f1_on_what_it_is_given() -> None:
     threshold, f1 = best_threshold(labels, predictions)
 
     # Sweeping by hand: at 0.4 the flagged set is {0.9, 0.8, 0.7, 0.4},
-    # 3 of 4 correct, recall 1.0 — precision 0.75, F1 6/7.
+    # 3 of 4 correct, recall 1.0, precision 0.75, F1 6/7.
     assert threshold == pytest.approx(0.4)
     assert f1 == pytest.approx(6 / 7)
 
@@ -157,7 +157,7 @@ def test_the_step_curve_integrates_to_the_reported_pr_auc() -> None:
 
     Average precision is a step-wise sum. A curve joined by straight segments
     encloses more area than that sum, so a reader comparing the picture with
-    the table would find them disagreeing — most severely for a predictor with
+    the table would find them disagreeing, most severely for a predictor with
     two operating points, whose straight line integrates to roughly twice its
     score.
     """
@@ -339,7 +339,7 @@ def test_the_specified_model_loses_on_calibration_and_the_report_says_so(
     assert verdict["pr_auc"] is True
     assert verdict["brier"] is False, (
         "the weighted model now beats the no-skill reference on Brier; the "
-        "calibration finding recorded in the README needs revisiting"
+        "calibration finding recorded in the build log needs revisiting"
     )
     detail = report["verdict"]["model_weighted"]["detail"]["brier"]
     assert detail["base_rate"] is False
@@ -383,6 +383,6 @@ def test_the_committed_figures_are_current(warehouse_report, tmp_path) -> None:
         beside = FIGURE_DIR / path.name
         assert beside.exists(), f"{beside} is missing"
         assert beside.read_bytes() == path.read_bytes(), (
-            f"{beside.name} is out of date — re-run "
+            f"{beside.name} is out of date; re-run "
             "`python machine_learning/evaluate.py --write`"
         )

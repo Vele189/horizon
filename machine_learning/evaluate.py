@@ -2,10 +2,10 @@
 
 **Accuracy is excluded deliberately.** At a 13.58% test base rate, a model that
 answers "no anomaly" every single time is 86.4% accurate. Reporting that number
-beside a real result is not a rounding of the truth, it is an inversion of it —
+beside a real result is not a rounding of the truth, it is an inversion of it,
 and any reader who knows the field reads it as a signal that nobody in the
 project understood the base rate. The scikit-learn function for it does not
-appear anywhere in this repository, and a test enforces that — the forbidden
+appear anywhere in this repository, and a test enforces that. The forbidden
 names are listed in ``tests/test_evaluation.py`` rather than here, so the scan
 does not find its own explanation.
 
@@ -13,14 +13,14 @@ What is reported instead:
 
 * **PR-AUC**, with the base rate printed beside it, because average precision
   for a random ranker *is* the base rate.
-* **F1, precision and recall** at a threshold chosen on **validation** — never
+* **F1, precision and recall** at a threshold chosen on **validation**, never
   on test, and never at 0.5. A model whose mean prediction is 0.07 classifies
   nothing at 0.5 and would score F1 = 0.00 while ranking better than anything
   else in the table.
 * **Brier**, which is the only one of these that notices a probability is
   wrong rather than merely badly ordered.
-* **A precision–recall curve and a calibration curve**, saved as SVG with a
-  rasterised PNG beside them — the same arrangement as the lineage diagram, and
+* **A precision-recall curve and a calibration curve**, saved as SVG with a
+  rasterised PNG beside them, the same arrangement as the lineage diagram, and
   for the same reasons: SVG diffs as text, PNG is what a README renders. A test
   regenerates both and fails if they differ, so the figures cannot go stale.
 
@@ -118,8 +118,8 @@ def best_threshold(labels: pd.Series, predictions) -> tuple[float, float]:
     only that decision by coincidence. On a model whose mean prediction is 0.07
     it is the decision to never raise an alarm at all.
 
-    Ties break towards the **lower** threshold — the more sensitive of two
-    equally good rules — and the sweep is over the thresholds the data itself
+    Ties break towards the **lower** threshold, the more sensitive of two
+    equally good rules, and the sweep is over the thresholds the data itself
     produces, so no grid resolution is being chosen invisibly.
     """
     truth = positives(labels).to_numpy()
@@ -294,7 +294,7 @@ def build_evaluation(
             otherwise flatten into one gap: scored, ingested but not scorable
             on the test split, and never ingested at all. The ticket names
             Moscow as the contrast to Singapore, and Moscow is in the third
-            state — a table that simply lacks the row says nothing about why.
+            state, and a table that simply lacks the row says nothing about why.
     """
     population = frame if frame is not None else evaluation_frame(engine)
     parts = split_frame(population)
@@ -308,7 +308,7 @@ def build_evaluation(
     summary = summary_table(parts, predictors)
     cities = per_city_table(parts, predictors)
     # Three states, not two. "Not in the test split" and "not in the warehouse
-    # at all" are different facts about a city, and the ticket names Moscow —
+    # at all" are different facts about a city, and the ticket names Moscow,
     # which has not backfilled, so its absence from the per-city table says
     # nothing about Moscow and everything about the ingestion quota.
     present = sorted(parts["test"]["city_id"].unique())
@@ -396,8 +396,8 @@ def _verdict(summary: pd.DataFrame) -> dict[str, Any]:
 def _thin(points: pd.DataFrame, limit: int = 800) -> pd.DataFrame:
     """Fewer vertices to draw, without moving the line.
 
-    The precision–recall curve has one point per distinct prediction — 8 506 of
-    them for a model — and an SVG carrying all of them is a hundred kilobytes
+    The precision-recall curve has one point per distinct prediction, 8 506 of
+    them for a model, and an SVG carrying all of them is a hundred kilobytes
     of coordinates for a line that is smooth at any size a reader will view it.
     The *metric* is computed from every point; only the drawing is thinned, and
     the first and last are always kept so the endpoints are exact.
@@ -462,7 +462,7 @@ def _save(figure, stem: str, directory: Path) -> list[Path]:
 def render_figures(
     plots: Mapping[str, Any], directory: Path | None = None
 ) -> list[Path]:
-    """Draw the precision–recall and calibration figures."""
+    """Draw the precision-recall and calibration figures."""
     plt = _style()
     directory = Path(directory) if directory is not None else FIGURE_DIR
     curves, base = plots["curves"], plots["base_rate"]
@@ -642,7 +642,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             destination.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
             print(f"wrote {destination}")
     else:
-        print("\n(not written — pass --write for figures and metrics.json)")
+        print("\n(not written; pass --write for figures and metrics.json)")
     return 0
 
 

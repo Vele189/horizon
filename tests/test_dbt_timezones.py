@@ -5,7 +5,7 @@ each has an assertion here that a plausible shortcut would fail:
 
 *   **Phoenix** keeps standard time all year on a US longitude. Inferring a
     zone from a country or a longitude gives it America/Denver, and every
-    reading from March to November lands an hour out — a shift small enough to
+    reading from March to November lands an hour out, a shift small enough to
     read as weather.
 *   **Delhi** is UTC+05:30. `observation_time + interval '5 hours'` looks like
     a conversion and is wrong by half an hour.
@@ -215,7 +215,7 @@ def test_sydney_runs_daylight_saving_on_the_southern_calendar(engine) -> None:
     """January is high summer in Sydney (+11); July is winter (+10).
 
     A hardcoded northern calendar inverts this, adding an hour exactly where
-    one should be subtracted — an error of two hours, not one.
+    one should be subtracted: an error of two hours, not one.
     """
     import datetime as dt
 
@@ -243,7 +243,7 @@ def test_local_time_is_lossy_only_at_fall_back(engine) -> None:
     """The reason the macro is one-way, measured rather than asserted.
 
     Two instants share one wall-clock reading at a fall-back, so the reverse
-    conversion cannot recover which. That is clocks, not a bug — but it must be
+    conversion cannot recover which. That is clocks, not a bug, but it must be
     ten rows, not ten thousand.
     """
     with engine.connect() as connection:

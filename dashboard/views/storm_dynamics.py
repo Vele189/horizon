@@ -1,4 +1,4 @@
-"""View 3 — Storm Dynamics.
+"""View 3: Storm Dynamics.
 
 Do pressure crashes track with wind extremes?
 
@@ -7,7 +7,7 @@ that day's strongest gust. Two years of hourly observations for all fifteen
 cities, which is the one mart in this warehouse that is complete.
 
 **The naive answer is no, and it is wrong.** Signed pressure change against
-peak gust correlates at ρ = −0.04 — a blob. The relationship is not linear, it
+peak gust correlates at ρ = -0.04, a blob. The relationship is not linear, it
 is **V-shaped**: a deep low passing gives a sharp fall and then a sharp rise,
 and both limbs are windy. Against the *magnitude* of the swing the same data
 gives ρ = +0.31. The chart keeps the signed axis the ticket asks for precisely
@@ -15,15 +15,15 @@ so the V is visible, and the caption reports both numbers rather than the
 flattering one.
 
 **And the honest answer is "in some cities".** The correlation runs from +0.43
-in Reykjavík and +0.42 in Auckland to −0.08 in Singapore and +0.02 in Lagos.
+in Reykjavík and +0.42 in Auckland to -0.08 in Singapore and +0.02 in Lagos.
 Mid-latitude cities sit under a storm track and tropical ones do not, so the
 question has a different answer depending on where it is asked. That variation
 is the finding, which is why every city's coefficient is on screen rather than
 one pooled number.
 
 **Colour does not carry identity here.** Fifteen cities is more identities than
-any colour-blind-safe palette holds — see ``theme.py`` for the search that
-settles it — so one city is emphasised at a time against a grey field and the
+any colour-blind-safe palette holds (see ``theme.py`` for the search that
+settles it), so one city is emphasised at a time against a grey field and the
 identity of all fifteen lives in the sorted table, where position carries it.
 """
 
@@ -60,7 +60,7 @@ ALL_CITIES: Final[str] = "All cities"
 #
 # The signed change kept is the largest *by magnitude*, not the sharpest fall.
 # Keeping only falls would show one limb of the V and hide that the rise behind
-# a departing low is windy too — which is half the physical story.
+# a departing low is windy too, which is half the physical story.
 _DAILY_SQL = f"""
     with daily as (
         select city_id,
@@ -95,8 +95,8 @@ _DAILY_SQL = f"""
 
 # Spearman rather than Pearson. Gust distributions have a long right tail and a
 # handful of storms would otherwise set the coefficient on their own; rank
-# correlation asks the question the caption asks — when the pressure moves
-# more, does the wind rank higher — without letting four days answer it.
+# correlation asks the question the caption asks, which is whether the wind
+# ranks higher when the pressure moves more, without letting four days answer it.
 CORRELATION_METHOD: Final[str] = "spearman"
 
 
@@ -149,7 +149,7 @@ def _figure(frame: pd.DataFrame, selected: str, mode: theme.Mode) -> go.Figure:
             marker={"size": 4, "color": tokens["ink_muted"], "opacity": 0.22},
             customdata=context[["name", "date_key"]],
             hovertemplate=(
-                "<b>%{customdata[0]}</b> · %{customdata[1]}"
+                "<b>%{customdata[0]}</b>, %{customdata[1]}"
                 "<br><b>%{x:+.1f} hPa</b> over 24 h"
                 "<br><b>%{y:.1f} km/h</b> peak gust<extra></extra>"
             ),
@@ -171,7 +171,7 @@ def _figure(frame: pd.DataFrame, selected: str, mode: theme.Mode) -> go.Figure:
                 },
                 customdata=highlighted[["name", "date_key"]],
                 hovertemplate=(
-                    "<b>%{customdata[0]}</b> · %{customdata[1]}"
+                    "<b>%{customdata[0]}</b>, %{customdata[1]}"
                     "<br><b>%{x:+.1f} hPa</b> over 24 h"
                     "<br><b>%{y:.1f} km/h</b> peak gust<extra></extra>"
                 ),
@@ -238,7 +238,7 @@ def render() -> None:
     # cannot come apart from the picture it describes.
     st.markdown(
         f"**What the chart shows.** Pressure change and gust are all but "
-        f"uncorrelated when the *sign* is kept (ρ = {pooled['signed']:+.2f}) — "
+        f"uncorrelated when the *sign* is kept (ρ = {pooled['signed']:+.2f}). "
         f"the cloud is a V, not a line, because a passing low brings a sharp "
         f"fall and then a sharp rise and both are windy. Against the "
         f"**size** of the swing, ignoring direction, the same days correlate "
@@ -265,6 +265,6 @@ def render() -> None:
         st.caption(
             f"{len(frame):,} city-days, aggregated in the warehouse from "
             f"{int(frame['hours'].sum()):,} hourly observations. Spearman rank "
-            f"correlation — gust distributions have a long right tail, and a "
+            f"correlation, because gust distributions have a long right tail and a "
             f"handful of storms should not set the coefficient on their own."
         )

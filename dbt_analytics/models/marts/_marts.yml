@@ -11,7 +11,7 @@ models:
       reanalysis: a physical model reconciled with observations onto a regular
       grid, not readings from an instrument at a named place. The original
       project draft called this table `dim_weather_stations`, and that framing
-      would misdescribe the source to anyone who knows the domain — there is no
+      would misdescribe the source to anyone who knows the domain: there is no
       station, no instrument history, no siting metadata, and no station
       identifier to join on. A request is snapped to the nearest cell, which is
       why every observation row carries the `api_latitude`, `api_longitude` and

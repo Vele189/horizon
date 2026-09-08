@@ -3,10 +3,10 @@
 dbt's own docs site draws a force-directed graph, which is fine to explore and
 poor to read at a glance: the layers are the whole point of a medallion
 architecture and a force layout does not show them. This lays the same graph
-out left to right by layer, so source → staging → intermediate → marts is the
+out left to right by layer, so source -> staging -> intermediate -> marts is the
 shape of the picture rather than something to trace.
 
-Generated from `target/manifest.json`, so it cannot drift from the project —
+Generated from `target/manifest.json`, so it cannot drift from the project;
 run `dbt docs generate` first. SVG rather than a screenshot because it stays
 crisp at any size, diffs as text, and needs no browser to produce.
 
@@ -134,7 +134,7 @@ def build() -> str:
         px, py = position[parent]
         cx, cy = position[child]
         if px == cx:
-            # Same column — marts depend on marts. Bow the edge out to the left
+            # Same column: marts depend on marts. Bow the edge out to the left
             # so it reads as a connection rather than an arrowhead stub on the
             # box edge.
             y1, y2 = py + BOX_H / 2, cy + BOX_H / 2

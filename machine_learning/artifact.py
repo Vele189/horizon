@@ -3,14 +3,14 @@
 A ``.joblib`` with no record of what it was trained on is a file nobody can
 audit and nobody should deploy. Six months on, "which features, in what order,
 over what window, scoring what against which baseline" are not recoverable from
-the pickle — the estimator will happily accept a matrix with the columns in the
+the pickle: the estimator will happily accept a matrix with the columns in the
 wrong order and return confident nonsense.
 
 So every artefact is written with a **fingerprint** in its own filename and a
 full record in ``metrics.json``:
 
 * the **training window** and its row and positive counts;
-* the **feature list, in order** — the order is the part that matters, because
+* the **feature list, in order**. The order is the part that matters, because
   it is the part a caller can get wrong silently;
 * the hyperparameters, the seed, and the number of rounds early stopping kept;
 * the metrics on every split, and the baselines they are measured against;
@@ -18,8 +18,8 @@ full record in ``metrics.json``:
 * the file's own SHA-256 and size.
 
 **The fingerprint is derived, not stamped.** It hashes exactly the things that
-determine the model — window, features, hyperparameters, seed, library version,
-data snapshot — so two artefacts with the same name *are* the same model and a
+determine the model (window, features, hyperparameters, seed, library version,
+data snapshot) so two artefacts with the same name *are* the same model and a
 retrain that changes nothing produces no diff. A timestamp would change when
 nothing had.
 
@@ -27,7 +27,7 @@ nothing had.
 model was trained, and whether that tree was clean. It cannot be the commit
 that contains the model: the artefact has to exist before it can be committed.
 ``git_dirty: true`` in a committed sidecar is the normal case and is recorded
-rather than hidden — the alternative is a hash that implies a provenance it
+rather than hidden: the alternative is a hash that implies a provenance it
 does not have.
 
 **On the tree range.** The estimator stops early, so the booster carries 68
@@ -86,7 +86,7 @@ ARTIFACT_FORMAT_VERSION: Final[int] = 1
 #:
 #: Committing it at all is deliberate. Streamlit Community Cloud cannot reach
 #: the warehouse this model is trained from, so an artefact outside the
-#: repository means the deployed dashboard has no model — and a 271 KB file
+#: repository means the deployed dashboard has no model, and a 271 KB file
 #: that makes a clone runnable is worth more than the tidiness of an empty
 #: artifacts directory. Two megabytes is where that stops being true: git
 #: history is forever and a binary does not diff, so a model that large belongs
@@ -111,7 +111,7 @@ def fingerprint(payload: Mapping[str, Any]) -> str:
     """A short, deterministic id for the inputs that determine a model.
 
     Over a canonical JSON encoding, so key order in the caller cannot change
-    the answer. Twelve hex characters is 48 bits — ample for telling apart the
+    the answer. Twelve hex characters is 48 bits, ample for telling apart the
     handful of models a project like this produces, and short enough to read
     out of a filename.
     """
@@ -207,7 +207,7 @@ def save_artifact(
         metrics: The variant's scores on every split.
         baselines: The committed baselines, so the sidecar carries the
             comparison rather than pointing at it.
-        snapshot: The warehouse snapshot, which is part of the fingerprint —
+        snapshot: The warehouse snapshot, which is part of the fingerprint:
             the same hyperparameters over different data are a different model.
         recommended: Whether this is the variant to deploy.
         directory: Where to write. Defaults to the configured artifacts dir.
@@ -390,7 +390,7 @@ def load_model(
     """Read an artefact back, checking it is the one the sidecar describes.
 
     With no arguments it reads ``metrics.json``, takes the recommended
-    variant's filename, and loads that — so the sidecar is the index and there
+    variant's filename, and loads that, so the sidecar is the index and there
     is no "latest" symlink to go stale.
 
     Args:
@@ -466,7 +466,7 @@ def load_model(
         raise ArtifactError(
             f"{path.name} was scored on {expected} rounds but the estimator "
             f"reports {effective}. Early stopping keeps trees the model does "
-            "not use — this booster holds them and has lost the range that "
+            "not use; this booster holds them and has lost the range that "
             "excludes them, so it would score as a different model."
         )
 

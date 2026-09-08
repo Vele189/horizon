@@ -1,7 +1,7 @@
 # Local development warehouse.
 #
 # This is where the 30-year backfill lands and where all dbt iteration happens.
-# Neon receives only finished gold marts (§5.4 of docs/proposal.md) — running a
+# Neon receives only finished gold marts (§5.4 of docs/proposal.md). Running a
 # multi-hour backfill against a serverless database is both slow and wasteful of
 # the 100 compute-hours in the free allowance.
 #
@@ -21,7 +21,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-climate}
       # No default. Compose refuses to start rather than silently standing up a
       # warehouse with a blank or guessable password.
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set — copy .env.example to .env and set it}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set; copy .env.example to .env and set it}
       # The archive API returns local time by default; everything in this
       # project is stored and compared in UTC. Pinning the server timezone
       # means a missing AT TIME ZONE fails visibly rather than drifting by

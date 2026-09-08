@@ -4,7 +4,7 @@ This module is the **only** place a hex value is written. A palette scattered
 across four view modules drifts within a day: the map's "hot" stops matching
 the matrix's "hot", and the two views stop being about the same thing. Views
 import :data:`DIVERGING`, :data:`SURFACE` and the ink tokens from here and
-never spell a colour themselves — a test walks the AST of every other module
+never spell a colour themselves. A test walks the AST of every other module
 under ``dashboard/`` and fails on any hex literal it finds.
 
 The encoding
@@ -12,7 +12,7 @@ The encoding
 
 Anomalies are **signed**: a city is colder than its climatology or warmer than
 it, and zero is a meaningful middle rather than an axis end. That makes the
-scale *diverging* — two hues away from a neutral midpoint — and rules out a
+scale *diverging* (two hues away from a neutral midpoint) and rules out a
 sequential ramp (which would claim cold and hot are the same thing seen weakly
 and strongly) and a rainbow (which invents ordering where the hue wheel has
 none).
@@ -25,31 +25,31 @@ possibly buy.
 How the steps were chosen
 -------------------------
 
-The poles are ColorBrewer's ``RdBu`` extremes — the diverging scheme climate
-publication has standardised on, and the one ColorBrewer marks colourblind-safe
-— taken as an OKLCH hue each (252.4° cold, 22.4° warm). Everything between them
+The poles are ColorBrewer's ``RdBu`` extremes: the diverging scheme climate
+publication has standardised on, and the one ColorBrewer marks colourblind-safe.
+Each is taken as an OKLCH hue (252.4° cold, 22.4° warm). Everything between them
 was then *generated* rather than eyeballed:
 
 * **Lightness** runs on an even ladder outward from the midpoint, so a step of
   colour means a step of anomaly. Both arms sit at the same lightness at the
-  same distance from zero (0.426 against 0.427 at the poles), so +3σ and −3σ
+  same distance from zero (0.426 against 0.427 at the poles), so +3σ and -3σ
   carry equal visual weight and neither sign looks more urgent than the other.
-* **Chroma** rises 0.65 → 0.80 → 0.95 → 1.00 of the pole's, clipped to the
+* **Chroma** rises 0.65 -> 0.80 -> 0.95 -> 1.00 of the pole's, clipped to the
   largest value that stays inside sRGB at that lightness and hue.
 * **The midpoint is grey**, never a hue. A hue at zero would read as a third
   category and give "normal" a temperature of its own.
 
-The ladders were then searched — not adjusted by hand — for the combination
+The ladders were then searched, not adjusted by hand, for the combination
 maximising the worst-case separation under simulated colour-vision deficiency,
 subject to the steps staying evenly spaced. ``tests/test_dashboard.py`` recomputes
 every one of those measurements from these constants and fails if a value drifts,
-so the numbers quoted in the README cannot go stale.
+so the numbers quoted in ``docs/build-log.md`` cannot go stale.
 
 What was measured, and what it means
 ------------------------------------
 
 Under protanopia and deuteranopia (Machado 2009, severity 1.0), distances are
-Euclidean in OKLab ×100:
+Euclidean in OKLab x100:
 
 ===============================  ======  ======
                                   light    dark
@@ -62,7 +62,7 @@ Lightness-step evenness            1.23    1.40
 
 The first row is the one that matters: it is whether a reader with the most
 common form of colour blindness can tell *which way* an anomaly went. At 12.3
-it is comfortably above the 8 that counts as separated, so the sign survives —
+it is comfortably above the 8 that counts as separated, so the sign survives,
 which is the whole claim a red-blue climate figure makes.
 
 The one number below its floor
@@ -72,7 +72,7 @@ The palest step of each arm sits at 1.81:1 against the light surface, under the
 2:1 floor that says a mark must be visible against empty background. A search
 over lightness ladders showed the floor and even spacing cannot both be had:
 clearing 2:1 costs a doubled first step, which would exaggerate small anomalies
-and compress large ones — a worse chart than a pale swatch. Even spacing wins,
+and compress large ones, a worse chart than a pale swatch. Even spacing wins,
 and the mitigation is structural rather than chromatic: heatmap cells tile the
 plot with a surface gap between them, map points carry a surface ring, and
 legend swatches carry a hairline border. Nothing relies on that step being
@@ -82,35 +82,35 @@ question does not arise.
 Counting is not signing
 -----------------------
 
-A count — how many days in a year ran past the threshold — is a magnitude, and
+A count (how many days in a year ran past the threshold) is a magnitude, and
 it gets a **sequential** ramp instead: one hue, light to dark, on the same two
 pole hues. Zero to twenty has a bottom and a top and no meaningful middle, so
 painting it on two hues either side of a neutral would invent a direction the
 number does not have. Only a *difference* between two counts is signed, and
 only that goes back to the diverging scale.
 
-The two counting ramps are checked the way the arms are — one hue, monotone
-lightness, no adjacent pair closer than 0.06, the end nearest the surface still
-clearing 2:1 — and against each other, because a screenshot of the hot view and
-one of the cold view are the same picture otherwise. They separate by 8.7 under
-protanopia.
+The two counting ramps are checked the way the arms are: one hue, monotone
+lightness, no adjacent pair closer than 0.06, and the end nearest the surface
+still clearing 2:1. They are also checked against each other, because a
+screenshot of the hot view and one of the cold view are the same picture
+otherwise. They separate by 8.7 under protanopia.
 
 A fourth ramp, and the collision it could not avoid
 ---------------------------------------------------
 
 Risk Horizon needed a fifth colour job: a probability, unsigned, that is
-neither hot nor cold — the model's target is an anomaly in *either* tail, so
+neither hot nor cold. The model's target is an anomaly in *either* tail, so
 painting it on the warm ramp would claim a direction the number does not carry.
 
 By this point the hue circle is full. Under protanopia and deuteranopia the
 usable hue space collapses toward a blue-yellow axis, and the anomaly red, the
 anomaly blue and the emphasis green already occupy it. The risk ramp is violet
 (hue 320°) and it is measured as **0.6** from the cold counting ramp under
-protanopia — for a red-blind reader, violet minus its red *is* blue.
+protanopia: for a red-blind reader, violet minus its red *is* blue.
 
 That collision is stated rather than designed away, because the alternative was
 worse and the numbers say so. An achromatic ramp clears the cold ramp at 9.1
-but sits **3.7** from the muted ink — and the muted ink is on the *same page*,
+but sits **3.7** from the muted ink, and the muted ink is on the *same page*,
 marking the ten cities the model does not score. A reader who cannot separate
 "no prediction" from "low risk" in a single picture is worse off than one who
 could confuse two ramps that never appear together and each carry their own
@@ -136,7 +136,7 @@ So that view does not encode identity in colour at all. One city is emphasised
 at a time against a grey field, and the identity of all fifteen lives in a
 sorted table, where position carries it. That needs exactly **one** accent, and
 one is easy: green at hue 140°, 112° clear of both anomaly hues, and separated
-from the context ink by 21.5 in light mode and 20.1 in dark — well past the 15
+from the context ink by 21.5 in light mode and 20.1 in dark, well past the 15
 at which two colours stop being confusable.
 
 Green appears nowhere else in the dashboard and encodes no measurement. It
@@ -146,9 +146,9 @@ than of the weather.
 There is no accent hue
 ----------------------
 
-Chrome — links, focus rings, the selected nav item — wants an accent, and every
+Chrome (links, focus rings, the selected nav item) wants an accent, and every
 chromatic candidate tested collapsed into the ramp under simulation: a teal at
-mid-lightness lands 1.0–6.0 from a blue step under deuteranopia, well inside the
+mid-lightness lands 1.0-6.0 from a blue step under deuteranopia, well inside the
 distance that means "the same colour". Nine steps of blue and red leave no room
 for a tenth hue that stays distinct from all of them. So the accent is ink, and
 the palette keeps its promise that a colour on this page means a number.
@@ -236,7 +236,7 @@ NEUTRAL: Final[Mapping[Mode, str]] = {
 # maintained in parallel.
 SURFACE: Final[Mapping[Mode, str]] = {"light": "#fcfcfb", "dark": "#1a1a19"}
 
-# Chrome. Deliberately achromatic — see the module docstring.
+# Chrome. Deliberately achromatic; see the module docstring.
 _CHROME: Final[Mapping[Mode, Mapping[str, str]]] = {
     "light": {
         "surface": "#fcfcfb",
@@ -272,7 +272,7 @@ def resolve_mode(reported: str | None) -> Mode:
 
 
 def chrome(mode: Mode) -> Mapping[str, str]:
-    """The non-data colours — surfaces, ink, gridlines — for one mode."""
+    """The non-data colours (surfaces, ink, gridlines) for one mode."""
     return _CHROME[mode]
 
 
@@ -301,7 +301,7 @@ def diverging_legend_html(
     """A horizontal key for the anomaly scale.
 
     Swatches carry a hairline border in the muted ink. That border is not
-    decoration — it is what keeps the palest step of each arm legible against
+    decoration: it is what keeps the palest step of each arm legible against
     the page, which it is not on colour alone (see the module docstring).
     """
     tokens = chrome(mode)
@@ -340,7 +340,7 @@ for _mode, _steps in DIVERGING.items():
 #
 # The basemap is dark in both page themes, so the map uses the **dark** ramp
 # whichever theme the page is in. The ramp is chosen by the surface it is
-# painted on, not by the theme of the page around it — a light-mode ramp on a
+# painted on, not by the theme of the page around it. A light-mode ramp on a
 # dark basemap would be validated against a background that is not there.
 #
 # Three of the four basemap tokens are chrome tokens already defined above.
@@ -355,7 +355,7 @@ _MAP: Final[Mapping[str, str]] = {
     "land": "#1c1c1a",
     "coastline": _CHROME["dark"]["axis"],
     # Every filled marker carries a 2px ring in this. On a chart the ring is
-    # drawn in the *surface* colour, but a map has no single surface — a point
+    # drawn in the *surface* colour, but a map has no single surface: a point
     # may sit on ocean, on land, or across a coastline. So the ring is muted
     # ink instead, which clears both grounds by a wide margin (39.8 against
     # land, 46.4 against ocean).
@@ -364,7 +364,7 @@ _MAP: Final[Mapping[str, str]] = {
     # grey and so is the land: the fill alone separates by only 7.5, under the
     # 8 that counts as distinct. The ring is what makes a city reporting no
     # departure visible at all, which is why every marker has one and why it
-    # never varies — a constant outline cannot be mistaken for an encoding.
+    # never varies: a constant outline cannot be mistaken for an encoding.
     "ring": _CHROME["dark"]["ink_muted"],
 }
 
@@ -390,7 +390,7 @@ def anomaly_step(z: float) -> int:
 
     Binned rather than continuous. Nine steps that a reader can count against
     a key beat a smooth gradient they can only guess at, and the boundaries
-    are the ones the warehouse already reasons in — the outermost two steps
+    are the ones the warehouse already reasons in: the outermost two steps
     are exactly the rows `is_anomaly` is true for.
     """
     magnitude = abs(z)
@@ -410,7 +410,7 @@ def anomaly_colour(z: float, mode: Mode = MAP_MODE) -> str:
 
 
 # Marker sizing. Area is proportional to |Z| above a floor, so a diameter goes
-# as its square root — encoding magnitude by *radius* would quadruple the
+# as its square root. Encoding magnitude by *radius* would quadruple the
 # apparent size of a doubled anomaly.
 MARKER_MIN_PX: Final[float] = 8.0
 MARKER_MAX_PX: Final[float] = 40.0
@@ -450,7 +450,7 @@ def anomaly_key_html(mode: Mode = MAP_MODE) -> str:
     labels = "".join(
         f'<span style="flex:1;text-align:right;transform:translateX(50%);">{value}</span>'
         for value in (
-            *(f"−{break_}" for break_ in reversed(ANOMALY_BREAKS)),
+            *(f"-{break_}" for break_ in reversed(ANOMALY_BREAKS)),
             *(f"+{break_}" for break_ in ANOMALY_BREAKS),
             "",
         )
@@ -470,7 +470,7 @@ def anomaly_key_html(mode: Mode = MAP_MODE) -> str:
 def size_key_html(mode: Mode = MAP_MODE, *, samples: Sequence[float] = (1.0, 2.5, 4.0)) -> str:
     """Reference circles, so size can be read rather than estimated.
 
-    Plotly draws no key for a size channel. Without one, area is decoration —
+    Plotly draws no key for a size channel. Without one, area is decoration:
     the reader can see that a point is bigger and not what bigger means.
     """
     tokens = chrome(mode)
@@ -493,27 +493,27 @@ def size_key_html(mode: Mode = MAP_MODE, *, samples: Sequence[float] = (1.0, 2.5
 
 
 # ---------------------------------------------------------------------------
-# Sequential ramps — for counting, not for signing
+# Sequential ramps: for counting, not for signing
 # ---------------------------------------------------------------------------
 #
 # A count of anomaly days is a **magnitude**. Zero to twenty has a bottom and a
 # top and no meaningful middle, which makes it the wrong shape for the
 # diverging ramp above: painting an unsigned count on two hues either side of a
 # neutral invents a direction the number does not have, and puts the least
-# interesting value — the middle of the range — in the most visually neutral
+# interesting value (the middle of the range) in the most visually neutral
 # place.
 #
 # So counting gets one hue, light to dark, on the same two pole hues the
 # diverging scale uses. Hot days climb the warm ramp, cold days climb the cool
-# one, and only their *difference* — which really is signed — goes back to the
+# one, and only their *difference*, which really is signed, goes back to the
 # diverging scale.
 #
 # Five steps, generated on an even lightness ladder like the diverging arms and
 # checked the same way: one hue throughout, lightness monotone, no two adjacent
 # steps closer than 0.06, and the end nearest the surface still clearing 2:1
-# against it. The two ramps also have to be tellable apart from each other —
-# a screenshot of the hot view and one of the cold view are the same picture
-# otherwise — and they separate by 8.7 under protanopia.
+# against it. The two ramps also have to be tellable apart from each other,
+# because a screenshot of the hot view and one of the cold view are the same
+# picture otherwise. They separate by 8.7 under protanopia.
 
 SEQUENTIAL: Final[Mapping[Mode, Mapping[str, tuple[str, ...]]]] = {
     "light": {
@@ -550,7 +550,7 @@ def sequential_key_html(direction: str, mode: Mode, bounds: Sequence[str]) -> st
 
 
 # The emphasis accent. Deliberately not on the ramp's hues, and deliberately at
-# a lightness well away from the context ink — hue alone does not separate two
+# a lightness well away from the context ink. Hue alone does not separate two
 # colours that sit at the same lightness once a simulation flattens the chroma.
 EMPHASIS: Final[Mapping[Mode, str]] = {"light": "#145700", "dark": "#6bd852"}
 
@@ -570,7 +570,7 @@ RISK: Final[Mapping[Mode, tuple[str, ...]]] = {
 # decision threshold rather than as absolute probabilities. The threshold is
 # chosen on validation and can move when the model is retrained; breaks pinned
 # to 0.05 and 0.10 would quietly stop lining up with it, and the step boundary
-# that matters — the one where the model starts saying yes — would drift off
+# that matters, the one where the model starts saying yes, would drift off
 # the legend.
 RISK_BREAKS: Final[tuple[float, ...]] = (0.25, 0.5, 1.0, 2.0)
 
@@ -610,6 +610,6 @@ def risk_key_html(mode: Mode, threshold: float) -> str:
     return (
         f'<div style="display:flex;gap:2px;margin:0.25rem 0 0.35rem 0;">{cells}</div>'
         f'<div style="font-size:0.75rem;color:{tokens["ink_muted"]};">'
-        f"The model says yes at {threshold:.4f} — the third break, so the top "
+        f"The model says yes at {threshold:.4f}, the third break, so the top "
         f"two steps are exactly the flagged cities.</div>"
     )

@@ -7,7 +7,7 @@ Z-score comes out too small, and a model trained on those labels is scoring
 against a target that has already seen its own answer.
 
 Measured here rather than argued: the exclusion moves the mean by 0.037 °C and
-sigma by 0.07%, which is invisible in a spot check — and changes the count of
+sigma by 0.07%, which is invisible in a spot check, and changes the count of
 |Z| > 2.5 days from 740 to 976. The leaky baseline misses a quarter of the
 extremes, because the shift is small everywhere and the events live in the tail
 where small shifts decide membership.
@@ -197,7 +197,7 @@ def test_sigma_is_never_zero(engine, built) -> None:
 
 
 def test_a_null_sigma_means_the_exclusion_emptied_the_window(engine, built) -> None:
-    """Null is honest, not a bug — and only for that one reason.
+    """Null is honest, not a bug, and only for that one reason.
 
     A city with a single reference year has no leakage-free baseline at all.
     Returning null says so; falling back to the all-years value would silently
@@ -229,7 +229,7 @@ def test_tropical_cities_have_the_tightest_distributions(
 ) -> None:
     """The sanity check, on the cities that have a full record.
 
-    Note this is the *within-window* sigma — variability around the seasonal
+    Note this is the *within-window* sigma: variability around the seasonal
     curve, which is what a Z-score should be measured against. It ranks
     differently from the sigma of all days pooled; see the test below.
     """
@@ -254,7 +254,7 @@ def test_singapore_is_the_least_variable_city_overall(engine, complete_cities) -
     """The checklist's sanity check, on the quantity it is actually about.
 
     Singapore has the smallest spread of daily temperature *pooled across the
-    year* — but Lagos has the smaller within-window sigma, because Lagos has a
+    year*, but Lagos has the smaller within-window sigma, because Lagos has a
     3.4 °C seasonal swing against Singapore's 1.6 °C while being marginally
     steadier around it. Both are correct measurements of different things, and
     the climatology needs the second.
@@ -276,7 +276,7 @@ def test_singapore_is_the_least_variable_city_overall(engine, complete_cities) -
 def test_moscow_is_the_most_variable_once_it_lands(engine, complete_cities) -> None:
     """The other half of the sanity check, pending its data.
 
-    Skips rather than passes while Moscow is still backfilling — a check that
+    Skips rather than passes while Moscow is still backfilling. A check that
     silently passes on absent data is worse than one that says it is waiting.
     """
     if "moscow" not in complete_cities:

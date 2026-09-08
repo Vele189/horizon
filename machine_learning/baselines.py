@@ -2,7 +2,7 @@
 
 A PR-AUC with nothing beside it is not a result. Average precision for a random
 ranker is the positive rate, so 0.20 is strong against a 5% base rate and poor
-against 25% — and the base rate here moves from 5.50% in the training period to
+against 25%, and the base rate here moves from 5.50% in the training period to
 13.58% in the test one. Reporting a model score without these numbers is the
 single most common weakness in a portfolio ML project, and the fix is not to
 report them afterwards: it is to fix the target in advance, in a file that is
@@ -11,13 +11,13 @@ before anyone saw how it did.
 
 Two baselines, both from the proposal:
 
-* **Persistence** — predict an anomaly next week if one occurred this week.
+* **Persistence.** Predict an anomaly next week if one occurred this week.
   The rule is a flag, but a flag has no Brier score worth having: emitting 0
   and 1 makes every mistake maximally confident. So the rule is *calibrated* on
-  the training split — what fraction of weeks following an anomalous week were
-  themselves anomalous — and the baseline emits that probability. The ranking
+  the training split (what fraction of weeks following an anomalous week were
+  themselves anomalous) and the baseline emits that probability. The ranking
   is unchanged, so PR-AUC is the rule's own; only the calibration is fixed.
-* **Climatology** — predict the historical rate for that city and week of year.
+* **Climatology.** Predict the historical rate for that city and week of year.
 
 And one reference that is not a baseline: the **train base rate**, predicted
 constantly for every row. Its PR-AUC is the test base rate by construction, and
@@ -92,26 +92,26 @@ log = logging.getLogger(__name__)
 #: Bumped when the shape of ``metrics.json`` changes, so a reader can tell a
 #: file it does not understand from one that merely has different numbers.
 #:
-#: 2 — ML-04 added ``split.embargo_days``, so a file records not only the trim
+#: 2. ML-04 added ``split.embargo_days``, so a file records not only the trim
 #: that was applied at the end of each split but the one that was deliberately
 #: not applied at the start.
-#: 3 — ML-05 added a top-level ``model`` block, written by ``train.py`` beside
+#: 3. ML-05 added a top-level ``model`` block, written by ``train.py`` beside
 #: the baselines it is compared against. A file may legitimately lack it: the
 #: baselines exist before the model does, which is the whole point of them.
-#: 4 — ML-06 added ``evaluation``, written by ``evaluate.py``: the test-split
+#: 4. ML-06 added ``evaluation``, written by ``evaluate.py``: the test-split
 #: table, the per-city breakdown, and the per-metric verdict.
-#: 5 — ML-07 added ``explainability``, written by ``explain.py``: the SHAP
+#: 5. ML-07 added ``explainability``, written by ``explain.py``: the SHAP
 #: ranking, the both-tails response, and the two explained predictions.
 METRICS_SCHEMA_VERSION: Final[int] = 5
 
 #: Pseudo-counts tried for the climatology's shrinkage, chosen on **validation**
 #: Brier. A (city, week) cell holds around 130 training rows here, so a cell
-#: that happened to see no positives would otherwise predict exactly zero — a
+#: that happened to see no positives would otherwise predict exactly zero, a
 #: probability no amount of evidence can justify from 130 observations.
 #:
 #: The grid runs to infinity on purpose. A tuned parameter that lands on the
 #: largest value offered is not a tuned parameter, it is a clipped one, and the
-#: first version of this grid stopped at 100 and did exactly that — validation
+#: first version of this grid stopped at 100 and did exactly that: validation
 #: Brier was still improving at the edge. The limit is the honest end of the
 #: range: at infinity every week cell collapses to its city's own rate, which
 #: is a real hypothesis about this data and, as it turns out, the one
@@ -174,7 +174,7 @@ class Baseline:
 
 @dataclass
 class BaseRateReference(Baseline):
-    """Predict the training positive rate, constantly. Not a baseline — a floor.
+    """Predict the training positive rate, constantly. Not a baseline, a floor.
 
     Its PR-AUC on any split is that split's own base rate, to within tie
     handling, which makes it the sanity check on every other number in the
@@ -266,7 +266,7 @@ class ClimatologyBaseline(Baseline):
     """Predict the historical rate for that city and ISO week of year.
 
     Fitted on the training split, so the rate for Cairo in week 30 is what
-    Cairo's week 30 did between 1995 and 2018 — not what it did over the whole
+    Cairo's week 30 did between 1995 and 2018, not what it did over the whole
     record, which would carry the test period's answer back into training.
 
     Each cell is shrunk towards its city's own training rate rather than left
@@ -277,7 +277,7 @@ class ClimatologyBaseline(Baseline):
     split, never on test.
 
     Cities and weeks unseen in training fall back to the city rate, then to the
-    overall rate — in that order, because a city's own level is a better guess
+    overall rate, in that order, because a city's own level is a better guess
     than the pooled one.
     """
 
@@ -291,7 +291,7 @@ class ClimatologyBaseline(Baseline):
 
     @staticmethod
     def week_of_year(frame: pd.DataFrame) -> pd.Series:
-        """ISO week, 1–53.
+        """ISO week, 1-53.
 
         ISO rather than ``day_of_year // 7`` because week 1 is defined by where
         the year's first Thursday falls, so it stays aligned to the weekly
@@ -322,7 +322,7 @@ class ClimatologyBaseline(Baseline):
             if np.isinf(self.smoothing):
                 # The limit, computed rather than approached. At a large finite
                 # pseudo-count the week term survives as a rounding-sized
-                # perturbation that still breaks ties — and on this data it
+                # perturbation that still breaks ties, and on this data it
                 # breaks them the wrong way, costing more than it is worth.
                 rate = prior
             else:
@@ -393,7 +393,7 @@ class ClimatologyBaseline(Baseline):
             candidates.append((result.brier, candidate))
 
         # Ties break towards the first, which is the least shrinkage that did
-        # as well — the grid is ordered, so the choice is deterministic.
+        # as well; the grid is ordered, so the choice is deterministic.
         best = min(candidates, key=lambda item: item[0])[1]
         best.smoothing_search = search
         return best
@@ -440,7 +440,7 @@ def build_metrics(
     """
     population = frame if frame is not None else evaluation_frame(engine)
     # Sorted before anything is measured. Brier is a mean over a float array,
-    # and a mean is summation-order dependent in its last digit or two — enough
+    # and a mean is summation-order dependent in its last digit or two, enough
     # to make a committed file differ from one run to the next for no reason a
     # reviewer could act on. The real path arrives sorted already; this makes
     # it true whatever the caller hands over.
@@ -450,7 +450,7 @@ def build_metrics(
     if PERSISTENCE_FLAG not in population.columns:
         raise ValueError(
             f"{PERSISTENCE_FLAG!r} is missing. It has to be computed on the "
-            "whole record and not on the scored population — build the frame "
+            "whole record and not on the scored population. Build the frame "
             "with evaluation_frame(), which does it in that order, or the "
             "first rows of each city lose a signal they are entitled to."
         )
@@ -601,7 +601,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         written = write_metrics(payload, Path(args.out) if args.out else None)
         print(f"\nwrote {written}")
     else:
-        print("\n(not written — pass --write to update metrics.json)")
+        print("\n(not written; pass --write to update metrics.json)")
     return 0
 
 

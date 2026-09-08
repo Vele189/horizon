@@ -7,8 +7,8 @@ states in its docstring that a reader with the commonest form of colour
 blindness can tell a cold anomaly from a warm one, and gives numbers. Those
 numbers are the whole justification for the scale, and a docstring cannot go
 out of date quietly if a test parses it and recomputes every cell. The colour
-maths — sRGB to OKLab, and the Machado 2009 colour-vision-deficiency
-simulation — is implemented here rather than imported, so a palette edit that
+maths (sRGB to OKLab, and the Machado 2009 colour-vision-deficiency
+simulation) is implemented here rather than imported, so a palette edit that
 also edited the checker would still have to survive an independent measurement.
 
 **The cold start is exercised, not described.** Neon suspending its compute is
@@ -23,8 +23,8 @@ parsing the modules, in the same shape as the bronze-exclusion test in
 ``test_promotion.py``: a claim about paths not taken cannot be made by a test
 that only observes the paths it took.
 
-None of it needs a database. The suite that does — the one proving the app can
-actually read Neon — is ``tests/check_connection.py``.
+None of it needs a database. The suite that does, the one proving the app can
+actually read Neon, is ``tests/check_connection.py``.
 """
 
 from __future__ import annotations
@@ -71,7 +71,7 @@ DASHBOARD_DIR = PROJECT_ROOT / "dashboard"
 STREAMLIT_CONFIG = PROJECT_ROOT / ".streamlit" / "config.toml"
 
 # The separation below which two colours are the same colour to a reader.
-# OKLab Euclidean distance ×100; 8 is "distinct", 6 is the floor that is only
+# OKLab Euclidean distance x100; 8 is "distinct", 6 is the floor that is only
 # acceptable when something other than colour also carries the distinction.
 SEPARATION_TARGET = 8.0
 
@@ -82,7 +82,7 @@ GATING_DEFICIENCIES = ("protan", "deutan")
 
 
 # --------------------------------------------------------------------------
-# Colour maths. Implemented here on purpose — see the module docstring.
+# Colour maths. Implemented here on purpose; see the module docstring.
 # --------------------------------------------------------------------------
 
 _LIN_TO_LMS = (
@@ -195,8 +195,8 @@ MODES = tuple(theme.DIVERGING)
 def test_midpoint_is_grey_not_a_hue(mode: theme.Mode) -> None:
     """Zero anomaly must not look like a third kind of weather.
 
-    A hue at the midpoint reads as its own category — "normal" acquires a
-    temperature — and it also breaks the two-hue promise a diverging scale
+    A hue at the midpoint reads as its own category, since "normal" acquires
+    a temperature, and it also breaks the two-hue promise a diverging scale
     makes to a colour-blind reader, who is relying on there being exactly two
     directions to tell apart.
     """
@@ -221,7 +221,7 @@ def test_the_two_arms_are_two_hues(mode: theme.Mode) -> None:
 
 @pytest.mark.parametrize("mode", MODES)
 def test_equal_magnitudes_carry_equal_weight(mode: theme.Mode) -> None:
-    """+3σ and −3σ must look equally loud.
+    """+3σ and -3σ must look equally loud.
 
     If one arm is systematically darker, the scale editorialises: warming looks
     more urgent than cooling, or the reverse, for a reason that is in the
@@ -270,7 +270,7 @@ def test_the_sign_of_an_anomaly_survives_colour_blindness(
 
     A red-blue climate figure says one thing above everything else: which way
     it went. If a protanopic reader cannot separate the warm arm from the cold
-    arm at the same magnitude, the figure is not merely less pretty for them —
+    arm at the same magnitude, the figure is not merely less pretty for them:
     it is telling them the opposite of the truth half the time.
     """
     cold, _, warm = arms(mode)
@@ -326,7 +326,7 @@ def test_the_documented_measurements_cannot_go_stale() -> None:
 
     The docstring is the argument for the palette. If it can drift from the
     hex values beside it, the argument stops being evidence and becomes
-    decoration — so the table is parsed and each cell recomputed.
+    decoration, so the table is parsed and each cell recomputed.
     """
     table = re.findall(
         r"^(\S[^\n]*?)\s{2,}(\d+\.\d+)\s+(\d+\.\d+)\s*$",
@@ -384,7 +384,7 @@ def test_the_documented_shortfall_is_the_real_one() -> None:
     assert len(quoted) == 2, "expected the light shortfall and its dark counterpart"
 
     def worst_inner(mode: theme.Mode) -> float:
-        """The palest step of either arm — the docstring quotes the weaker one."""
+        """The palest step of either arm; the docstring quotes the weaker one."""
         cold, _, warm = arms(mode)
         surface = theme.SURFACE[mode]
         return min(contrast(cold[0], surface), contrast(warm[0], surface))
@@ -561,7 +561,7 @@ def test_a_missing_secrets_file_is_not_a_missing_secret(monkeypatch) -> None:
     """st.secrets raises when no secrets.toml exists anywhere.
 
     That is the ordinary state of a development machine, and it must not stop
-    the .env fallback from being reached — otherwise the app cannot be run
+    the .env fallback from being reached. Otherwise the app cannot be run
     locally at all, which is the one thing this ticket has to deliver.
     """
     from dashboard import database as module
@@ -798,7 +798,7 @@ def test_the_retry_budget_is_bounded(cold_start) -> None:
     """A public page must fail in seconds, not hang.
 
     Three attempts with a linear backoff is a few seconds against a cold start
-    that measures 1.2 s — enough headroom for a slow resume, short enough that
+    that measures 1.2 s: enough headroom for a slow resume, short enough that
     a genuinely dead database still renders its error while someone is
     watching.
     """
@@ -822,7 +822,7 @@ def test_results_are_cached_and_the_ttl_is_sized_for_the_compute_budget() -> Non
 
     Compute stays awake five minutes after each query, so a cache miss costs a
     five-minute minimum of the monthly allowance however fast the query runs.
-    A short TTL is therefore not a small cost — it is the dominant one.
+    A short TTL is therefore not a small cost; it is the dominant one.
     """
     from dashboard import database as module
 
@@ -897,7 +897,7 @@ def test_all_four_views_are_navigable() -> None:
 
 
 def test_each_view_carries_the_caption_the_criteria_require() -> None:
-    """"Each view has a one-line plain-English caption" — §Workstream 4."""
+    """"Each view has a one-line plain-English caption", §Workstream 4."""
     from dashboard import views
 
     for module in views.ORDER:
@@ -1036,7 +1036,7 @@ def offline(monkeypatch):
     ``warehouse_status`` for its sidebar, the stubs call ``run_query`` through
     ``_scaffold``, and the map calls it in its own module. Each bound the name
     at import, so each is patched where it is used rather than where it is
-    defined — a single patch on ``dashboard.database`` would leave the map
+    defined: a single patch on ``dashboard.database`` would leave the map
     talking to Neon in a test that claims to be offline.
     """
     from dashboard import database as module
@@ -1154,7 +1154,7 @@ def test_an_unpromoted_database_is_explained_rather_than_thrown(offline) -> None
     """Deployed before the first promotion: the database answers, and refuses.
 
     Not a connection failure, so the cold-start path does not cover it, and not
-    something a visitor can wait out — so it gets a message and no retry button
+    something a visitor can wait out, so it gets a message and no retry button
     rather than one that cannot help.
     """
     from streamlit.testing.v1 import AppTest
@@ -1188,6 +1188,10 @@ IMPLICIT_DEPLOYMENT_PINS = {
     "psycopg2-binary",
     # pandas requires it; pinned so Cloud resolves what the marts were built on.
     "numpy",
+    # pandas reaches into scipy.stats for a rank correlation, from inside its
+    # own call. No import under dashboard/ names it; the test below is what
+    # holds it here.
+    "scipy",
     # config.py's only dependency, reached through the local fallback.
     "python-dotenv",
 }
@@ -1221,7 +1225,7 @@ def _third_party_imports(directory: Path) -> set[str]:
     """Third-party modules a directory needs, following its first-party imports.
 
     Transitive through our own modules on purpose. The map reads the city
-    registry through ``cities.py``, whose own dependency is PyYAML — and a scan
+    registry through ``cities.py``, whose own dependency is PyYAML, and a scan
     that stopped at the directory boundary would call PyYAML unused and then
     call it missing, in two different tests, for the same reason. What the
     deployment needs is what the *reachable* code imports.
@@ -1249,7 +1253,7 @@ def _third_party_imports(directory: Path) -> set[str]:
 
 
 def test_the_deployment_manifest_covers_what_the_dashboard_imports() -> None:
-    """A dependency left behind fails on Cloud, not here — unless this runs.
+    """A dependency left behind fails on Cloud, not here, unless this runs.
 
     BI-03 adds Plotly to a view. Without this, the first anyone hears of it is
     a ``ModuleNotFoundError`` on a public URL after a deploy that reported
@@ -1272,6 +1276,42 @@ def test_the_deployment_manifest_covers_what_the_dashboard_imports() -> None:
         "imported by the dashboard but not pinned in requirements.txt: "
         + ", ".join(missing)
     )
+
+
+RANK_CORRELATIONS = {"spearman", "kendall"}
+
+
+def test_the_backend_of_a_lazy_import_is_pinned_too() -> None:
+    """The scan above reads import statements. This one reads what pandas does.
+
+    ``Series.corr(method="spearman")`` implements nothing itself: it reaches
+    into ``scipy.stats`` from inside pandas, at call time, so no walk over
+    dashboard/ will ever see the name. The storm scatter ranks rather than
+    fits, which is the whole point of the V-shape, so every load of that page
+    runs it, and a manifest without scipy installs clean, deploys green, and
+    dies on the visitor's screen with a redacted traceback.
+    """
+    askers = sorted(
+        str(path.relative_to(PROJECT_ROOT))
+        for path in _python_modules(DASHBOARD_DIR)
+        if RANK_CORRELATIONS
+        & {
+            node.value
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+        }
+    )
+    if not askers:  # the day nothing ranks, the pin can go with it
+        return
+
+    assert "scipy" in _pinned(DEPLOYMENT_REQUIREMENTS), (
+        "a rank correlation in " + ", ".join(askers) + " with no scipy pinned"
+    )
+    # And that the pin resolves to something that answers, rather than to a
+    # line in a file: this call is the one the page makes.
+    assert pd.Series([1.0, 2.0, 3.0]).corr(
+        pd.Series([2.0, 1.0, 4.0]), method="spearman"
+    ) == pytest.approx(0.5)
 
 
 def test_the_warehouse_toolchain_stays_out_of_the_deployment() -> None:
@@ -1314,7 +1354,7 @@ def test_every_deployment_pin_earns_its_place() -> None:
 
 
 # --------------------------------------------------------------------------
-# BI-03 — the Global Anomaly Map. What a number turns into.
+# BI-03: the Global Anomaly Map. What a number turns into.
 # --------------------------------------------------------------------------
 
 
@@ -1414,7 +1454,7 @@ def test_the_marker_ring_is_what_makes_a_quiet_city_visible() -> None:
 
 
 # --------------------------------------------------------------------------
-# BI-03 — every city, every time.
+# BI-03: every city, every time.
 # --------------------------------------------------------------------------
 
 
@@ -1450,14 +1490,14 @@ def test_the_query_keeps_every_city_whether_or_not_it_was_scored() -> None:
 
     An inner join would redraw the world every time the backfill advanced, and
     a reader would have no way to tell "normal here" from "nothing ingested
-    here" — which are opposite statements about the same blank space.
+    here", which are opposite statements about the same blank space.
     """
     from dashboard.views import anomaly_map
 
     sql = " ".join(anomaly_map._DAY_SQL.lower().split())
     assert "from gold_marts.dim_cities c" in sql
     assert "left join gold_marts.fact_weather_anomalies" in sql
-    # The date filter belongs in the join, not in a where clause — moving it
+    # The date filter belongs in the join, not in a where clause; moving it
     # would turn the left join back into an inner one for every other city.
     assert "and a.date_key = :day" in sql
     assert "where" not in sql.split("order by")[0]
@@ -1515,14 +1555,14 @@ def test_the_figure_paints_from_the_palette(day_frame) -> None:
 
 
 # --------------------------------------------------------------------------
-# BI-03 — the DBT-11 verification, asked of the picture.
+# BI-03: the DBT-11 verification, asked of the picture.
 # --------------------------------------------------------------------------
 
 
 def _event(city_id="tokyo", city="Tokyo", direction="hot", date=dt.date(2018, 7, 23)):
     from dashboard.views.anomaly_map import Event
 
-    return Event(city_id=city_id, city=city, date=date, direction=direction, description="…")
+    return Event(city_id=city_id, city=city, date=date, direction=direction, description="...")
 
 
 def _coverage_row(city_id, observed_days, scored_days):
@@ -1564,7 +1604,7 @@ def test_the_verdict_reads_the_event_not_just_the_number(
 def test_an_uningested_event_is_pending_and_never_passes() -> None:
     """The gate's own rule, and the reason it exists.
 
-    "A missing city skips with a reason; it does not pass" — a verification
+    "A missing city skips with a reason; it does not pass". A verification
     that went green on absent data is the specific failure DBT-11 was written
     to prevent, wearing the costume of success.
     """
@@ -1610,7 +1650,7 @@ def test_the_events_come_from_the_registry_rather_than_being_restated() -> None:
 
 
 # --------------------------------------------------------------------------
-# BI-03 — against a real warehouse. The local one: a test that bills a quota
+# BI-03: against a real warehouse. The local one: a test that bills a quota
 # is a test nobody runs, and Neon holds a copy of exactly these marts.
 # --------------------------------------------------------------------------
 
@@ -1633,7 +1673,7 @@ def test_a_documented_extreme_lights_the_map_up(engine, event) -> None:
     Every one of the seven currently **skips**: the daily backfill is
     quota-bound and none of these seven cities has a scored observation on its
     event date yet. That is reported rather than passed, for the reason the
-    gate itself gives — a check that goes green on absent data is worse than no
+    gate itself gives: a check that goes green on absent data is worse than no
     check. Each skip names what is missing, and each becomes a real assertion
     the moment the backfill reaches it, with no edit here.
     """
@@ -1664,7 +1704,7 @@ def test_a_documented_extreme_lights_the_map_up(engine, event) -> None:
 def test_the_map_lights_up_on_the_strongest_anomaly_the_marts_hold(engine) -> None:
     """The mechanism, proven on data that exists.
 
-    Not a DBT-11 event — none of those is reachable yet — so this makes no
+    Not a DBT-11 event, since none of those is reachable yet, so this makes no
     claim about the climatology. It makes the claim BI-03 is responsible for:
     that a large Z-score in the mart becomes a large, pole-coloured, flagged
     marker on the map, end to end through the shipped query and encoding.
@@ -1717,7 +1757,7 @@ def test_the_map_plots_every_registered_city_at_its_registered_coordinates(engin
 
 
 # --------------------------------------------------------------------------
-# BI-04 — the Climate Matrix. Counting is not signing.
+# BI-04: the Climate Matrix. Counting is not signing.
 # --------------------------------------------------------------------------
 
 SEQUENTIAL_DIRECTIONS = ("hot", "cold")
@@ -1746,7 +1786,7 @@ def test_a_counting_ramp_is_one_hue_light_to_dark(mode, direction) -> None:
 def test_the_end_nearest_the_surface_still_reads_as_a_cell(mode, direction) -> None:
     """The pale end of a heatmap ramp must clear its own background.
 
-    Unlike the diverging midpoint — which is meant to recede — the low end of a
+    Unlike the diverging midpoint, which is meant to recede, the low end of a
     counting ramp is a real value that a reader has to be able to see.
     """
     steps = theme.sequential_scale(direction, mode)
@@ -1831,7 +1871,7 @@ def _matrix_frame() -> pd.DataFrame:
 
 
 def test_bucket_boundaries_are_the_ones_the_key_prints() -> None:
-    """A key that says 3–5 and a bucket that holds 3–6 is a chart that lies."""
+    """A key that says 3-5 and a bucket that holds 3-6 is a chart that lies."""
     from dashboard.views.climate_matrix import COUNT_LABELS, count_bucket
 
     assert [count_bucket(n) for n in (0, 1, 2, 3, 5, 6, 10, 11, 40)] == [
@@ -1954,7 +1994,7 @@ def test_the_matrix_query_returns_a_bounded_grid(engine) -> None:
     """Fifteen cities by the ingested span, and nothing larger.
 
     A heatmap that grew a row per city-day would still render and would still
-    be under three seconds on a cache hit — and would be sending sixty
+    be under three seconds on a cache hit, and would be sending sixty
     thousand rows over the wire to fill four hundred cells.
     """
     from dashboard.views.climate_matrix import _MATRIX_SQL
@@ -1965,7 +2005,7 @@ def test_the_matrix_query_returns_a_bounded_grid(engine) -> None:
     cities, years = frame["city_id"].nunique(), frame["year"].nunique()
     assert cities == 15
     assert len(frame) == cities * years
-    assert years >= 30, f"only {years} years — the 30-year range is not rendered"
+    assert years >= 30, f"only {years} years; the 30-year range is not rendered"
     assert set(frame.columns) >= {"hot_days", "cold_days", "scored_days"}
 
 
@@ -1984,7 +2024,7 @@ def test_every_registered_city_has_a_row_even_with_nothing_ingested(engine) -> N
 
 
 # --------------------------------------------------------------------------
-# BI-05 — Storm Dynamics. Where colour stops being able to carry identity.
+# BI-05: Storm Dynamics. Where colour stops being able to carry identity.
 # --------------------------------------------------------------------------
 
 
@@ -2089,8 +2129,8 @@ def test_the_correlation_is_ranked_not_least_squares() -> None:
     """Gust distributions have a long right tail.
 
     Pearson would let four storms set a city's coefficient; Spearman asks the
-    question the caption asks — when the barometer moves more, does the wind
-    rank higher.
+    question the caption asks, which is whether the wind ranks higher when the
+    barometer moves more.
     """
     from dashboard.views import storm_dynamics as storm
 
@@ -2129,7 +2169,7 @@ def test_the_hourly_fact_is_aggregated_in_the_warehouse() -> None:
     """A quarter of a million points cannot be drawn, and should not be sent.
 
     Grouping to city-day is a 24-fold reduction that loses nothing the question
-    needs — "did this day have a pressure crash and a gale" is a question about
+    needs: "did this day have a pressure crash and a gale" is a question about
     a day.
     """
     from dashboard.views.storm_dynamics import _DAILY_SQL
@@ -2180,7 +2220,7 @@ def test_the_reported_relationship_is_the_one_the_data_has(engine) -> None:
     """The caption's claim, recomputed against the warehouse.
 
     The caption is generated from the frame on screen, so it cannot go stale on
-    its own — but the *shape* of the claim can: if the signed correlation ever
+    its own, but the *shape* of the claim can: if the signed correlation ever
     became strong, the sentence about a V would be wrong while still being
     arithmetically correct.
     """
@@ -2193,7 +2233,7 @@ def test_the_reported_relationship_is_the_one_the_data_has(engine) -> None:
 
     pooled = storm.overall(frame)
     assert abs(pooled["signed"]) < 0.15, (
-        "the signed relationship is no longer negligible — the caption's "
+        "the signed relationship is no longer negligible, so the caption's "
         "explanation of the V no longer describes the data"
     )
     assert pooled["magnitude"] > pooled["signed"] + 0.2, (
@@ -2203,13 +2243,13 @@ def test_the_reported_relationship_is_the_one_the_data_has(engine) -> None:
     per_city = storm.correlations(frame)
     assert len(per_city) == 15
     assert per_city.iloc[0] - per_city.iloc[-1] > 0.2, (
-        "the spread across cities has collapsed — the second caption claims a "
+        "the spread across cities has collapsed, so the second caption claims a "
         "variation the data no longer shows"
     )
 
 
 # --------------------------------------------------------------------------
-# BI-06 — Risk Horizon. Where the model becomes a picture.
+# BI-06: Risk Horizon. Where the model becomes a picture.
 # --------------------------------------------------------------------------
 
 
@@ -2229,12 +2269,12 @@ def test_the_risk_ramp_is_a_ramp(mode) -> None:
 
 
 def test_the_step_boundary_is_the_models_own_comparison() -> None:
-    """``prediction_label = (risk_score >= decision_threshold)`` — greater or *equal*.
+    """``prediction_label = (risk_score >= decision_threshold)``, greater or *equal*.
 
     The anomaly flag two views away is a strict ``>`` and this one is not. The
     two conventions differ, each follows its own table, and getting it wrong
     here would paint a city as flagged on the exact value where the warehouse
-    says it is not — or the reverse.
+    says it is not, or the reverse.
     """
     threshold = 0.1024
     outermost = {3, 4}
@@ -2313,7 +2353,7 @@ def test_the_rejected_alternative_is_still_the_worse_one() -> None:
 
 
 # --------------------------------------------------------------------------
-# BI-06 — the grid, and the claim it is allowed to make.
+# BI-06: the grid, and the claim it is allowed to make.
 # --------------------------------------------------------------------------
 
 
@@ -2346,7 +2386,7 @@ def test_a_week_is_drawn_as_a_band_not_as_seven_estimates() -> None:
 
     The model's target is "an anomaly at any point in the next seven days", so
     there is one probability per city per week and no per-day resolution
-    underneath it. Every cell in a row therefore carries the same value —
+    underneath it. Every cell in a row therefore carries the same value;
     varying them would be a chart claiming precision the model does not have.
     """
     from dashboard.views import risk_horizon as risk
@@ -2391,7 +2431,7 @@ def test_an_unscored_city_is_empty_rather_than_grey() -> None:
     """Absence carries no fill at all, which is what lets the ramp be violet.
 
     A grey fill for "no prediction" would sit 3.7 from the muted ink and land
-    in the same picture as the ramp — the same-page collision theme.py rejected
+    in the same picture as the ramp: the same-page collision theme.py rejected
     the achromatic ramp to avoid.
     """
     from dashboard.views import risk_horizon as risk
@@ -2430,11 +2470,11 @@ def test_the_tooltip_says_the_score_covers_the_whole_window() -> None:
     assert "risk score" in scored
     assert "threshold" in scored
     assert "one score for 7 days" in scored
-    assert "03 Sep – 09 Sep" in scored
+    assert "03 Sep - 09 Sep" in scored
 
 
 def test_the_vintage_is_on_the_page() -> None:
-    """"so the reader knows the vintage" — the model, and when it ran."""
+    """"so the reader knows the vintage": the model, and when it ran."""
     from dashboard.views import risk_horizon as risk
 
     stamp = risk.vintage(_risk_frame())
@@ -2544,7 +2584,7 @@ def test_the_warehouse_agrees_with_the_committed_evaluation_record(engine) -> No
 
 
 # --------------------------------------------------------------------------
-# BI-07 — what the deployment needs, asserted before it is deployed.
+# BI-07: what the deployment needs, asserted before it is deployed.
 # --------------------------------------------------------------------------
 
 
@@ -2597,8 +2637,8 @@ def test_no_secret_bearing_file_is_committed() -> None:
     forbidden = {".env", ".streamlit/secrets.toml", "secrets.yml", "secrets.yaml"}
     assert not (forbidden & tracked), f"a secret file is tracked: {forbidden & tracked}"
     assert not [p for p in tracked if p.endswith((".pem", ".key"))]
-    # The examples must be committed — they are the documentation for what is
-    # missing — and must never hold a real value.
+    # The examples must be committed, since they are the documentation for
+    # what is missing, and must never hold a real value.
     assert ".env.example" in tracked
     assert ".streamlit/secrets.toml.example" in tracked
 
@@ -2613,7 +2653,7 @@ def test_the_committed_examples_still_hold_placeholders() -> None:
 
 
 def test_the_app_starts_with_no_environment_at_all() -> None:
-    """Community Cloud has no .env — only the secret it injects.
+    """Community Cloud has no .env, only the secret it injects.
 
     config.py must still build, and the dashboard must still refuse politely
     rather than raise, when nothing is configured. This is the state a
@@ -2639,7 +2679,7 @@ def test_the_deployment_checker_reads_the_navigation_rather_than_a_list() -> Non
     """A fifth view must not need a second edit to be checked after deploy.
 
     Loaded by path rather than imported as ``tests.check_deployment``: the
-    tests directory is deliberately not a package — making it one changes how
+    tests directory is deliberately not a package, and making it one changes how
     pytest imports every module in it and breaks the flat ``from ml_fixtures
     import ...`` the rest of the suite uses.
     """

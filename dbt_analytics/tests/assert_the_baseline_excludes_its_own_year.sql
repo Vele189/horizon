@@ -8,7 +8,7 @@
 --
 -- So: the arithmetic must hold exactly everywhere, and the exclusion must
 -- actually remove something wherever the labelled year did contribute. The
--- second is what catches an exclusion that silently did nothing — the failure
+-- second is what catches an exclusion that silently did nothing, the failure
 -- that makes ML-05's metrics flattering and wrong.
 {% if var('climatology_exclude_own_year', true) %}
 

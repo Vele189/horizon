@@ -20,7 +20,7 @@ select
 
     -- Derived from the coordinate, never configured. A hardcoded hemisphere is
     -- a second source of truth that can disagree with the latitude beside it,
-    -- and the season mapping downstream reads this — so for the five southern
+    -- and the season mapping downstream reads this, so for the five southern
     -- cities a wrong value inverts summer and winter rather than merely
     -- mislabelling them. Asserted against the registry's own derivation in
     -- tests/, so Python and SQL cannot drift apart.

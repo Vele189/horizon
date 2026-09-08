@@ -1,4 +1,4 @@
-"""View 1 — Global Anomaly Map.
+"""View 1: Global Anomaly Map.
 
 Where is it abnormally hot or cold, on a chosen day?
 
@@ -7,7 +7,7 @@ Where is it abnormally hot or cold, on a chosen day?
 coordinates whether or not the warehouse has scored it. A map that plotted
 only the cities with data would silently redraw the world each time the
 backfill advanced, and a reader would have no way to tell "normal here" from
-"nothing ingested here" — which are opposite statements. Cities without a
+"nothing ingested here", which are opposite statements. Cities without a
 score are drawn as open rings and say why in their tooltip.
 
 **Two channels, one number.** Size carries magnitude and colour carries
@@ -108,12 +108,12 @@ def _tooltip(row: pd.Series) -> str:
             if pd.notna(row["observed_c"])
             else "observed"
         )
-        return f"{head}<br>{observed}<br><i>no baseline yet — too few reference years</i>"
+        return f"{head}<br>{observed}<br><i>no baseline yet, too few reference years</i>"
 
     return (
         f"{head}"
         f"<br><b>Z {row['z']:+.2f}</b>"
-        f"{'  ·  flagged' if row['is_anomaly'] else ''}"
+        f"{' (flagged)' if row['is_anomaly'] else ''}"
         f"<br><b>{row['observed_c']:.1f} °C</b> observed"
         f"<br><b>{row['baseline_c']:.1f} °C</b> baseline μ"
         f" (σ {row['baseline_sigma']:.1f})"
@@ -139,7 +139,7 @@ def _figure(frame: pd.DataFrame) -> go.Figure:
                 mode="markers",
                 name="not scored",
                 marker={
-                    # Shape, not colour, carries this distinction — it has to
+                    # Shape, not colour, carries this distinction, which has to
                     # survive both colour-vision deficiency and the fact that
                     # every fill on this map already means a number.
                     "symbol": "circle-open",
@@ -221,7 +221,7 @@ class Event:
 
     @property
     def label(self) -> str:
-        return f"{self.city} — {self.date:%d %b %Y}"
+        return f"{self.city}, {self.date:%d %b %Y}"
 
 
 def _events() -> Sequence[Event]:
@@ -289,7 +289,7 @@ def verify(event: Event, frame: pd.DataFrame, coverage: pd.DataFrame) -> tuple[s
             first, last = window.iloc[0]["first_day"], window.iloc[0]["last_day"]
             held = f"the marts hold {first:%d %b %Y} to {last:%d %b %Y}"
         return "pending", (
-            f"**{event.city}, {event.date:%d %b %Y} — cannot be checked yet.** "
+            f"**{event.city}, {event.date:%d %b %Y}: cannot be checked yet.** "
             f"No scored observation for this day ({held}). The event stays "
             f"pending rather than passing; the map will show it the moment the "
             f"backfill reaches it."
@@ -302,18 +302,18 @@ def verify(event: Event, frame: pd.DataFrame, coverage: pd.DataFrame) -> tuple[s
 
     if flagged and agrees:
         return "pass", (
-            f"**{event.city}, {event.date:%d %b %Y} — Z {z:+.2f}, flagged.** "
+            f"**{event.city}, {event.date:%d %b %Y}: Z {z:+.2f}, flagged.** "
             f"A documented {event.direction} extreme surfaces as one, in the "
             f"right direction. The climatology holds here."
         )
     if agrees:
         return "weak", (
-            f"**{event.city}, {event.date:%d %b %Y} — Z {z:+.2f}, not flagged.** "
+            f"**{event.city}, {event.date:%d %b %Y}: Z {z:+.2f}, not flagged.** "
             f"The departure is in the documented {event.direction} direction but "
             f"does not clear {theme.ANOMALY_Z_THRESHOLD}."
         )
     return "fail", (
-        f"**{event.city}, {event.date:%d %b %Y} — Z {z:+.2f}.** A documented "
+        f"**{event.city}, {event.date:%d %b %Y}: Z {z:+.2f}.** A documented "
         f"{event.direction} event reads {observed_direction}. Something is wrong "
         f"with the climatology, not with the map."
     )
@@ -351,7 +351,7 @@ def _selected_day(coverage: Mapping[str, Any]) -> tuple[dt.date, "Event | None"]
         )
         # Applied once, when the selection changes. Applying it on every rerun
         # would let the jump overrule the date picker for as long as an event
-        # stayed selected — the reader would move the date and watch it snap
+        # stayed selected: the reader would move the date and watch it snap
         # back, with nothing on screen explaining why.
         if choice != _NO_EVENT and st.session_state.get(_APPLIED) != choice:
             st.session_state[_APPLIED] = choice

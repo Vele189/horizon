@@ -1,9 +1,9 @@
 # =============================================================================
-# Horizon — Climate Volatility & Risk Engine
+# Horizon: Climate Volatility & Risk Engine
 # =============================================================================
 # Bronze is landed by Python (ingestion/); everything from silver upwards is
 # dbt's. The layers map onto the schemas ingestion/schema.sql already creates,
-# which is why generate_schema_name is overridden — see macros/.
+# which is why generate_schema_name is overridden; see macros/.
 # =============================================================================
 
 name: horizon
@@ -33,7 +33,7 @@ models:
   horizon:
     # Silver: deduplicated, unit-asserted, UTC-cast. Views, because these are
     # thin projections over bronze and materialising them would double the
-    # storage for no query benefit — nothing reads silver directly except the
+    # storage for no query benefit, since nothing reads silver directly except the
     # marts built on top of it.
     staging:
       +materialized: view

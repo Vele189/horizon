@@ -4,7 +4,7 @@
     One way, deliberately. Postgres returns a *naive* timestamp from
     `AT TIME ZONE`, which is correct: a wall-clock reading has no offset, and
     at a daylight-saving fall-back two different instants produce the same
-    reading. Converting back is therefore ambiguous — measured here, ten of
+    reading. Converting back is therefore ambiguous. Measured here, ten of
     274,920 hourly rows do not survive a round trip, one per DST-observing city
     per autumn transition.
 

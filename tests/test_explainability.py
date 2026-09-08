@@ -8,7 +8,7 @@ value must reproduce ``predict_proba`` to floating-point.
 That is not a formality. The first draft of ``explain.py`` used XGBoost's
 default tree range, which is *every* tree, while the classifier stops early on
 validation and scores with the first eighteen. The contributions summed
-perfectly — to the wrong model's margin — and explained a Delhi day at 0.64
+perfectly, to the wrong model's margin, and explained a Delhi day at 0.64
 that the model had scored at 0.695. Anchoring the identity to ``predict_proba``
 rather than to the booster's own margin is what catches that.
 
@@ -223,7 +223,7 @@ def test_the_model_raises_risk_on_both_tails(explained) -> None:
 
     The target is ``abs(z) > 2.5``. The model was handed a binary column and
     never told what produced it. If it has learned the shape of its own label
-    it will push risk up at both extremes of Z and be quietest near zero — and
+    it will push risk up at both extremes of Z and be quietest near zero, and
     a model that had only memorised the test period, which runs 231 hot
     anomalies to 61 cold, would show the hot tail and not the cold one.
     """
@@ -239,7 +239,7 @@ def test_the_model_raises_risk_on_both_tails(explained) -> None:
     assert cold > middle + 1.5 and hot > middle + 1.5
     # Near-symmetric: neither tail is more than twice the other.
     assert 0.5 < cold / hot < 2.0, (
-        f"the tails are lopsided — cold {cold:.3f} against hot {hot:.3f}. The "
+        f"the tails are lopsided: cold {cold:.3f} against hot {hot:.3f}. The "
         "model may be fitting the test period's hot-dominated mix rather than "
         "the label's definition."
     )
@@ -300,8 +300,8 @@ def test_a_confident_mistake_is_a_spell_that_broke(explained) -> None:
 
     The model's most confident error is not a hallucination: it is a city
     eight days into a hot spell, with the same evidence as the most confident
-    correct call. The lesson is a limit of the target — at this horizon the
-    model can say a spell is running, not when it will end — and it is only
+    correct call. The lesson is a limit of the target: at this horizon the
+    model can say a spell is running, not when it will end, and it is only
     visible because the case was chosen for confidence rather than for
     marginality.
     """
@@ -318,7 +318,7 @@ def test_a_confident_mistake_is_a_spell_that_broke(explained) -> None:
         assert leading["value"] > 2.0, (
             "the confident cases should be days that are already extreme"
         )
-    # Same evidence, opposite outcomes — that is the point of showing both.
+    # Same evidence, opposite outcomes, which is the point of showing both.
     assert abs(hit["predicted"] - miss["predicted"]) < 0.1
 
 
@@ -351,7 +351,7 @@ def test_the_committed_figures_are_current(explained, tmp_path) -> None:
         beside = FIGURE_DIR / path.name
         assert beside.exists(), f"{beside} is missing"
         assert beside.read_bytes() == path.read_bytes(), (
-            f"{beside.name} is out of date — re-run "
+            f"{beside.name} is out of date; re-run "
             "`python machine_learning/explain.py --write`"
         )
 

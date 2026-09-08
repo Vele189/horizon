@@ -4,13 +4,13 @@ Two failures this guards against, both quiet:
 
 *   **A global month lookup.** `case month when 12 then 'winter'` passes review
     and is wrong for a third of this city set. It does not merely mislabel the
-    five southern cities — it puts their hottest month in the same cohort as
+    five southern cities: it puts their hottest month in the same cohort as
     Moscow's coldest, so a seasonal aggregate averages summer and winter
     together and reports something near the annual mean with a season's name
     on it.
 *   **Grouping a climatology by `day_of_year`.** 1 March is day 60 in a common
     year and 61 in a leap year, so the grouping mixes 1 March with 29 February
-    and shifts every day after February by one in three years out of four — a
+    and shifts every day after February by one in three years out of four: a
     systematic error that reads as a seasonal signal.
 """
 

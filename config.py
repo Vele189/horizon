@@ -1,7 +1,7 @@
 """Single source of truth for environment configuration.
 
 This module is the **only** place in the project that reads from the process
-environment. Nothing else may call ``os.environ`` or ``os.getenv`` — importing
+environment. Nothing else may call ``os.environ`` or ``os.getenv``. Importing
 :func:`get_settings` here instead means every variable is named once, typed
 once, validated once, and documented once (in ``.env.example``).
 
@@ -94,7 +94,7 @@ def _get_positive_int(name: str, default: int) -> int:
 
 
 def _get_positive_float(name: str, default: float) -> float:
-    """A non-negative float. Zero is allowed — it means "no delay"."""
+    """A non-negative float. Zero is allowed; it means "no delay"."""
     raw = _get(name)
     if raw is None:
         return default
@@ -118,7 +118,7 @@ def _get_path(name: str, default: str) -> Path:
 def mask_secret(value: str | None) -> str:
     """Render a secret safely for logs and terminals.
 
-    Connection strings keep their shape — driver, host, database — so a
+    Connection strings keep their shape (driver, host, database) so a
     misconfiguration is still diagnosable, but the password is replaced.
     """
     if not value:
@@ -164,7 +164,7 @@ def split_database_url(url: str, *, name: str = "DATABASE_URL") -> DatabaseParts
     """Split a Postgres URL into the fields dbt needs.
 
     Raises:
-        ConfigError: The URL is missing a host, a user, or a database name —
+        ConfigError: The URL is missing a host, a user, or a database name,
             each of which dbt would otherwise fail on with a message that does
             not mention the URL at all.
     """
@@ -332,6 +332,6 @@ def reload_settings() -> Settings:
 if __name__ == "__main__":
     resolved = get_settings()
     width = max(len(name) for name in resolved.redacted())
-    print(f"Loaded from: {ENV_FILE if ENV_FILE.exists() else '<no .env — using defaults>'}\n")
+    print(f"Loaded from: {ENV_FILE if ENV_FILE.exists() else '<no .env, using defaults>'}\n")
     for key, value in resolved.redacted().items():
         print(f"  {key.ljust(width)}  {value}")

@@ -15,7 +15,7 @@ convention: a row whose horizon starts on its own forecast date is not a
 differently-shaped row, it is a bug that would otherwise be found in a chart.
 
 **The schema.** If ``features.py`` has gained, lost or renamed a column since
-the model was trained, scoring must fail rather than proceed — a matrix with a
+the model was trained, scoring must fail rather than proceed: a matrix with a
 renamed column still has the right shape and the model will return a
 probability for every row of it.
 """
@@ -113,7 +113,7 @@ def test_no_feature_logic_is_duplicated_here() -> None:
     """The ticket asks that features.py be reused, so nothing is recomputed.
 
     A window computed here would be a second implementation free to drift from
-    the one the model was trained on, and a drift would be silent — both would
+    the one the model was trained on, and a drift would be silent, since both would
     still produce a plausible column of numbers.
     """
     source = (REPO_ROOT / "machine_learning" / "predict.py").read_text()
@@ -392,7 +392,7 @@ def test_the_unscored_cities_have_named_reasons(engine) -> None:
         assert reason in {
             "never ingested",
             "inside the feature warm-up",
-            "a feature is null — no climatology baseline",
+            "a feature is null: no climatology baseline",
             "no observations inside the scored window",
             "no rows in the scored window",
         }, f"{city_id}: {reason}"

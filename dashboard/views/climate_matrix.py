@@ -1,4 +1,4 @@
-"""View 2 — Climate Matrix.
+"""View 2: Climate Matrix.
 
 Which cities are seeing more extremes over time?
 
@@ -6,7 +6,7 @@ One cell per city-year, shaded by how many days that year ran more than 2.5σ
 from that city's own seasonal normal. Years across, cities down.
 
 **A count is a magnitude, so the ramp is sequential.** Hot days climb the warm
-ramp and cold days climb the cool one — one hue each, light to dark. The
+ramp and cold days climb the cool one, one hue each, light to dark. The
 diverging blue-grey-red scale is *not* used for either, because zero-to-twenty
 has a bottom and a top and no meaningful middle: painting it on two hues either
 side of a neutral would invent a direction the number does not have. Only the
@@ -55,7 +55,7 @@ VIEW = ViewMeta(
 # change shape as the backfill advanced.
 #
 # Aggregated in SQL rather than in pandas. The fact is 60k rows and the answer
-# is 480 — sending the difference over the wire to group it locally would be
+# is 480. Sending the difference over the wire to group it locally would be
 # paying for the same arithmetic twice, once in bandwidth.
 _MATRIX_SQL = f"""
     with span as (
@@ -92,12 +92,12 @@ _MATRIX_SQL = f"""
 # distribution: half of all scored city-years sit at zero or one, so an even
 # split would put almost everything in one step and waste four.
 COUNT_BREAKS: Final[tuple[int, ...]] = (0, 2, 5, 10)
-COUNT_LABELS: Final[tuple[str, ...]] = ("0", "1–2", "3–5", "6–10", "11+")
+COUNT_LABELS: Final[tuple[str, ...]] = ("0", "1-2", "3-5", "6-10", "11+")
 
 # The same boundaries mirrored, so a reader moving between the hot view and the
 # net view is not also learning a new set of buckets.
 NET_LABELS: Final[tuple[str, ...]] = (
-    "≤ −11", "−10…−6", "−5…−3", "−2…−1", "0", "1…2", "3…5", "6…10", "11+",
+    "≤ -11", "-10...-6", "-5...-3", "-2...-1", "0", "1...2", "3...5", "6...10", "11+",
 )
 
 METRICS: Final[Mapping[str, str]] = {
@@ -166,7 +166,7 @@ def order_cities(frame: pd.DataFrame, metric: str, sort: str) -> list[str]:
     """Row order. Cities with nothing to say sort to the bottom, always.
 
     Whatever the sort, a city the backfill has not reached carries no
-    information and is placed last rather than interleaved — otherwise nine
+    information and is placed last rather than interleaved. Otherwise nine
     empty rows sit between the six that answer the question.
     """
     column = value_column(metric)
@@ -189,7 +189,7 @@ def order_cities(frame: pd.DataFrame, metric: str, sort: str) -> list[str]:
 
 
 def _cell_text(row: pd.Series) -> str:
-    head = f"<b>{row['name']}</b> · {int(row['year'])}"
+    head = f"<b>{row['name']}</b>, {int(row['year'])}"
     if not row["scored"]:
         return f"{head}<br><i>not ingested</i>"
     return (
@@ -249,7 +249,7 @@ def _figure(frame: pd.DataFrame, metric: str, mode: theme.Mode) -> go.Figure:
             zmax=len(colours),
             showscale=False,
             # The 2px separator is the surface showing through, which is also
-            # what an un-ingested cell is — so a hole in the grid reads as a
+            # what an un-ingested cell is, so a hole in the grid reads as a
             # wider gap rather than as a colour a reader has to decode.
             xgap=2,
             ygap=2,
@@ -280,7 +280,7 @@ def render() -> None:
             list(METRICS),
             default="Hot",
             key="climate_matrix_metric",
-            help="Net is hot days minus cold days — the only signed view, and "
+            help="Net is hot days minus cold days, the only signed view, and "
             "the only one on the diverging scale.",
         )
     with sorting:
@@ -304,8 +304,8 @@ def render() -> None:
     key, ranking = st.columns([3, 2])
     with key:
         st.caption(
-            f"{'Net anomaly days (hot − cold)' if metric == 'net' else f'{label} anomaly days'} "
-            f"per city-year. A gap is a year that has not been ingested — not a year with none."
+            f"{'Net anomaly days (hot - cold)' if metric == 'net' else f'{label} anomaly days'} "
+            f"per city-year. A gap is a year that has not been ingested, not a year with none."
         )
         if metric == "net":
             st.markdown(

@@ -1,6 +1,6 @@
 """Tests for the bronze landing schema.
 
-These need a reachable database — the local Docker Postgres from FND-02. They
+These need a reachable database, the local Docker Postgres from FND-02. They
 skip rather than fail when DATABASE_URL is unset or unreachable, so CI without
 a warehouse stays green.
 

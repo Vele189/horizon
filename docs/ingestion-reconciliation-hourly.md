@@ -1,4 +1,4 @@
-# Ingestion reconciliation — `hourly`
+# Ingestion reconciliation: `hourly`
 
 Generated 2026-09-07 01:26 UTC by `python ingestion/reconcile.py --grain hourly`.
 
@@ -24,16 +24,16 @@ Range **2024-09-02 .. 2026-09-02**, 17,544 observations expected per city across
 | `sydney` | 17,544 | 17,544 | 17,544 | 0 | 0 |
 | `tokyo` | 17,544 | 17,544 | 17,544 | 0 | 0 |
 
-`actual` counts every row held for the city; `distinct` counts distinct observation times inside the range, which is what `delta` compares against `expected`. The two diverge for two separate reasons, reported separately below: the same observation landed twice — legal, since bronze is append-only and silver deduplicates — or the row falls outside the range this report asked about.
+`actual` counts every row held for the city; `distinct` counts distinct observation times inside the range, which is what `delta` compares against `expected`. The two diverge for two separate reasons, reported separately below: the same observation landed twice (legal, since bronze is append-only and silver deduplicates), or the row falls outside the range this report asked about.
 
-**Rows outside the reconciled range** — a surplus, not a gap:
+**Rows outside the reconciled range**, a surplus, not a gap:
 
 | city | rows outside |
 |---|---:|
 | `cairo` | 5,880 |
 | `london` | 5,880 |
 
-Real observations the range did not ask about — usually a wider window ingested earlier. They do not count towards `delta` and are not a defect; downstream models filter by range.
+Real observations the range did not ask about, usually a wider window ingested earlier. They do not count towards `delta` and are not a defect; downstream models filter by range.
 
 ## Gaps by category
 
@@ -56,7 +56,7 @@ Accepted. The ERA5 archive begins 1940-01-01 and trails the present by several d
 
 None.
 
-Accepted while the backfill is in progress. The daily grain costs ~26 000 weighted API calls against a free-tier allowance of 10 000 a day, so it completes across roughly three days. Every range here is pending, not lost — the manifest resumes rather than restarts.
+Accepted while the backfill is in progress. The daily grain costs ~26 000 weighted API calls against a free-tier allowance of 10 000 a day, so it completes across roughly three days. Every range here is pending, not lost; the manifest resumes rather than restarts.
 
 ### api limitation
 
@@ -72,5 +72,5 @@ Nothing should ever land here. A gap in this category means a completed unit cov
 
 ## Verdict
 
-**No gap is unexplained.** Every one is either outside what the archive can serve, or inside a range the backfill has not reached yet — and the latter shrinks to nothing as the backfill completes.
+**No gap is unexplained.** Every one is either outside what the archive can serve, or inside a range the backfill has not reached yet, and the latter shrinks to nothing as the backfill completes.
 

@@ -10,7 +10,7 @@ is reachable from here, this one proves the app is reachable from anywhere.
 **Two different cold starts, and they are not the same number.** Neon suspends
 compute after five minutes and resumes in about a second (§Promotion to Neon).
 Streamlit Community Cloud puts an app to sleep after roughly a week of no
-visitors, and waking it rebuilds a container — tens of seconds, not one. A
+visitors, and waking it rebuilds a container: tens of seconds, not one. A
 visitor arriving at a long-idle portfolio link pays the second one and then the
 first. ``--cold`` labels a run as that case; without it the timing is a warm
 measurement and is recorded as such.
@@ -68,7 +68,7 @@ def wake(url: str, *, cold: bool) -> float | None:
                 return elapsed
         except requests.RequestException as exc:
             if attempt == 1:
-                print(f"  waiting        {type(exc).__name__} — retrying")
+                print(f"  waiting        {type(exc).__name__}, retrying")
         time.sleep(2)
 
     print(f"  FAIL           no health response within {WAKE_TIMEOUT_SECONDS} s")
@@ -78,7 +78,7 @@ def wake(url: str, *, cold: bool) -> float | None:
 def check_views(url: str) -> bool:
     """Each view's own URL must serve the app shell.
 
-    Proves routing, not rendering — see the module docstring.
+    Proves routing, not rendering; see the module docstring.
     """
     base = url.rstrip("/")
     ok = True
@@ -171,7 +171,7 @@ def main(argv: Sequence[str] | None = None) -> int:
           + ("   (record this as the cold start)" if args.cold else ""))
     print(f"  all four views {'route' if routed else 'DO NOT all route'}")
     if args.screenshots:
-        print(f"  screenshots    {'captured — check them by eye' if captured else 'FAILED'}")
+        print(f"  screenshots    {'captured; check them by eye' if captured else 'FAILED'}")
     else:
         print("  screenshots    not requested; rendering is unverified by this run")
     return 0 if routed and captured else 1

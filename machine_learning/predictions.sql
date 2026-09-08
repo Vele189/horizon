@@ -18,7 +18,7 @@
 --
 -- **Three different times, because they answer three different questions.**
 --   forecast_date  the last day of *observed* data the score was computed from
---   horizon_start  the first day the score covers — always forecast_date + 1,
+--   horizon_start  the first day the score covers, always forecast_date + 1,
 --                  because day t is a feature and cannot be in its own window
 --   horizon_end    the last day it covers, forecast_date + horizon_days
 --   scored_at      when the row was written, which is not when it was about
@@ -90,13 +90,13 @@ comment on table gold_marts.fact_ml_predictions is
 comment on column gold_marts.fact_ml_predictions.forecast_date is
   'Last day of observed data used. The score covers the days AFTER this one.';
 comment on column gold_marts.fact_ml_predictions.horizon_start is
-  'First day covered, always forecast_date + 1 — day t is a feature, not part of its own window.';
+  'First day covered, always forecast_date + 1; day t is a feature, not part of its own window.';
 comment on column gold_marts.fact_ml_predictions.risk_score is
   'P(|Z| > 2.5 on at least one day in horizon_start..horizon_end). Trained on a period with a lower base rate than the present, so it reads low; see the calibration note in the README.';
 comment on column gold_marts.fact_ml_predictions.model_version is
   'Versioned artefact filename stem, e.g. model-unweighted-v1-2ad772ff7b18.';
 comment on column gold_marts.fact_ml_predictions.scored_at is
-  'When the row was written. Freshness of the answer, not of the data — forecast_date is that.';
+  'When the row was written. Freshness of the answer, not of the data; forecast_date is that.';
 
 -- The dashboard reads the newest forecast_date per city, and an operator
 -- clearing a bad run reads by model_version.

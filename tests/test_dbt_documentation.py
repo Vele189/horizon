@@ -1,13 +1,13 @@
 """Tests for documentation coverage and lineage shape.
 
 An undocumented model is a model a reviewer cannot assess, so coverage is
-asserted rather than reviewed — it is the kind of thing that is complete on the
+asserted rather than reviewed. It is the kind of thing that is complete on the
 day it is written and 80% complete a month later.
 
 The lineage tests exist because the DAG had a real defect that only became
 visible when it was drawn: `int_climatology_contributions` selected from
 `fact_weather_observations` and `dim_date`, making the lineage run
-staging → marts → intermediate → marts. It built fine and every test passed;
+staging -> marts -> intermediate -> marts. It built fine and every test passed;
 it was simply not a layering anyone could follow.
 """
 
@@ -135,7 +135,7 @@ def test_the_dag_only_flows_forward(manifest) -> None:
 
     This is not pedantry: it was violated. `int_climatology_contributions`
     selected from `fact_weather_observations` and `dim_date`, so the lineage
-    ran staging → marts → intermediate → marts. Everything built and every test
+    ran staging -> marts -> intermediate -> marts. Everything built and every test
     passed; the graph was simply unreadable, which is the whole artefact this
     ticket is about.
     """

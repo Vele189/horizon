@@ -3,13 +3,13 @@
 -- A single calendar day's normal is built from ~30 observations, one per
 -- reference year, and at that sample size the standard deviation is noise: a
 -- Z-score against it says more about which thirty days happened to be sampled
--- than about the weather. Widening to ±7 days gives 15 calendar days × ~30
+-- than about the weather. Widening to ±7 days gives 15 calendar days x ~30
 -- years ≈ 450 observations, which is a stable estimate of a distribution that
 -- genuinely does vary slowly across a fortnight.
 --
 -- The window is **circular**. 1 January's neighbourhood includes 25 December
 -- through 8 January, and a non-circular window would silently build the
--- year's first and last week from half as much data as every other week —
+-- year's first and last week from half as much data as every other week,
 -- exactly where the northern winter extremes are.
 --
 -- Measured on `climatology_day`, the day-of-year a date would have in a leap

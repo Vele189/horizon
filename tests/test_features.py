@@ -1,8 +1,8 @@
 """Tests for the feature matrix, and for the claim that it cannot see forward.
 
 The claim is the whole point. A leaked feature does not fail a test that was
-not written for it: it raises PR-AUC, passes review, and is found — if it is
-found — by someone asking why the model is so good. So the central test here
+not written for it: it raises PR-AUC, passes review, and is found, if it is
+found at all, by someone asking why the model is so good. So the central test here
 does not inspect the formulas. It perturbs the *future*, rebuilds, and asserts
 that every row at or before the cut is bit-identical. Any window that reaches
 forward by a single day moves those rows, whatever it is called and however it
@@ -121,8 +121,8 @@ def test_no_feature_sees_the_future(offset: int) -> None:
 def test_the_leakage_check_catches_a_forward_window() -> None:
     """The test above can fail. A centred window is what failing looks like.
 
-    Without this, a future-perturbation test that compared the wrong rows —
-    or compared nothing — would be indistinguishable from a clean matrix.
+    Without this, a future-perturbation test that compared the wrong rows,
+    or compared nothing, would be indistinguishable from a clean matrix.
     """
     frame = synthetic(days=200)
     cut = frame["date_key"].iloc[90]
@@ -218,10 +218,10 @@ def test_a_partial_window_is_null_rather_than_a_shorter_average() -> None:
 
 
 def test_the_trailing_z_does_not_score_a_day_against_itself() -> None:
-    """The baseline is t−30 .. t−1, exclusive of t.
+    """The baseline is t-30 .. t-1, exclusive of t.
 
     Including t pulls the mean 1/30 of the way towards it and inflates σ by its
-    own deviation, so an extreme day scores systematically closer to zero — the
+    own deviation, so an extreme day scores systematically closer to zero, the
     same self-labelling ``fact_climatology`` excludes a whole year to avoid.
     """
     frame = synthetic(days=90)
@@ -254,7 +254,7 @@ def test_pressure_tendency_spans_the_days_it_names() -> None:
 
 
 # --------------------------------------------------------------------------
-# Calendar gaps — the row-window trap
+# Calendar gaps: the row-window trap
 # --------------------------------------------------------------------------
 
 
@@ -293,7 +293,7 @@ def test_a_lag_across_a_gap_is_null_not_the_previous_row() -> None:
     day_after = built.loc[built["date_key"] == hole + pd.Timedelta(days=1)].iloc[0]
     assert pd.isna(day_after[f"{TEMPERATURE}_lag1"])
     assert pd.isna(day_after["pressure_tendency_24h"])
-    # Three days on, t−3 lands in the hole and t−1 does not: the lag is null
+    # Three days on, t-3 lands in the hole and t-1 does not: the lag is null
     # rather than quietly returning the reading from four days back.
     later = built.loc[built["date_key"] == hole + pd.Timedelta(days=3)].iloc[0]
     assert not pd.isna(later[f"{TEMPERATURE}_lag1"])
@@ -357,7 +357,7 @@ def test_the_missing_report_separates_arithmetic_from_data() -> None:
 def test_an_unscored_day_is_not_counted_as_a_quiet_one() -> None:
     """A null flag lowers the denominator, never the numerator.
 
-    ``fact_weather_anomalies`` leaves 1 095 city-days with a null flag — the
+    ``fact_weather_anomalies`` leaves 1 095 city-days with a null flag: the
     cities holding one reference year, where leave-one-year-out leaves nothing
     to score against. Folding those into "not an anomaly" would report a quiet
     month that was never actually measured.
@@ -543,7 +543,7 @@ def test_a_slice_agrees_with_the_full_build(engine, built) -> None:
     """A windowed request is padded, so it is not silently all warm-up.
 
     Building features from exactly the rows asked for would give the first
-    thirty days of the slice the nulls of a series that begins there — except
+    thirty days of the slice the nulls of a series that begins there, except
     the series does not begin there, the request does.
     """
     city = sorted(built["city_id"].unique())[0]
@@ -561,7 +561,7 @@ def test_a_slice_agrees_with_the_full_build(engine, built) -> None:
 
     # Every feature agrees to the bit, and so does the warm-up flag: the
     # padding is what makes that true. `history_days` is the one column that
-    # cannot — it counts from the padded window, so on a slice it is a lower
+    # cannot: it counts from the padded window, so on a slice it is a lower
     # bound, and asserting that keeps it from quietly becoming something else.
     shared = [column for column in expected.columns if column != "history_days"]
     pd.testing.assert_frame_equal(sliced[shared], expected[shared])

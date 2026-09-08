@@ -9,7 +9,7 @@
 -- Bronze is append-only. Re-ingesting a city-date range inserts new rows
 -- rather than updating existing ones; silver deduplicates by taking the most
 -- recent `ingested_at` per (city_id, observation_time). Nothing here may be
--- mutated in place — the whole point of an append-only landing zone is that a
+-- mutated in place: the whole point of an append-only landing zone is that a
 -- bad transformation is recoverable without re-hitting the API.
 --
 -- There is deliberately NO jsonb payload column. Storing the raw response
@@ -20,8 +20,8 @@
 -- replay remains possible without paying for it in the warehouse.
 --
 -- There is likewise NO source_url column, for the same reason at a smaller
--- scale. It was measured at 712 bytes per daily row and 466 per hourly one —
--- 83% and 81% of the row payload, roughly 300 MB across the full backfill —
+-- scale. It was measured at 712 bytes per daily row and 466 per hourly one,
+-- 83% and 81% of the row payload and roughly 300 MB across the full backfill,
 -- and every value was one of a few hundred distinct strings repeated once per
 -- row. It is also fully derivable: ingestion.client.request_url() rebuilds the
 -- exact string from (city_id, grain, start, end), which is what ING-03's
@@ -48,7 +48,7 @@ comment on schema gold_marts is
 -- ----------------------------------------------------------------------------
 -- bronze_raw.observations_daily
 -- ----------------------------------------------------------------------------
--- One row per city per UTC day, ~30 years back (1995 →). Approximately
+-- One row per city per UTC day, ~30 years back (1995 ->). Approximately
 -- 164,000 rows at 15 cities.
 -- ----------------------------------------------------------------------------
 create table if not exists bronze_raw.observations_daily (
@@ -56,7 +56,7 @@ create table if not exists bronze_raw.observations_daily (
     -- (city_id, observation_time) cannot be the primary key.
     id                          bigint generated always as identity primary key,
 
-    -- Ingestion metadata — every row carries all four.
+    -- Ingestion metadata; every row carries all four.
     city_id                     text        not null,
     observation_time            timestamptz not null,
     ingested_at                 timestamptz not null default now(),
@@ -118,7 +118,7 @@ create table if not exists bronze_raw.observations_daily (
 comment on table bronze_raw.observations_daily is
   'Append-only daily observations from the Open-Meteo archive (ERA5). Deduplicated downstream in silver.';
 comment on column bronze_raw.observations_daily.city_id is
-  'Slug from config/cities.yml. Not a foreign key — bronze must land even if the city config changes.';
+  'Slug from config/cities.yml. Not a foreign key, because bronze must land even if the city config changes.';
 comment on column bronze_raw.observations_daily.observation_time is
   'Midnight UTC of the aggregated day.';
 comment on column bronze_raw.observations_daily.batch_id is
@@ -128,7 +128,7 @@ comment on column bronze_raw.observations_daily.batch_id is
 -- ----------------------------------------------------------------------------
 -- bronze_raw.observations_hourly
 -- ----------------------------------------------------------------------------
--- One row per city per hour, trailing 24 months only — all the storm-dynamics
+-- One row per city per hour, trailing 24 months only, which is all the storm-dynamics
 -- view needs (§5.1). Approximately 263,000 rows at 15 cities.
 -- ----------------------------------------------------------------------------
 create table if not exists bronze_raw.observations_hourly (
@@ -178,7 +178,7 @@ comment on column bronze_raw.observations_hourly.observation_time is
 -- Idempotent like everything above: a no-op on a database created from the
 -- current DDL, and the corrective step on one created before it. Postgres
 -- marks a dropped column dead rather than rewriting the heap, so the space is
--- only returned by a VACUUM FULL — which is not run here, because it takes an
+-- only returned by a VACUUM FULL, which is not run here, because it takes an
 -- exclusive lock and that is an operator's decision, not a schema file's.
 alter table bronze_raw.observations_daily  drop column if exists source_url;
 alter table bronze_raw.observations_hourly drop column if exists source_url;

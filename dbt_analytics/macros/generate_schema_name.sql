@@ -3,8 +3,8 @@
     target's.
 
     dbt's default builds `<target.schema>_<custom>`, so a model configured into
-    `gold_marts` against target schema `public` would land in `public_gold_marts`
-    — a schema nothing else in this project knows about, next to the empty
+    `gold_marts` against target schema `public` would land in `public_gold_marts`,
+    a schema nothing else in this project knows about, next to the empty
     `gold_marts` that ingestion/schema.sql created. The medallion schema names
     are fixed by §5.2 and shared with the Python loader, so they are used as
     written.

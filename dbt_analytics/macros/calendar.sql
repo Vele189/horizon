@@ -4,7 +4,7 @@
 
     `int_climatology_contributions` sits in the intermediate layer and must not
     read a mart, so it cannot join dim_date for these. Defining them once here
-    is what keeps the two derivations from drifting — and a drift would be
+    is what keeps the two derivations from drifting, and a drift would be
     quiet, because both would still produce a number between 1 and 366.
 #}
 

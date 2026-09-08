@@ -5,13 +5,13 @@ sources:
     description: >
       The append-only landing zone, written by ingestion/ rather than by dbt.
       Parsed API columns plus ingestion metadata; no raw payloads and no
-      source_url — those live on disk under DATA_RAW_DIR, gzipped, because a
+      source_url. Those live on disk under DATA_RAW_DIR, gzipped, because a
       per-row copy measured over 80% of the row payload for a value that
       ingestion.archive.source_url_for() reconstructs exactly.
     schema: bronze_raw
 
     # `ingested_at` is when *this pipeline* landed a row, not when the
-    # observation happened — which is the right clock for freshness. The
+    # observation happened, which is the right clock for freshness. The
     # observation clock would report every row as decades stale.
     loaded_at_field: ingested_at
 
@@ -29,12 +29,12 @@ sources:
       - name: observations_daily
         description: >
           One row per city per UTC day, 1995 to the archive edge. Roughly
-          173,500 rows at fifteen cities. Duplicates are legal and expected —
+          173,500 rows at fifteen cities. Duplicates are legal and expected:
           re-ingesting a window appends rather than replaces, and silver
           deduplicates on (city_id, observation_time) by newest ingested_at.
         columns:
           - name: city_id
-            description: Slug from config/cities.yml. Not a foreign key — bronze must land even if the city config changes.
+            description: Slug from config/cities.yml. Not a foreign key, because bronze must land even if the city config changes.
           - name: observation_time
             description: Midnight UTC of the aggregated day.
           - name: ingested_at
@@ -50,7 +50,7 @@ sources:
         description: >
           One row per city per hour, trailing 24 months from a configurable
           anchor. Roughly 263,000 rows at fifteen cities. Feeds the storm
-          dynamics view and nothing else — thirty years at this grain would be
+          dynamics view and nothing else; thirty years at this grain would be
           over four million rows for no analytical benefit.
         columns:
           - name: observation_time

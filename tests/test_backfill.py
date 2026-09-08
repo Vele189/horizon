@@ -3,7 +3,7 @@
 The runner is the only module that drives the others, so what is tested here is
 ordering and stopping: that a unit already on disk costs no request, that the
 manifest is written only after the warehouse commit, and that every way of
-stopping — budget, interrupt, rate limit, repeated failure — leaves a state the
+stopping (budget, interrupt, rate limit, repeated failure) leaves a state the
 next invocation can resume from.
 
 Network is scripted. The database is real, inside its own batch, deleted
@@ -490,7 +490,7 @@ def test_a_city_holding_only_its_first_year_is_not_complete(
     """The false pass the gate exists to catch.
 
     Measuring expected days to the city's own last row rather than to the end
-    of the requested range reports 365 of 365 — 100% — for a city that is one
+    of the requested range reports 365 of 365, or 100%, for a city that is one
     year into a three-year backfill.
     """
     pending = units_for(settings=settings, manifest=manifest)

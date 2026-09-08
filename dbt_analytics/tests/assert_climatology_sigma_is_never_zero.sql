@@ -1,7 +1,7 @@
 -- A zero sigma would make every Z-score infinite or undefined.
 --
 -- It requires ~450 observations in a fortnight-wide window to be bit-identical,
--- which for a real temperature series cannot happen — so a zero here means the
+-- which for a real temperature series cannot happen, so a zero here means the
 -- window collapsed, not that the weather was constant.
 --
 -- Null is different and is allowed: it means the leave-one-year-out exclusion

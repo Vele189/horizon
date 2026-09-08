@@ -3,7 +3,7 @@
 # deployment does not install a warehouse toolchain to render four pages.
 #
 # The dashboard reads finished marts out of Neon. It does not ingest, it does
-# not run dbt, and it does not score — predictions are computed by predict.py
+# not run dbt, and it does not score: predictions are computed by predict.py
 # and promoted into fact_ml_predictions ahead of time. So none of this is a
 # runtime dependency of the deployed app, and if BI-04 ever loads the model
 # artefact directly, joblib and xgboost move up into requirements.txt rather
@@ -23,13 +23,13 @@ dbt-postgres==1.11.0
 # average_precision_score and brier_score_loss, from ML-03 onwards. Hand-rolling
 # them was the alternative and it is the wrong one: the baselines and the model
 # have to be scored by the *same* function or the comparison is void, and the
-# difference would hide in tie handling — where a rule-based baseline puts
+# difference would hide in tie handling, where a rule-based baseline puts
 # thousands of rows on one score and a trained model puts none.
 scikit-learn==1.9.0
 xgboost==3.4.1
 joblib==1.6.0
 
-# Reporting figures only — the precision-recall and calibration curves in
+# Reporting figures only: the precision-recall and calibration curves in
 # docs/images. Kept beside the pipeline rather than in the dev file because
 # evaluate.py regenerates them and a test compares the bytes.
 matplotlib==3.11.1

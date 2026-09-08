@@ -1,4 +1,4 @@
-# Streamlit configuration. Committed, and free of secrets by construction —
+# Streamlit configuration. Committed, and free of secrets by construction:
 # credentials live in .streamlit/secrets.toml, which is git-ignored, and in
 # Streamlit Community Cloud's own encrypted store.
 #
@@ -13,7 +13,7 @@ base = "light"
 font = "sans-serif"
 
 [theme.light]
-backgroundColor = "#fcfcfb"          # theme.SURFACE["light"] — the surface the
+backgroundColor = "#fcfcfb"          # theme.SURFACE["light"], the surface the
                                      # diverging ramp was validated against
 secondaryBackgroundColor = "#f9f9f7" # chrome("light")["plane"]
 textColor = "#0b0b0b"                # chrome("light")["ink"]
