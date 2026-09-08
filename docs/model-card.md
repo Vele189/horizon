@@ -16,7 +16,7 @@ training and evaluation loop against warehouse data, honestly measured.
 
 | | |
 |---|---|
-| Version | `model-unweighted-v1-2df05d793378` |
+| Version | `model-unweighted-v1-e3559dcc6b5a` |
 | Type | XGBoost gradient-boosted trees, binary classification |
 | Trained | 1995-01-31 to 2018-12-24, 96 019 city-days, 11 cities |
 | Evaluated | 2022-01-01 to 2026-09-02, 18 100 city-days, 11 cities |
@@ -32,27 +32,27 @@ describes. If a retrain moves a score, this card fails until it is updated.
 
 | figure | value |
 |---|---|
-| model_version | model-unweighted-v1-2df05d793378 |
+| model_version | model-unweighted-v1-e3559dcc6b5a |
 | feature_count | 27 |
 | train_rows | 96019 |
-| train_positive_rate | 0.0502 |
+| train_positive_rate | 0.0487 |
 | test_rows | 18100 |
-| test_positive_rate | 0.1150 |
-| test_pr_auc | 0.3313 |
-| test_brier | 0.0934 |
-| test_f1 | 0.3578 |
-| test_precision | 0.3640 |
-| test_recall | 0.3518 |
-| decision_threshold | 0.1075 |
-| alert_budget_per_city_year | 20 |
-| alert_budget_threshold | 0.2065 |
-| implied_cost_ratio | 3.84 |
-| test_mean_predicted | 0.0658 |
-| baseline_persistence_pr_auc | 0.1915 |
-| baseline_climatology_pr_auc | 0.1145 |
-| no_skill_pr_auc | 0.1150 |
-| static_city_share_of_shap | 0.1037 |
-| n_estimators | 82 |
+| test_positive_rate | 0.1130 |
+| test_pr_auc | 0.2886 |
+| test_brier | 0.0946 |
+| test_f1 | 0.3255 |
+| test_precision | 0.3284 |
+| test_recall | 0.3227 |
+| decision_threshold | 0.1174 |
+| alert_budget_per_city_year | 20.0 |
+| alert_budget_threshold | 0.2010 |
+| implied_cost_ratio | 3.98 |
+| test_mean_predicted | 0.0611 |
+| baseline_persistence_pr_auc | 0.1913 |
+| baseline_climatology_pr_auc | 0.1250 |
+| no_skill_pr_auc | 0.1130 |
+| static_city_share_of_shap | 0.0956 |
+| n_estimators | 126 |
 | seed | 42 |
 
 ---
@@ -140,28 +140,38 @@ Test split, against baselines fixed and committed before the model was trained.
 
 | | PR-AUC | vs base rate | vs persistence | Brier | F1 |
 |---|---:|---:|---:|---:|---:|
-| no-skill reference | 0.1150 | 1.00x | 0.60x | 0.1060 | 0.2062 |
-| climatology baseline | 0.1145 | 1.00x | 0.60x | 0.1062 | 0.2062 |
-| persistence baseline | 0.1915 | 1.67x | 1.00x | 0.0992 | 0.3398 |
-| **this model** | **0.3313** | **2.88x** | **1.73x** | **0.0934** | **0.3578** |
+| no-skill reference | 0.1130 | 1.00x | 0.59x | 0.1043 | 0.2030 |
+| climatology baseline | 0.1250 | 1.11x | 0.65x | 0.1045 | 0.1597 |
+| persistence baseline | 0.1913 | 1.69x | 1.00x | 0.0976 | 0.3418 |
+| **this model** | **0.2886** | **2.55x** | **1.51x** | **0.0946** | 0.3255 |
 
 Every score carries its lift over **persistence** as well as over the base
 rate. The base rate is the floor a random ranker scores by construction;
 persistence is the number that has to be beaten. The climatology baseline shows
-why the distinction is not pedantic: at 1.00x the base rate it has no
-out-of-sample skill left at all, because shrinkage collapses it to a per-city
-rate and the per-city ordering does not survive the split (Spearman -0.06
-between the training and test periods).
+why the distinction is not pedantic: 1.11x the base rate is barely
+distinguishable from no out-of-sample skill at all, because shrinkage collapses
+it to a per-city rate and the per-city ordering does not survive the split
+(Spearman near zero between the training and test periods).
 
-This model beats every baseline on PR-AUC, on Brier and on F1, and beats
-persistence in every city individually, from 1.28x in Singapore to 3.40x in
-Phoenix.
+This model beats every baseline on ranking and on calibration, and beats
+persistence in every city individually, from 1.36x in Singapore to 2.92x in
+Phoenix. On F1 it is *behind* persistence, 0.3255 against 0.3418.
 
-**And it does so at every threshold.** ML-09 re-ran the whole evaluation at
-|Z| 2.0, 2.5 and 3.0 — refitting, since the threshold moves two features as
-well as the label — and all three verdicts hold at all three. The advantage
-over persistence *grows* with the threshold, 1.43x to 1.73x to 1.95x, so the
-model is not living on the easy half of the distribution. One qualification: at
+**Which of those survive a different threshold.** ML-09 re-ran the whole
+evaluation at |Z| 2.0, 2.5 and 3.0 — refitting, since the threshold moves two
+features as well as the label:
+
+| \|Z\| | model PR-AUC | persistence | vs persistence | model F1 | persistence F1 |
+|---:|---:|---:|---:|---:|---:|
+| 2.0 | 0.4918 | 0.3370 | 1.46x | 0.4647 | 0.4183 |
+| 2.5 | 0.2886 | 0.1913 | 1.51x | 0.3255 | 0.3418 |
+| 3.0 | 0.1915 | 0.0964 | 1.99x | 0.2769 | 0.2524 |
+
+PR-AUC and Brier hold at all three. **F1 does not** — the model is behind
+persistence at 2.5 and ahead at 2.0 and 3.0 — so the ranking and calibration
+verdicts are properties of the model and the F1 verdict is a property of where
+the line sits. The advantage on ranking *grows* with the threshold, 1.46x to
+1.99x, so the model is not living on the easy half of the distribution. At
 |Z| > 3.0 it beats persistence in ten of eleven cities rather than all eleven.
 
 **Accuracy is not reported.** At a 13.58% base rate, always answering "no
@@ -192,7 +202,7 @@ Often enough to be worth looking at, rare enough not to become wallpaper.
 The two rules are not really rivals, and that is the useful part. On a
 **calibrated** probability the expected-cost-minimising cut for a cost ratio
 *c* is 1/(1+*c*), so a threshold *is* a cost ratio, and this one asserts that
-**3.84 false alarms are worth one missed week**. F1 at 0.5 was asserting 1.0,
+**3.98 false alarms are worth one missed week**. F1 at 0.5 was asserting 1.0,
 silently. ML-10 is what makes that translation legal; on a raw score it would
 be arithmetic with no meaning attached.
 
@@ -201,17 +211,17 @@ recorded so the trade is visible rather than asserted:
 
 | | threshold | precision | recall | alerts per city-year |
 |---|---:|---:|---:|---:|
-| looser | 0.1963 | 0.317 | 0.270 | 22.0 |
-| **chosen** | **0.2065** | **0.352** | **0.232** | **17.0** |
-| tighter | 0.2500 | 0.468 | 0.172 | 9.5 |
+| looser | 0.1975 | 0.301 | 0.276 | 22.9 |
+| **chosen** | **0.2010** | **0.329** | **0.237** | **17.9** |
+| tighter | 0.2714 | 0.397 | 0.187 | 11.7 |
 
 **And the budget is overspent on test, by 61%.** The same threshold delivers
-32.2 alerts per city-year there, at precision 0.409 and recall 0.314, because
-validation has 25.9 anomalous days per city-year and test has 42.0. A budget
-set on one period and spent on another is not a guarantee; it is the same drift
+32.3 alerts per city-year there, at precision 0.356 and recall 0.278, because
+validation has fewer anomalous days per city-year than test does. A budget set
+on one period and spent on another is not a guarantee; it is the same drift
 every other ticket in this phase is about, and it is recorded as a number
 rather than left to be discovered. F1 on the same calibrated probabilities
-would have chosen 0.1273 and spent 40.7.
+would have chosen 0.1765 and spent 39.6.
 
 **What the dashboard currently applies is still the F1 threshold**, because
 `fact_ml_predictions` holds raw model scores and the budget rule is defined on
@@ -220,14 +230,14 @@ artefact, which is a serving change and not this ticket's.
 
 ---
 
-**F1 is reported at 0.1075**, the threshold that maximises F1 on the
+**F1 is reported at 0.1174**, the threshold that maximises F1 on the
 *validation* split. At 0.5 this model flags nothing at all and scores F1 =
-0.00. Note how little F1 separates the model from persistence — 0.3578 against
-0.3398 — compared with PR-AUC, 0.3313 against 0.1915: F1 collapses the whole
-curve to one point, and that point is where persistence is strongest. On an
-earlier and much smaller snapshot the two were level on F1 to a thousandth
-while PR-AUC differed by 58%, which is the clearest available demonstration
-that a single-point metric is measuring the point and not the predictors.
+0.00. Note how little F1 separates the model from persistence — 0.3255 against
+0.3418, the wrong way — compared with PR-AUC, 0.2886 against 0.1913: F1
+collapses the whole curve to one point, and that point is where persistence is
+strongest. The sweep above is the clearest available demonstration that a
+single-point metric measures the point and not the predictors: the same two
+predictors change places twice as the threshold moves.
 
 ---
 
@@ -235,25 +245,25 @@ that a single-point metric is measuring the point and not the predictors.
 
 ### 1. It under-states risk in the present climate
 
-The most important line in this card. The positive rate is **5.02% in the
-training period and 11.50% in the test period**, more than doubling, because
+The most important line in this card. The positive rate is **4.87% in the
+training period and 11.30% in the test period**, more than doubling, because
 the climatology baseline spans the whole record and the climate has warmed
 within it. The model is correctly calibrated to a world that no longer exists.
 
 DBT-12 tested whether that is an artefact of the baseline and found it is not:
 detrending the climatology removes only 5% of the drift. See limitation 6.
 
-In consequence its mean predicted probability on the test split is **0.066
-where 0.115 actually occurs**, and the shortfall runs through every decile. It
+In consequence its mean predicted probability on the test split is **0.061
+where 0.113 actually occurs**, and the shortfall runs through every decile. It
 is wrong in the direction that matters for a warning system: it says "quiet"
 more often than it should. **`risk_score` must be recalibrated before any
 reader sees it as a percentage.**
 
 ML-10 measured what recalibration is worth. Isotonic regression fitted on
-validation, never on test, halves the expected calibration error, from 0.049 to
-0.025, and moves the mean prediction from 0.066 to 0.090 against the 0.115 that
-occurs. It costs 4% of PR-AUC, because isotonic collapses 17 247 distinct
-scores into 127 flat runs and average precision is tie-sensitive. That trade is
+validation, never on test, halves the expected calibration error, from 0.052 to
+0.030, and moves the mean prediction closer to the 0.113 that occurs. It costs
+a few per cent of PR-AUC, because isotonic collapses thousands of distinct
+scores into a few dozen flat runs and average precision is tie-sensitive. That trade is
 worth making for a number a reader sees as a percentage and not for one they
 see as a rank, which is why it is recorded rather than applied: the Risk
 Horizon view shows rank bands, and BI-08 is the ticket that decides what a
@@ -262,8 +272,8 @@ calibrated probability is shown as.
 Prior-shift correction on top of it — re-estimating the target period's class
 prior by EM over the model's own posteriors, with no labels — is the method
 that ought to handle a shift of exactly this kind, and here its estimator
-returns 0.299 against an observed 0.115. Given the right prior the correction
-is the best row in the table at ECE 0.019, so the fault is the estimate and not
+returns a badly biased estimate. Given the right prior the correction is the
+best row in the table at ECE 0.019, so the fault is the estimate and not
 the adjustment; and no choice among the candidate quantifiers can be made on
 validation, because the one that is nearly exact on test collapses to zero
 there. It is recorded in full, in `model.calibration`, and not shipped.
@@ -307,17 +317,27 @@ doing, the model is not depending on having met the city: the
 `leave_one_city_out` block in `metrics.json` carries every fold, and each
 fold's own record names the cities it trained on.
 
-### 5. Sydney's baseline is five observations, not 459
+### 5. σ is estimated, and the flag now says so
 
-Every complete city now has a 459-observation baseline and sd(Z) within 0.02 of
-one. Sydney has five, sd(Z) = 1.67, and flags 16.7% of its eighteen scored days
-against 1.0-2.0% everywhere else. It is excluded from every per-city table for
-want of test rows, so it moves no headline figure, but it is the surviving
-instance of the defect: the flag treats σ as known when it is an estimate, and
-at small baselines a noisy one, so a thin city over-flags by construction.
-DBT-14 is the ticket that owns it. Tokyo used to be this entry, at forty-five
-observations and sd(Z) = 1.14; its record is now complete and its flag rate,
-1.44%, sits inside the range the other cities occupy.
+A Z-score divides by a σ that was estimated from a finite window, and treating
+it as known makes the standardised departure a t-statistic read against a
+normal table. The error is one-directional: a city whose baseline rests on few
+observations over-flags by construction. Sydney, on five reference
+observations, flagged 16.7% of its eighteen scored days against 1.0-2.0%
+everywhere else, with sd(Z) = 1.67 where every complete city sits within 0.02
+of one.
+
+DBT-14 judges each day against a Student-t critical value on its own degrees of
+freedom, scaled by √(1 + 1/n) because the day is not in its own baseline:
+`anomaly_z_critical` is 2.513 at a complete city's 459 observations, 2.96 at
+fifteen, and 62.8 at two, which is the honest answer — two observations cannot
+establish that anything is unusual. Sydney now flags 1 of 18 days, a count no
+longer distinguishable from the complete-city rate.
+
+It is a correction rather than a new definition: 52 days across the warehouse
+lost their flag, two of them Sydney's and fifty from complete cities sitting
+between 2.500 and 2.513. Tokyo used to be this entry, at forty-five
+observations and sd(Z) = 1.14; its record is now complete.
 
 ### 6. The label conflates two things, and that is now a choice
 

@@ -55,6 +55,7 @@ from machine_learning.evaluation import (  # noqa: E402
     reflag,
     score,
     split_frame,
+    widened_threshold,
 )
 from machine_learning.features import (  # noqa: E402
     ANOMALY_COUNT_WINDOW,
@@ -438,11 +439,27 @@ def test_the_week_of_year_signal_does_not_survive_the_split(population) -> None:
         "validation no longer wants the week term shrunk away entirely"
     )
     collapsed = score(parts["test"][LABEL], tuned.predict(parts["test"]))
-    assert collapsed.lift == pytest.approx(1.0, abs=0.05), (
+    persistence = score(
+        parts["test"][LABEL],
+        PersistenceBaseline().fit(parts["train"]).predict(parts["test"]),
+    )
+    # Bounded rather than pinned. This asserted 1.00x to within a twentieth,
+    # which was true until DBT-14 widened the exceedance threshold and moved 52
+    # days out of the flag; the collapsed climatology now scores 1.11x. The
+    # figure moves whenever the label does, and the claim worth keeping does
+    # not: whatever the per-city rate is worth out of sample, it is worth far
+    # less than the cheapest real baseline, and reporting a lift over it as
+    # though it were a reference is what ML-09 exists to stop.
+    assert collapsed.lift < 1.3, (
         f"the collapsed climatology scores {collapsed.lift:.4f}x the base rate "
-        "on test. It was chance to within a twentieth when this was written, "
-        "and both directions are news: skill means the per-city ordering has "
-        "started surviving the split, and anti-skill means it has inverted."
+        "on test. It has been between 1.00 and 1.11 across every label "
+        "definition tried so far; real skill here would mean the per-city "
+        "ordering has started surviving the split."
+    )
+    assert collapsed.lift < persistence.lift / 1.3, (
+        f"the climatology baseline ({collapsed.lift:.2f}x) has closed on "
+        f"persistence ({persistence.lift:.2f}x); ML-09's argument for "
+        "reporting against persistence rests on the gap between them"
     )
 
 
@@ -832,4 +849,52 @@ def test_no_block_another_module_writes_is_dropped_by_a_rebuild(tmp_path) -> Non
         f"a rebuild of the baselines dropped {lost}. Add them to the "
         "`downstream` tuple in write_metrics; a block missing from it "
         "disappears without an error."
+    )
+
+
+def test_the_python_threshold_matches_the_warehouse_row_for_row(engine, population) -> None:
+    """One correction, computed twice, with the agreement checked.
+
+    DBT-14's widened threshold exists in two places and has to: the mart reads a
+    generated seed of Student-t quantiles, because Postgres has no inverse-t,
+    and ML-09's sweep computes it from ``scipy`` directly, because it needs the
+    value at thresholds the seed was not generated for. That is a duplication,
+    and the project's usual objection to duplication is that two copies drift.
+
+    They cannot drift silently here, because the seed was generated *from*
+    scipy and this compares the two on every row of the warehouse. If the seed
+    goes stale, or the degrees of freedom are counted differently on one side,
+    or the sqrt(1 + 1/n) factor is dropped from one, the disagreement lands here
+    rather than in a metric nobody can explain.
+    """
+    from sqlalchemy import text
+
+    from machine_learning.features import gold_frame
+
+    gold = gold_frame(engine)
+    with engine.connect() as connection:
+        mart = pd.read_sql(
+            text(
+                "select city_id, date_key, is_anomaly, anomaly_z_critical "
+                "from gold_marts.fact_weather_anomalies"
+            ),
+            connection,
+        )
+    mart["date_key"] = pd.to_datetime(mart["date_key"])
+    joined = gold.merge(mart, on=["city_id", "date_key"], suffixes=("", "_mart"))
+    assert len(joined) == len(gold)
+
+    computed = widened_threshold(joined["baseline_observations"], ANOMALY_THRESHOLD)
+    recorded = joined["anomaly_z_critical"].astype(float).to_numpy()
+
+    # Compared where a day was actually judged. A row with no Z has no flag to
+    # be right or wrong about, and the two sides legitimately differ there: the
+    # mart coalesces to the nominal threshold, scipy returns nan for zero
+    # degrees of freedom, and neither is used.
+    judged = joined["is_anomaly_mart"].notna().to_numpy()
+    assert judged.sum() > 100_000
+    np.testing.assert_allclose(
+        computed[judged], recorded[judged], rtol=1e-9,
+        err_msg="the seeded critical values and scipy disagree; regenerate "
+                "seeds/t_critical.csv with dbt_analytics/export_t_critical.py",
     )

@@ -78,6 +78,7 @@ _DAY_SQL = f"""
            a.temperature_2m_mean        as observed_c,
            a.mean_temperature_2m_mean   as baseline_c,
            a.stddev_temperature_2m_mean as baseline_sigma,
+           a.anomaly_z_critical,
            a.z_temperature_2m_mean      as z,
            a.departure_c,
            a.is_anomaly,
@@ -142,7 +143,33 @@ def _tooltip(row: pd.Series) -> str:
         # omission as a PR-AUC with no base rate beside it.
         f"<br><span style='font-size:0.85em'>"
         f"{int(row['baseline_observations'])} reference observations, "
-        f"all years (not detrended)</span>"
+        f"all years (not detrended)"
+        f"{_baseline_note(row)}</span>"
+    )
+
+
+def _baseline_note(row: pd.Series) -> str:
+    """Say when this city was held to a wider bar, and why.
+
+    The observation count was already printed, and a count alone asks the
+    reader to know what it implies. Since DBT-14 the threshold is a function of
+    it -- a sigma estimated from fifteen observations earns a wider bar than one
+    estimated from four hundred -- so a thin baseline is no longer a caveat the
+    reader has to supply, it is a number the mart computed and this can quote.
+
+    Silent on a complete baseline. At 459 observations the bar moves by four
+    parts in a thousand, and a note on every point about a correction that
+    changes nothing is noise that trains people to ignore the one that matters.
+    """
+    critical = row.get("anomaly_z_critical")
+    if pd.isna(critical):
+        return ""
+    if float(critical) <= theme.ANOMALY_Z_THRESHOLD * 1.01:
+        return ""
+    return (
+        f"<br><i>thin baseline: judged at |Z| &gt; {float(critical):.2f} "
+        f"rather than {theme.ANOMALY_Z_THRESHOLD:.1f}, "
+        f"because sigma rests on so few observations</i>"
     )
 
 

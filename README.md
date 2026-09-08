@@ -117,25 +117,26 @@ the model existed.
 
 | test split | PR-AUC | vs base rate | **vs persistence** | Brier | F1 | mean predicted |
 |---|---:|---:|---:|---:|---:|---:|
-| no-skill reference | 0.1150 | 1.00x | 0.60x | 0.1060 | 0.2062 | |
-| climatology baseline | 0.1145 | 1.00x | 0.60x | 0.1062 | 0.2062 | |
-| persistence baseline | 0.1915 | 1.67x | 1.00x | 0.0992 | 0.3398 | |
-| model, weighted *(as specified)* | 0.3026 | 2.63x | 1.58x | 0.2077 | 0.3461 | 0.444 |
-| **model, unweighted** *(recommended)* | **0.3313** | **2.88x** | **1.73x** | **0.0934** | **0.3578** | 0.066 |
+| no-skill reference | 0.1130 | 1.00x | 0.59x | 0.1043 | 0.2030 | |
+| climatology baseline | 0.1250 | 1.11x | 0.65x | 0.1045 | 0.1597 | |
+| persistence baseline | 0.1913 | 1.69x | 1.00x | 0.0976 | 0.3418 | |
+| model, weighted *(as specified)* | 0.3268 | 2.89x | 1.71x | 0.2282 | 0.3610 | 0.483 |
+| **model, unweighted** *(recommended)* | **0.2886** | **2.55x** | **1.51x** | **0.0946** | 0.3255 | 0.061 |
 
 **Every score is reported against persistence, not only against the base
 rate.** The base rate is the floor: average precision for a random ranker *is*
 the positive rate, so a lift over it only says a predictor is not noise.
 Persistence — "an anomaly next week if there was one this week" — is the number
-that has to be beaten, and it is 1.67x higher. A method from a later phase
+that has to be beaten, and it is 1.69x higher. A method from a later phase
 reported only against chance will look better than it is. The climatology
-baseline is the cautionary case: it scores 1.00x the base rate on test, which
-is to say it has no out-of-sample skill at all, and only the second column
-makes that visible at a glance.
+baseline is the cautionary case: 1.11x the base rate is barely distinguishable
+from no out-of-sample skill at all, and only the second column shows that at a
+glance.
 
-The recommended model beats every baseline on PR-AUC, on Brier and on F1, and
-beats persistence in every city individually, which a test asserts separately
-because a pooled win can be one city carrying the rest.
+The recommended model beats every baseline on ranking and on calibration, and
+beats persistence in every city individually. On F1 it is behind persistence at
+|Z| > 2.5 (0.3255 against 0.3418) and ahead at 2.0 and 3.0 — which is the
+whole reason the next section exists.
 
 ### Which findings survive a different threshold
 
@@ -147,18 +148,20 @@ features built from the flag as well as the target.
 
 | \|Z\| | test base rate | model PR-AUC | persistence | vs persistence | model F1 | persistence F1 | cities beaten |
 |---:|---:|---:|---:|---:|---:|---:|---:|
-| 2.0 | 0.2667 | 0.4851 | 0.3398 | 1.43x | 0.4643 | 0.4212 | 11/11 |
-| **2.5** *(shipped)* | 0.1150 | 0.3313 | 0.1915 | 1.73x | 0.3578 | 0.3398 | 11/11 |
-| 3.0 | 0.0445 | 0.1937 | 0.0995 | 1.95x | 0.2736 | 0.2577 | 10/11 |
+| 2.0 | 0.2645 | 0.4918 | 0.3370 | 1.46x | 0.4647 | 0.4183 | 11/11 |
+| **2.5** *(shipped)* | 0.1130 | 0.2886 | 0.1913 | 1.51x | 0.3255 | 0.3418 | 11/11 |
+| 3.0 | 0.0437 | 0.1915 | 0.0964 | 1.99x | 0.2769 | 0.2524 | 10/11 |
 
 Re-run at |Z| thresholds 2, 2.5, 3, the recommended model beats every baseline
-on PR-AUC, Brier and F1 at all three.
+on PR-AUC and Brier at all three, and on F1 at some but not all of them.
 
-The advantage over persistence *grows* as the threshold rises, from 1.43x at
-2.0 to 1.95x at 3.0, so the model is not living on the easy half of the
-distribution. The one qualification is per-city: at |Z| > 3.0 it beats
-persistence in ten of eleven cities rather than all eleven, at a base rate of
-4.5% where a single city's ranking is thin.
+Ranking and calibration are properties of the model; the F1 verdict is a
+property of where the line happens to sit, and reverses twice across the sweep.
+That is exactly what this mode was built to expose, and it is why the claim
+above is qualified rather than confident. The advantage over persistence on
+ranking *grows* as the threshold rises, from 1.46x at 2.0 to 1.99x at 3.0, so
+the model is not living on the easy half of the distribution. At |Z| > 3.0 it
+beats persistence in ten of eleven cities rather than all eleven.
 
 ### Does it work on a city it has never seen
 
@@ -167,34 +170,38 @@ in principle score a city it was not trained on. `evaluate.py
 --leave-one-city-out` refits once per scored city with that city removed from
 the training and validation splits altogether, then scores it against **its own
 persistence baseline** rather than its base rate, because the eleven cities
-differ fivefold in base rate and a raw PR-AUC would sort them by climate.
+differ sixfold in base rate and a raw PR-AUC would sort them by climate.
 
 | held out | base rate | in-sample PR-AUC | held-out PR-AUC | own persistence | lift | retained |
 |---|---:|---:|---:|---:|---:|---:|
-| cairo | 17.8% | 0.3884 | 0.3894 | 0.2420 | 1.61x | 1.00x |
-| delhi | 5.2% | 0.2994 | 0.2896 | 0.1178 | 2.46x | 0.97x |
-| lagos | 15.7% | 0.4858 | 0.5023 | 0.3399 | 1.48x | 1.03x |
-| london | 10.4% | 0.4388 | 0.3809 | 0.2585 | 1.47x | 0.87x |
-| moscow | 5.4% | 0.2059 | 0.1920 | 0.1303 | 1.47x | 0.93x |
-| phoenix | 5.6% | 0.1852 | 0.2210 | 0.0650 | 3.40x | 1.19x |
-| portland | 10.8% | 0.1847 | 0.1824 | 0.1107 | 1.65x | 0.99x |
-| reykjavik | 4.2% | 0.1220 | 0.1241 | 0.0527 | 2.36x | 1.02x |
-| sao_paulo | 10.9% | 0.2719 | 0.2521 | 0.1597 | 1.58x | 0.93x |
-| singapore | 23.7% | 0.4223 | 0.3863 | 0.3013 | 1.28x | 0.91x |
-| tokyo | 16.6% | 0.3719 | 0.3640 | 0.2174 | 1.67x | 0.98x |
+| cairo | 17.6% | 0.3645 | 0.3913 | 0.2374 | 1.65x | 1.07x |
+| delhi | 4.8% | 0.2330 | 0.3266 | 0.1282 | 2.55x | 1.40x |
+| lagos | 15.1% | 0.4388 | 0.4916 | 0.3464 | 1.42x | 1.12x |
+| london | 10.4% | 0.4112 | 0.4285 | 0.2585 | 1.66x | 1.04x |
+| moscow | 5.4% | 0.1507 | 0.1761 | 0.1257 | 1.40x | 1.17x |
+| phoenix | 5.5% | 0.1011 | 0.1771 | 0.0607 | 2.92x | 1.75x |
+| portland | 10.8% | 0.1858 | 0.1727 | 0.1107 | 1.56x | 0.93x |
+| reykjavik | 3.8% | 0.1023 | 0.1015 | 0.0521 | 1.95x | 0.99x |
+| sao_paulo | 10.9% | 0.2583 | 0.2883 | 0.1597 | 1.81x | 1.12x |
+| singapore | 23.7% | 0.4187 | 0.4103 | 0.3013 | 1.36x | 0.98x |
+| tokyo | 16.2% | 0.3384 | 0.3524 | 0.2188 | 1.61x | 1.04x |
 
 Held out of training entirely, each of the 11 scored cities is still ranked
 better by the model than by its own persistence baseline (11 of 11, median
-PR-AUC 1.61x persistence and 98% of the same city's in-sample score), so the
+PR-AUC 1.65x persistence and 107% of the same city's in-sample score), so the
 model transfers to a city it has never seen.
 
-London loses the most by being unseen, at 87% of its in-sample score, and
-Phoenix gains the most at 119%; the median is 98%, which is what a model with
-no city identifier and no per-city capacity to spare should do. Four of the
-fifteen registry cities are still absent — Sydney has eighteen scored days and
-Auckland, Buenos Aires and Johannesburg three each — and each is named with a
-reason in the `leave_one_city_out` block of `metrics.json` rather than left out
-of the table.
+The retention column deserves suspicion rather than celebration: a median of
+1.07 means the held-out model usually scores *better* than the one that had
+seen the city, and Phoenix reaches 1.75. With no city identifier and no
+per-city capacity to spare there is little for the model to gain from a city's
+own rows, and removing them changes which grid point the validation search
+picks — so the spread is mostly the search, not transfer. What the column
+establishes is the absence of a collapse, which is what the ticket asked.
+
+Four of the fifteen registry cities are still absent — Sydney has eighteen
+scored days and Auckland, Buenos Aires and Johannesburg three each — and each
+is named with a reason in the `leave_one_city_out` block of `metrics.json`.
 
 Full metrics, feature importances, and the intended use of the model are in the
 [model card](docs/model-card.md), which is generated from the run manifest and
@@ -215,9 +222,9 @@ Of the five checkable, four flag under both definitions and Tokyo flags under
 neither. Not one event changes verdict between them, which is the finding
 DBT-13 exists to produce.
 
-**The model is under-confident on the test period.** It predicts 0.066 where
-0.115 occurs. This is the non-stationary base rate: positives run at 5.02% in
-the training period and 11.50% in the test period, so a model fitted on the
+**The model is under-confident on the test period.** It predicts 0.061 where
+0.113 occurs. This is the non-stationary base rate: positives run at 4.87% in
+the training period and 11.30% in the test period, so a model fitted on the
 early record is calibrated to a world that has since warmed. Ranking is sound
 and observed risk rises monotonically across the deciles, but the level is not.
 The Risk Horizon view therefore shows rank bands rather than raw probabilities.
@@ -227,13 +234,15 @@ against an observed 0.115. Isotonic regression fitted on validation does help,
 halving the calibration error for 4% of the ranking, and is recorded in
 `model.calibration` for BI-08 to decide what to do with.
 
-**One city's baseline is too thin to trust.** Sydney has eighteen scored days,
-and on a five-observation baseline it flags 16.7% of them against 1.0-2.0% in
-every complete city, with sd(Z) = 1.67 where the others sit within 0.02 of one.
-It is excluded from every per-city table for want of test rows, so it moves no
-headline figure, but it is the remaining instance of the defect DBT-14 exists
-to fix: the flag treats sigma as known when it is an estimate, and at small
-baselines a noisy one.
+**The flag now knows how good its own baseline is.** A Z-score divides by a
+sigma that was *estimated*, and treating it as known made the standardised
+departure a t-statistic read against a normal table — so a city with a thin
+baseline over-flagged by construction. Sydney, on five reference observations,
+flagged 16.7% of its eighteen scored days against 1.0-2.0% everywhere else.
+Each day is now judged against a Student-t critical value on its own degrees of
+freedom: 2.513 at a complete city's 459 observations, 2.96 at fifteen, 62.8 at
+two. Sydney flags 1 of 18 instead of 3, which is no longer distinguishable from
+the complete-city rate.
 
 **Three events do not flag, and the threshold was not lowered to make them.**
 Phoenix in July 2023 peaks at Z = +1.97, Delhi on 29 May 2024 at Z = +2.22, and

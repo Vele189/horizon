@@ -9,18 +9,19 @@
 <text x="1445" y="30" text-anchor="middle" font-size="13" font-weight="600" fill="#1f4e79">gold (marts)</text>
 <path d="M1010,238 C974,238 974,296 1002,296" fill="none" stroke="#9aa4b2" stroke-width="1.1" marker-end="url(#a)" opacity="0.65" stroke-dasharray="3 2"/>
 <path d="M902,267 C956,267 956,296 1002,296" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
-<path d="M576,267 C630,267 630,209 676,209" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
+<path d="M576,238 C630,238 630,209 676,209" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
 <path d="M250,296 C467,296 467,325 676,325" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
 <path d="M250,238 C467,238 467,267 676,267" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
 <path d="M1336,93 C1260,93 1260,383 1328,383" fill="none" stroke="#9aa4b2" stroke-width="1.1" marker-end="url(#a)" opacity="0.65" stroke-dasharray="3 2"/>
 <path d="M1228,296 C1282,296 1282,383 1328,383" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
-<path d="M1336,93 C1250,93 1250,441 1328,441" fill="none" stroke="#9aa4b2" stroke-width="1.1" marker-end="url(#a)" opacity="0.65" stroke-dasharray="3 2"/>
-<path d="M1336,383 C1300,383 1300,441 1328,441" fill="none" stroke="#9aa4b2" stroke-width="1.1" marker-end="url(#a)" opacity="0.65" stroke-dasharray="3 2"/>
-<path d="M1336,267 C1280,267 1280,441 1328,441" fill="none" stroke="#9aa4b2" stroke-width="1.1" marker-end="url(#a)" opacity="0.65" stroke-dasharray="3 2"/>
 <path d="M902,325 C1119,325 1119,209 1328,209" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
 <path d="M902,267 C1119,267 1119,267 1328,267" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
 <path d="M1336,151 C1280,151 1280,325 1328,325" fill="none" stroke="#9aa4b2" stroke-width="1.1" marker-end="url(#a)" opacity="0.65" stroke-dasharray="3 2"/>
 <path d="M902,209 C1119,209 1119,151 1328,151" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
+<path d="M1336,93 C1250,93 1250,441 1328,441" fill="none" stroke="#9aa4b2" stroke-width="1.1" marker-end="url(#a)" opacity="0.65" stroke-dasharray="3 2"/>
+<path d="M1336,383 C1300,383 1300,441 1328,441" fill="none" stroke="#9aa4b2" stroke-width="1.1" marker-end="url(#a)" opacity="0.65" stroke-dasharray="3 2"/>
+<path d="M1336,267 C1280,267 1280,441 1328,441" fill="none" stroke="#9aa4b2" stroke-width="1.1" marker-end="url(#a)" opacity="0.65" stroke-dasharray="3 2"/>
+<path d="M576,296 C956,296 956,441 1328,441" fill="none" stroke="#9aa4b2" stroke-width="1.3" marker-end="url(#a)" opacity="0.8"/>
 <rect x="1010" y="218" width="218" height="40" rx="7" fill="#f1ecf9" stroke="#7a5ea8" stroke-width="1.4"/>
 <text x="1022" y="232" font-size="12.5" font-weight="600" fill="#1a1a1a">int_climatology_window</text>
 <text x="1022" y="248" font-size="10.5" fill="#6b7280">ephemeral</text>
@@ -39,9 +40,6 @@
 <rect x="1336" y="363" width="218" height="40" rx="7" fill="#e7f0f8" stroke="#1f4e79" stroke-width="1.4"/>
 <text x="1348" y="377" font-size="12.5" font-weight="600" fill="#1a1a1a">fact_climatology</text>
 <text x="1348" y="393" font-size="10.5" fill="#6b7280">table</text>
-<rect x="1336" y="421" width="218" height="40" rx="7" fill="#e7f0f8" stroke="#1f4e79" stroke-width="1.4"/>
-<text x="1348" y="435" font-size="12.5" font-weight="600" fill="#1a1a1a">fact_weather_anomalies</text>
-<text x="1348" y="451" font-size="10.5" fill="#6b7280">table</text>
 <rect x="1336" y="73" width="218" height="40" rx="7" fill="#e7f0f8" stroke="#1f4e79" stroke-width="1.4"/>
 <text x="1348" y="87" font-size="12.5" font-weight="600" fill="#1a1a1a">dim_date</text>
 <text x="1348" y="103" font-size="10.5" fill="#6b7280">table</text>
@@ -57,9 +55,15 @@
 <rect x="1336" y="131" width="218" height="40" rx="7" fill="#e7f0f8" stroke="#1f4e79" stroke-width="1.4"/>
 <text x="1348" y="145" font-size="12.5" font-weight="600" fill="#1a1a1a">dim_cities</text>
 <text x="1348" y="161" font-size="10.5" fill="#6b7280">table</text>
-<rect x="358" y="247" width="218" height="40" rx="7" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.4"/>
-<text x="370" y="261" font-size="12.5" font-weight="600" fill="#1a1a1a">cities</text>
-<text x="370" y="277" font-size="10.5" fill="#6b7280">seed</text>
+<rect x="358" y="276" width="218" height="40" rx="7" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.4"/>
+<text x="370" y="290" font-size="12.5" font-weight="600" fill="#1a1a1a">t_critical</text>
+<text x="370" y="306" font-size="10.5" fill="#6b7280">seed</text>
+<rect x="358" y="218" width="218" height="40" rx="7" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.4"/>
+<text x="370" y="232" font-size="12.5" font-weight="600" fill="#1a1a1a">cities</text>
+<text x="370" y="248" font-size="10.5" fill="#6b7280">seed</text>
+<rect x="1336" y="421" width="218" height="40" rx="7" fill="#e7f0f8" stroke="#1f4e79" stroke-width="1.4"/>
+<text x="1348" y="435" font-size="12.5" font-weight="600" fill="#1a1a1a">fact_weather_anomalies</text>
+<text x="1348" y="451" font-size="10.5" fill="#6b7280">table</text>
 <rect x="32" y="218" width="218" height="40" rx="7" fill="#fdf6e8" stroke="#8c6d3f" stroke-width="1.4"/>
 <text x="44" y="232" font-size="12.5" font-weight="600" fill="#1a1a1a">bronze.observations_daily</text>
 <text x="44" y="248" font-size="10.5" fill="#6b7280">source</text>

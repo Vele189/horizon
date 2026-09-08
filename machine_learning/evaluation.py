@@ -115,6 +115,7 @@ __all__ = [
     "lift_over",
     "operating_points",
     "reflag",
+    "widened_threshold",
     "reliability_points",
     "scorable_cities",
     "scored_city_years",
@@ -728,6 +729,33 @@ def lift_over(result: Score, reference: Score) -> dict[str, float]:
     }
 
 
+def widened_threshold(
+    baseline_observations, threshold: float = ANOMALY_THRESHOLD
+):
+    """The |Z| a day must clear, given how many observations its sigma rests on.
+
+    DBT-14's correction, in Python, so ML-09's sweep can re-derive the flag at a
+    threshold the mart was not built for. The mart reads a generated seed of
+    Student-t quantiles; this reads ``scipy``, which is what generated the seed,
+    and ``tests/test_baselines.py`` asserts the two agree on every row of the
+    warehouse. One source of truth, consulted twice, with the agreement checked
+    rather than assumed.
+
+    The departure is a t-statistic on ``n - 1`` degrees of freedom, and the
+    ``sqrt(1 + 1/n)`` factor is there because the day being scored is not in its
+    own baseline: this is a prediction interval, not a confidence interval. At a
+    complete city's 459 observations it comes to 2.513 against a nominal 2.5; at
+    fifteen, 2.96; at two, 62.8.
+    """
+    from scipy.stats import norm, t as student_t  # noqa: PLC0415
+
+    counts = np.asarray(baseline_observations, dtype=float)
+    tail = 2.0 * float(norm.sf(threshold))
+    with np.errstate(invalid="ignore", divide="ignore"):
+        critical = student_t.isf(tail / 2.0, counts - 1.0)
+        return critical * np.sqrt(1.0 + 1.0 / counts)
+
+
 def reflag(gold: pd.DataFrame, threshold: float) -> pd.DataFrame:
     """Re-derive ``is_anomaly`` from the Z-score at a different threshold.
 
@@ -739,8 +767,13 @@ def reflag(gold: pd.DataFrame, threshold: float) -> pd.DataFrame:
     the project describing a threshold nobody chose, and the failure would be
     silent because every number would still be a plausible number.
 
-    The arithmetic is the mart's, transcribed once: ``abs(z) > threshold``,
-    null-preserving, because an unscored day is not a quiet day.
+    The arithmetic is the mart's, transcribed once: ``abs(z)`` against the
+    threshold :func:`widened_threshold` gives for that row's baseline size,
+    null-preserving, because an unscored day is not a quiet day. Since DBT-14
+    the threshold is not a constant -- a sigma estimated from fifteen
+    observations earns a wider bar than one estimated from four hundred -- so
+    the sweep has to move the *nominal* threshold and let the widening follow,
+    rather than comparing against a number.
     ``tests/test_baselines.py`` asserts that reflagging at
     :data:`ANOMALY_THRESHOLD` reproduces the warehouse's own column exactly, so
     the middle point of the sweep is provably the shipped pipeline rather than
@@ -753,14 +786,16 @@ def reflag(gold: pd.DataFrame, threshold: float) -> pd.DataFrame:
     sweep asks what the *project* looks like at 2.0, not what the model scores
     when only its answer key is changed.
     """
-    if "z_temperature_2m_mean" not in gold.columns:
-        raise ValueError(
-            "the frame has no 'z_temperature_2m_mean' to re-flag from. This "
-            "needs the gold frame, before features are built."
-        )
+    for column in ("z_temperature_2m_mean", "baseline_observations"):
+        if column not in gold.columns:
+            raise ValueError(
+                f"the frame has no {column!r} to re-flag from. This needs the "
+                "gold frame, before features are built."
+            )
     z = gold["z_temperature_2m_mean"]
+    critical = widened_threshold(gold["baseline_observations"], threshold)
     flagged = pd.Series(pd.NA, index=gold.index, dtype="boolean")
-    flagged = flagged.mask(z.notna(), z.abs() > threshold)
+    flagged = flagged.mask(z.notna(), z.abs() > critical)
     return gold.assign(is_anomaly=flagged)
 
 

@@ -572,24 +572,28 @@ def warehouse_report(engine):
     return build_evaluation(frame=population, roster=roster, ingested=ingested)
 
 
-def test_the_recommended_model_beats_every_baseline_on_every_metric(
+def test_the_recommended_model_beats_every_baseline_on_ranking_and_calibration(
     warehouse_report,
 ) -> None:
-    """All three, and the F1 leg is the one that has moved.
+    """Two of the three, and the third is the one ML-09 was built to expose.
 
-    On a five-city snapshot the model and persistence were level on F1 to a
-    thousandth, and this test asserted the tie. The tie was never a property of
-    the model: it came from twenty-six spurious training rows contributed by
-    London and Reykjavik while their baselines were eighteen observations long,
-    and it went when their records completed. The claim is back to the strong
-    one, and ML-09's sweep says it holds at |Z| 2.0 and 3.0 as well as at 2.5.
+    PR-AUC and Brier are properties of the model, and ML-09's sweep says they
+    hold at |Z| 2.0, 2.5 and 3.0 alike. F1 is a property of the model *and* a
+    threshold, and it does not: the recommended model is behind persistence at
+    2.5 and ahead at 2.0 and 3.0.
 
-    The margin is asserted beside the verdict, because "beats" is a boolean and
-    a win by a thousandth and a win by 73% are different findings.
+    This test has now asserted three different F1 verdicts across three
+    snapshots -- a win, a tie to a thousandth, and a loss -- while PR-AUC and
+    Brier never moved. That is not instability in the model, it is a
+    single-point metric measuring the point, and it is why the claim in the
+    README is qualified and why the sweep exists at all. So the two durable
+    legs are asserted as booleans and the third as a margin, which is the shape
+    of what is actually known.
     """
     report, _ = warehouse_report
     verdict = report["verdict"]["model_unweighted"]["beats_every_baseline"]
-    assert verdict == {"pr_auc": True, "f1": True, "brier": True}, verdict
+    assert verdict["pr_auc"] is True
+    assert verdict["brier"] is True
 
     summary = pd.DataFrame(report["summary"]).set_index("predictor")
     model, persistence = summary.loc["model_unweighted"], summary.loc["persistence"]
@@ -598,6 +602,11 @@ def test_the_recommended_model_beats_every_baseline_on_every_metric(
         model["pr_auc"] / persistence["pr_auc"]
     )
     assert persistence["lift_over_persistence"] == pytest.approx(1.0)
+    assert abs(model["f1"] - persistence["f1"]) < 0.05, (
+        "the model and persistence have separated on F1 by more than the "
+        "threshold sweep can account for; the README's qualification needs "
+        "revisiting"
+    )
 
 
 def test_the_specified_model_loses_on_calibration_and_the_report_says_so(

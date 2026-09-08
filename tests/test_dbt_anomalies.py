@@ -104,13 +104,30 @@ def test_the_standardisation_has_unit_variance(engine, full_record) -> None:
 
 
 def test_the_flag_is_on_the_absolute_value(engine, built) -> None:
+    """Both tails, against the bar the row was actually judged at.
+
+    This compared with the flat |Z| > 2.5 and started failing when DBT-14 made
+    the bar depend on how many observations sigma rests on. It failed for the
+    right reason and about the wrong property: what has to hold is that the
+    flag is symmetric in the sign of Z and agrees with its own threshold. The
+    constant was how that threshold used to be spelled, not the claim.
+    """
     mismatched = query(
         engine,
         f"""select count(*) from {ANOMALIES}
             where z_temperature_2m_mean is not null
-              and is_anomaly <> (abs(z_temperature_2m_mean) > {THRESHOLD})""",
+              and is_anomaly
+                  <> (abs(z_temperature_2m_mean) > anomaly_z_critical)""",
     )[0][0]
     assert mismatched == 0
+
+    # And the nominal threshold is still the floor every bar is measured from.
+    below = query(
+        engine,
+        f"""select count(*) from {ANOMALIES}
+            where anomaly_z_critical < {THRESHOLD}""",
+    )[0][0]
+    assert below == 0
 
 
 def test_cold_anomalies_exist_at_all(engine, built) -> None:
@@ -376,3 +393,103 @@ def test_the_direction_macro_handles_null_before_comparing() -> None:
     body = macro.split("anomaly_direction")[-1]
     assert "is null then null" in body
     assert body.index("is null") < body.index("'hot'")
+
+
+# ---------------------------------------------------------------------------
+# A flag that knows how good its own baseline is (DBT-14)
+# ---------------------------------------------------------------------------
+
+
+def test_a_thin_baseline_flags_at_a_rate_consistent_with_complete_cities(
+    engine, built
+) -> None:
+    """DBT-14's acceptance, tested as a rate rather than as a percentage.
+
+    A city with eighteen scored days can only post flag rates of 0%, 5.6%,
+    11.1% and so on, so comparing its percentage with a complete city's 1.4%
+    would be comparing a coarse number with a fine one and calling the
+    granularity a defect. The honest question is whether the count it posts is
+    *surprising* under the complete-city rate, and the answer is a binomial
+    tail.
+
+    Before the correction Sydney flagged 3 of 18 days: the probability of three
+    or more at 1.4% is 0.2%, which is a rate inconsistent with every other city
+    in the set. After it, 1 of 18, whose probability is about 22%.
+
+    The tolerance is stated rather than tuned: a thin city's count must not sit
+    in either 1% tail of the distribution the complete cities define. That
+    catches over-flagging, which is the defect, and also the over-correction
+    that would follow from widening the bar too far.
+    """
+    from scipy.stats import binom
+
+    rows = query(
+        engine,
+        f"""select city_id,
+                   count(*)                                  as scored,
+                   count(*) filter (where is_anomaly)        as flagged,
+                   min(baseline_observations)                as smallest_baseline
+            from {ANOMALIES}
+            where is_anomaly is not null
+            group by 1""",
+    )
+    complete = [r for r in rows if r.smallest_baseline >= 400]
+    thin = [r for r in rows if r.smallest_baseline < 400]
+    if not thin:
+        pytest.skip("no city has a thin baseline; nothing to compare")
+    assert complete, "no complete city to compare against"
+
+    reference = sum(r.flagged for r in complete) / sum(r.scored for r in complete)
+    for city in thin:
+        lower = binom.cdf(city.flagged, city.scored, reference)
+        upper = binom.sf(city.flagged - 1, city.scored, reference)
+        assert min(lower, upper) > 0.01, (
+            f"{city.city_id} flagged {city.flagged} of {city.scored} days on a "
+            f"baseline of {city.smallest_baseline}, against a complete-city "
+            f"rate of {reference:.4f}. That is outside the 1% tails, so the "
+            "thin baseline is still distorting the flag"
+        )
+
+
+def test_the_widened_threshold_only_ever_widens(engine, built) -> None:
+    """The correction has a direction, and it is not symmetric.
+
+    An estimated sigma is never *more* trustworthy than a known one, so the bar
+    can only move up. A sign error would still produce thresholds near 2.5 and
+    would narrow the thin cities instead of widening them, which is the same
+    defect the ticket exists to fix, made worse and harder to see.
+    """
+    below, widest, at_complete = query(
+        engine,
+        f"""select count(*) filter (where anomaly_z_critical < 2.5),
+                   max(anomaly_z_critical),
+                   max(anomaly_z_critical) filter (where baseline_observations >= 400)
+            from {ANOMALIES} where is_anomaly is not null""",
+    )[0]
+    assert below == 0, f"{below} rows were judged at a bar below the nominal one"
+    assert widest > 2.5, "the correction never widened anything"
+    assert at_complete < 2.5 * 1.01, (
+        f"a complete baseline was judged at {at_complete}, more than 1% above "
+        "the nominal threshold; this is meant to be a correction, not a new "
+        "definition"
+    )
+
+
+def test_the_correction_removed_flags_and_did_not_add_any(engine, built) -> None:
+    """Every day it changed, it changed the same way.
+
+    Widening a threshold can only take flags away. A day that gained one would
+    mean the bar had moved down somewhere, which the test above rules out
+    directly; this rules it out from the data, which is the form that survives
+    someone rewriting the arithmetic.
+    """
+    gained = query(
+        engine,
+        f"""select count(*) from {ANOMALIES}
+            where is_anomaly
+              and abs(z_temperature_2m_mean) <= 2.5""",
+    )[0][0]
+    assert gained == 0, (
+        f"{gained} days are flagged despite sitting inside the nominal "
+        "threshold, so the correction added flags rather than removing them"
+    )

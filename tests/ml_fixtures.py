@@ -45,6 +45,11 @@ def spanning(
             "pressure_msl_mean": 1013 + rng.normal(scale=8.0, size=days),
             "z_temperature_2m_mean": rng.normal(size=days),
             "is_anomaly": pd.array(rng.random(days) < 0.02, dtype="boolean"),
+            # A complete baseline, so a synthetic frame re-flagged by ML-09's
+            # sweep is judged at the same bar a real complete city gets. Since
+            # DBT-14 the threshold depends on this, and a fixture without it
+            # would be exercising the thin-baseline path by accident.
+            "baseline_observations": 459,
             "latitude": 30.0,
             "elevation_m": 20.0,
         }

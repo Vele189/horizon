@@ -285,6 +285,11 @@ def gold_frame(
             observations.{PRESSURE},
             anomalies.z_temperature_2m_mean,
             anomalies.is_anomaly,
+            -- Not a feature and not narrowed into the matrix: ML-09's threshold
+            -- sweep needs it to re-derive the flag, because since DBT-14 the
+            -- exceedance threshold depends on how many observations the sigma
+            -- was estimated from.
+            anomalies.baseline_observations,
             cities.latitude,
             cities.elevation_m
         from {GOLD_SCHEMA}.fact_weather_observations as observations

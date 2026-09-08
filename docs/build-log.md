@@ -4165,6 +4165,122 @@ the budget, the cost ratio it implies, and the fact that the number beside it
 was chosen by the rule the model card argues against — which is the honest
 arrangement until the two agree.
 
+## A flag that knows how good its own baseline is
+
+DBT-14. A Z-score divides a departure by a σ, and that σ is an *estimate* from
+a finite window. Treating it as known and exact makes the standardised
+departure a t-statistic being read against a normal table, and the error is
+entirely one-directional: a city whose baseline rests on few observations
+over-flags by construction.
+
+The build log had already recorded the symptom — Tokyo, on a 45-observation
+baseline, with sd(Z) = 1.14 where every complete city sat at 1.00. Tokyo's
+record has since completed. Sydney inherited the defect and made it
+unmistakable: five reference observations, sd(Z) = 1.67, and **16.7% of its
+eighteen scored days flagged** against 1.0-2.0% everywhere else.
+
+### The correction, and where it does nothing
+
+Each day is now judged against a Student-t critical value at the same tail
+probability, on its own degrees of freedom, scaled by √(1 + 1/n). The scaling
+is there because the day being scored is not in its own baseline — the
+leave-one-year-out exclusion guarantees that — so this is a prediction interval
+and not a confidence interval.
+
+| baseline observations | bar |
+|---:|---:|
+| 2 | 62.8 |
+| 3 | 10.3 |
+| 15 | 2.96 |
+| 459 | 2.513 |
+
+At a complete city's baseline the bar moves by four parts in a thousand. That
+is the property that makes this a correction rather than a new definition, and
+it is asserted from both sides: no baseline of any size may be judged below the
+nominal threshold, because an estimated σ is never *more* trustworthy than a
+known one, and no complete baseline may be judged more than one per cent above
+it.
+
+Fifty-two days across the warehouse lost their flag. Two are Sydney's; fifty
+are from complete cities sitting between 2.500 and 2.513. The rows that moved
+in Sydney are the ones worth reading:
+
+- 2026-09-01, Z = +2.567, judged at 2.96 on fifteen observations. **No longer
+  flags**, and should not: a departure of two and a half σ against a σ known to
+  a fortnight's worth of data is not evidence of anything.
+- 2026-09-02, Z = +3.222, same bar. **Still flags**, which is the other half of
+  the requirement — the correction must not simply silence thin cities.
+- 2021-09-08, Z = −3.762 on *two* observations, judged at 62.8. No longer
+  flags. Two observations cannot establish that anything is unusual, and the
+  old rule said this day was a 3.8σ event.
+
+Sydney now flags 1 of 18. The acceptance test asks whether that is "consistent
+with complete cities", and the honest form of the question is a binomial tail
+rather than a comparison of percentages: with eighteen days a city can only
+post 0%, 5.6%, 11.1%, so its percentage is coarse by construction and calling
+the granularity a defect would be a category error. At the complete-city rate,
+three flags in eighteen has probability 0.2% and one has probability 22%. The
+test requires the count to sit outside neither 1% tail, which catches
+over-flagging and also the over-correction that would follow from widening the
+bar too far.
+
+### A table, because the closed forms are worst where this lives
+
+Postgres has no inverse-t. The usual expansions are worst exactly where the
+correction matters: Cornish-Fisher is 7% low at fourteen degrees of freedom and
+10% low at four, which is the entire population this exists for.
+
+So `seeds/t_critical.csv` holds one to a thousand degrees of freedom, generated
+from `scipy.stats.t` by a committed script, in the same arrangement
+`export_cities.py` already uses for the city registry: generated, committed,
+and asserted to match its source. A generated table is exact, diffs as text and
+can be checked against any reference; an approximation is a page of magic
+constants nobody can check by reading.
+
+It is generated for one threshold, so the file carries the threshold as a
+column and a dbt test refuses to build if the configured one has drifted away
+from it. Two more assert that no judged row falls back to the normal quantile
+above the seeded range, and that the correction only ever removed flags.
+
+### The same correction, in Python, checked against the seed
+
+ML-09's threshold sweep re-flags in Python at 2.0 and 3.0, which the seed was
+not generated for, so `widened_threshold` computes the same quantity from
+`scipy` directly. That is a duplication, and the project's usual objection to
+duplication is that two copies drift.
+
+They cannot drift silently: the seed was generated *from* scipy, and a test
+compares the two on every one of the 126,669 judged rows in the warehouse. A
+stale seed, a degree of freedom counted differently on one side, or a dropped
+√(1 + 1/n) lands there rather than in a metric nobody can explain.
+
+### Two tests were asserting the spelling, not the property
+
+Both failed, correctly, and both about the wrong thing.
+`assert_the_anomaly_flag_captures_both_tails` and
+`test_the_flag_is_on_the_absolute_value` compared the flag against the
+configured constant. What they exist to guarantee is that the flag is symmetric
+in the sign of Z and agrees with the bar it was judged at; the constant was how
+that bar used to be spelled, not the claim. Both now read
+`anomaly_z_critical`, and both keep a separate assertion that the nominal
+threshold is still the floor every bar is measured from.
+
+### What it cost downstream
+
+The label moved, so the whole chain was rebuilt, and one finding moved with it.
+The recommended model now **loses to persistence on F1 at |Z| > 2.5**, 0.3255
+against 0.3418, while beating it at 2.0 and 3.0 — so ML-09's sweep, which had
+been unanimous, now shows a verdict that depends on where the line sits. That
+is a better demonstration of why the sweep exists than the all-green table it
+replaced, and the README's claim is qualified accordingly, which its own test
+enforces.
+
+PR-AUC and Brier still hold at every threshold. The climatology baseline moved
+from 1.00x the base rate to 1.11x, which is still barely distinguishable from
+no out-of-sample skill and still far below persistence's 1.69x; the test that
+guards that finding is now a bound rather than a pinned value, because the
+figure moves whenever the label does and the claim worth keeping does not.
+
 ## Publishing
 
 Community Cloud requires a public repository, which makes deployment the moment

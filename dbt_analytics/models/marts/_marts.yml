@@ -821,6 +821,26 @@ models:
       Letting a default settle it is the failure this shape exists to prevent.
 
 
+      **The threshold widens when the baseline is thin (DBT-14).** A Z-score
+      divides by a sigma that has been *estimated* from a finite window, and
+      treating it as known makes the standardised departure a t-statistic read
+      against a normal table. The error is one-directional: a city whose
+      baseline rests on few observations over-flags by construction. Sydney, on
+      five reference observations, flagged 16.7% of its scored days against
+      1.0-2.0% in every complete city.
+
+
+      `anomaly_z_critical` is the bar each row was actually judged at: a
+      Student-t quantile at the same tail probability, on
+      `baseline_degrees_of_freedom`, scaled by sqrt(1 + 1/n) because the day
+      being scored is not in its own baseline. It is a correction rather than a
+      new definition - at 459 observations it moves the bar from 2.500 to
+      2.513, four parts in a thousand - and it is published beside the flag,
+      because a threshold that varies per row and is not visible is worse than
+      a fixed one: a reader comparing two cities would have no way to know they
+      were held to different standards.
+
+
       **What detrending actually does, measured.** It removes about half of the
       linear year-correlation it was built to remove: pooled corr(year, Z)
       falls from +0.150 to +0.078, in Cairo from +0.283 to +0.121 and in
@@ -901,6 +921,15 @@ models:
       - name: z_temperature_2m_min
         description: >
           Z-score of the daily minimum. Often the most anomalous of the three in a heat wave, since hot nights are its distinguishing feature.
+      - name: anomaly_z_critical
+        description: >
+          The |Z| this row had to clear, widened for the uncertainty in its own sigma. A Student-t quantile at the threshold's tail probability, on `baseline_degrees_of_freedom`, times sqrt(1 + 1/n). Converges on the nominal threshold as the baseline grows: 2.513 at 459 observations, 2.96 at fifteen, 62.8 at two.
+        tests:
+          - accepted_range:
+              arguments: {min_value: 2.5}
+      - name: baseline_degrees_of_freedom
+        description: >
+          Observations behind the baseline, less the one spent estimating sigma from them. The index into the `t_critical` seed.
       - name: mean_temperature_2m_mean_detrended
         description: >
           The baseline mean with the fitted trend removed, referenced to this row's own year. See `fact_climatology`.

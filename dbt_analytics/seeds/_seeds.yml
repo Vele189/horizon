@@ -71,3 +71,52 @@ seeds:
         description: >
           Why this city is in the set - the analytical job it does. Null where it is simply representative.
 
+
+  - name: t_critical
+    description: >
+      Student-t critical values by degrees of freedom, at the two-tailed
+      probability of |Z| > 2.5. Generated from `scipy.stats.t` by
+      `dbt_analytics/export_t_critical.py`; never edited by hand, and a test
+      asserts it matches the generator.
+
+
+      **Why a table and not a formula.** The anomaly flag divides a departure by
+      a sigma that has been *estimated* from a finite window, so the honest
+      exceedance test is a t-interval rather than a normal one. Postgres has no
+      inverse-t, and the usual closed forms are worst exactly where this matters:
+      the Cornish-Fisher expansion is 7% low at fourteen degrees of freedom and
+      10% low at four, which is the entire population the correction exists for.
+      A generated table is exact, diffs as text, and can be checked against any
+      reference; an approximation is a page of magic constants nobody can check
+      by reading.
+
+
+      One to a thousand degrees of freedom. A complete city's baseline is about
+      460 observations, so the range covers every baseline this project can
+      produce with room for a wider smoothing window; above it
+      `fact_weather_anomalies` falls back to the nominal threshold, and a test
+      asserts no judged row takes that path.
+    config:
+      column_types:
+        degrees_of_freedom: integer
+        z_threshold: double precision
+        critical_value: double precision
+    columns:
+      - name: degrees_of_freedom
+        description: >
+          Observations behind the baseline, less one for the sigma estimated
+          from them.
+        tests: [unique, not_null]
+      - name: z_threshold
+        description: >
+          The nominal |Z| this table was generated for. Carried so the file is
+          self-describing and a dbt test can refuse a build whose configured
+          threshold has drifted away from it.
+        tests: [not_null]
+      - name: critical_value
+        description: >
+          The 1 - alpha/2 quantile of the t distribution, where alpha is the
+          two-tailed normal probability of the threshold. Converges on the
+          threshold itself as the degrees of freedom grow, which is what makes
+          this a correction rather than a new definition.
+        tests: [not_null]
