@@ -436,15 +436,30 @@ def test_the_predictions_table_keeps_its_semantics_in_the_rendered_ddl(local_con
     """The check constraints are the grain, so they have to survive the copy.
 
     ``fact_ml_predictions`` encodes its whole contract in constraints: the
-    horizon starts the day after the forecast date, the label is the score
-    against the threshold. A serving copy without them would accept a row the
-    local table would reject, which is the one difference between the two
-    databases that would matter.
+    horizon covers what `horizon_day` says it covers, and the label is the
+    score against the threshold on the rows where that means anything. A
+    serving copy without them would accept a row the local table would reject,
+    which is the one difference between the two databases that would matter.
     """
     definition = describe_table(local_conn, PREDICTIONS)
     sql = create_table_sql(definition)
-    assert "PRIMARY KEY (city_id, forecast_date)" in sql
-    assert "horizon_start = (forecast_date + 1)" in sql
+    assert "PRIMARY KEY (city_id, forecast_date, horizon_day)" in sql
+    # Matched on the constraint *names* rather than on their rendered
+    # expressions. ML-13 made the horizon checks conditional on `horizon_day`,
+    # so Postgres now prints a multi-line CASE inside each and a substring
+    # check against the expression was asserting the formatting. The contract
+    # is that every constraint the local table carries reaches the copy, and
+    # the names are how that is stated without re-writing the SQL here.
+    for constraint in (
+        "fact_ml_predictions_horizon_day_is_in_the_window",
+        "fact_ml_predictions_horizon_starts_where_it_should",
+        "fact_ml_predictions_horizon_ends_where_it_should",
+        "fact_ml_predictions_label_matches_the_threshold",
+        "fact_ml_predictions_risk_is_a_probability",
+    ):
+        assert constraint in sql, f"{constraint} did not survive the copy"
+    # And the one that still renders on a line, so this is not purely a check
+    # that some strings were copied.
     assert "prediction_label = (risk_score >= decision_threshold)" in sql
 
 

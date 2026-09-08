@@ -61,6 +61,10 @@ def sentinel_rows(count: int = 3, *, risk: float = 0.42) -> pd.DataFrame:
         {
             "city_id": SENTINEL,
             "forecast_date": dates,
+            # Window rows. The day rows have their own construction and their
+            # own constraints; a fixture that emitted both would be testing two
+            # shapes at once and would hide which one had broken.
+            "horizon_day": 0,
             "horizon_start": [day + dt.timedelta(days=1) for day in dates],
             "horizon_end": [day + dt.timedelta(days=HORIZON_DAYS) for day in dates],
             "horizon_days": HORIZON_DAYS,
@@ -234,7 +238,17 @@ def sentinel(prepared):
         )
 
 
-def test_the_table_holds_one_row_per_city_and_forecast_date(prepared) -> None:
+def test_the_table_holds_one_row_per_city_forecast_and_horizon_day(
+    prepared,
+) -> None:
+    """The grain, which ML-13 widened by a column rather than by a table.
+
+    It used to be one row per city per forecast_date. The hazard adds a per-day
+    probability that is a different quantity from the weekly one, and putting
+    it in the same column without `horizon_day` beside it would have been the
+    ambiguity this table's whole design fights. So the grain grew and the
+    invariant is the same shape: exactly one row per key.
+    """
     from sqlalchemy import text
 
     with prepared.connect() as connection:
@@ -243,13 +257,28 @@ def test_the_table_holds_one_row_per_city_and_forecast_date(prepared) -> None:
         ).scalar()
         distinct = connection.execute(
             text(
-                "select count(*) from (select distinct city_id, forecast_date "
-                f"from {PREDICTIONS_TABLE}) as grain"
+                "select count(*) from (select distinct city_id, forecast_date, "
+                f"horizon_day from {PREDICTIONS_TABLE}) as grain"
+            )
+        ).scalar()
+        weekly = connection.execute(
+            text(
+                f"select count(*) from {PREDICTIONS_TABLE} where horizon_day = 0"
             )
         ).scalar()
     if not rows:
         pytest.skip("no predictions written yet; run predict.py")
     assert rows == distinct
+    # And exactly one window row per city-forecast, which is what the dashboard
+    # reads and what the old grain guaranteed.
+    with prepared.connect() as connection:
+        city_days = connection.execute(
+            text(
+                "select count(*) from (select distinct city_id, forecast_date "
+                f"from {PREDICTIONS_TABLE}) as grain"
+            )
+        ).scalar()
+    assert weekly == city_days
 
 
 def test_re_running_replaces_rather_than_appends(sentinel) -> None:
@@ -335,7 +364,11 @@ def test_the_written_rows_say_which_model_made_them(prepared) -> None:
     for version, variant, count in rows:
         assert version in known, f"{version} is not a committed artefact"
         assert variant in artefacts
-        assert count == len(feature_columns())
+        # The hazard carries `horizon_day` as a twenty-eighth input, which is
+        # what lets one model express seven days instead of seven models
+        # dividing the positives between them.
+        expected = len(feature_columns()) + (1 if variant == "hazard" else 0)
+        assert count == expected, f"{variant} has {count} features"
 
 
 def test_a_real_scoring_run_covers_the_horizon_it_claims(engine) -> None:
@@ -360,21 +393,45 @@ def test_a_real_scoring_run_covers_the_horizon_it_claims(engine) -> None:
     per_city = predictions.groupby("city_id")["forecast_date"].nunique()
     assert (per_city <= DEFAULT_DATES).all()
     assert (predictions["horizon_days"] == HORIZON_DAYS).all()
-    spans = pd.to_datetime(predictions["horizon_end"]) - pd.to_datetime(
-        predictions["horizon_start"]
+
+    # Two shapes now, and each has to hold its own. A window row spans the
+    # horizon and starts the day after; a day row is one day, `horizon_day`
+    # days out. Checking them together would let a day row with a week-long
+    # span through, which is exactly what the database constraints refuse.
+    window = predictions.loc[predictions["horizon_day"] == 0]
+    days = predictions.loc[predictions["horizon_day"] > 0]
+    assert not window.empty
+
+    spans = pd.to_datetime(window["horizon_end"]) - pd.to_datetime(
+        window["horizon_start"]
     )
     assert (spans == pd.Timedelta(days=HORIZON_DAYS - 1)).all()
-    starts = pd.to_datetime(predictions["horizon_start"]) - pd.to_datetime(
-        predictions["forecast_date"]
+    starts = pd.to_datetime(window["horizon_start"]) - pd.to_datetime(
+        window["forecast_date"]
     )
     assert (starts == pd.Timedelta(days=1)).all()
 
+    if not days.empty:
+        assert set(days["horizon_day"]) == set(range(1, HORIZON_DAYS + 1))
+        assert (days["horizon_start"] == days["horizon_end"]).all()
+        offsets = pd.to_datetime(days["horizon_start"]) - pd.to_datetime(
+            days["forecast_date"]
+        )
+        assert (offsets == pd.to_timedelta(days["horizon_day"], unit="D")).all()
+
     assert predictions["risk_score"].between(0, 1).all()
     assert (
-        predictions["prediction_label"]
-        == (predictions["risk_score"] >= predictions["decision_threshold"])
+        window["prediction_label"]
+        == (window["risk_score"] >= window["decision_threshold"])
     ).all()
-    assert predictions["model_version"].nunique() == 1
+    # One model per shape, not one model overall. The window rows come from
+    # the weekly model and the day rows from the hazard, and a run that mixed
+    # two weekly models would be the defect this originally guarded against.
+    assert window["model_version"].nunique() == 1
+    if not days.empty:
+        assert days["model_version"].nunique() == 1
+        assert set(days["model_variant"]) == {"hazard"}
+        assert days["model_version"].iloc[0] != window["model_version"].iloc[0]
 
 
 def test_the_unscored_cities_have_named_reasons(engine) -> None:

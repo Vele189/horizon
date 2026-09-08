@@ -74,12 +74,18 @@ from machine_learning.features import (  # noqa: E402
 )
 
 __all__ = [
+    "HAZARD_AT_RISK",
+    "HAZARD_COLUMNS",
+    "HAZARD_DAY",
+    "HAZARD_EVENT",
     "HORIZON_DAYS",
     "LABEL",
     "LABEL_COLUMNS",
     "LABEL_REQUIRED_COLUMNS",
     "WINDOW_END",
     "WINDOW_START",
+    "compose_weekly",
+    "person_periods",
     "build_labels",
     "drop_unlabelled",
     "load_labels",
@@ -119,6 +125,26 @@ LABEL_COLUMNS: Final[tuple[str, ...]] = (LABEL, FORWARD_COUNT, SCORED_COUNT)
 #: What :func:`build_labels` needs. Notably *not* the weather: the label is a
 #: function of the anomaly flag alone, so no feature can enter it by accident.
 LABEL_REQUIRED_COLUMNS: Final[tuple[str, ...]] = ("city_id", "date_key", "is_anomaly")
+
+#: Which day of the horizon a person-period row is about, 1 .. 7 (ML-13).
+#:
+#: A *feature* as well as a key. A discrete-time hazard model is one model over
+#: the reshaped data with the period index as a covariate, which is what lets a
+#: single fit express "the risk on day 3 differs from the risk on day 6" without
+#: seven separate models and seven separate sample sizes.
+HAZARD_DAY: Final[str] = "horizon_day"
+
+#: Whether the anomaly happened on *this* day of the horizon. The hazard's
+#: target: not "within the week" but "today, given it has not happened yet".
+HAZARD_EVENT: Final[str] = "anomaly_on_day"
+
+#: How many of the horizon's days had to be known for this row to exist.
+#: Carried for the same reason :data:`SCORED_COUNT` is: it is the evidence
+#: behind a negative, and a row whose earlier days were unscored cannot claim
+#: the event had not happened yet.
+HAZARD_AT_RISK: Final[str] = "days_survived"
+
+HAZARD_COLUMNS: Final[tuple[str, ...]] = (HAZARD_DAY, HAZARD_EVENT, HAZARD_AT_RISK)
 
 
 def build_labels(observations: pd.DataFrame) -> pd.DataFrame:
@@ -180,6 +206,118 @@ def build_labels(observations: pd.DataFrame) -> pd.DataFrame:
     labels = labels.loc[labels["is_observed"]]
     columns = ["city_id", "date_key", *LABEL_COLUMNS]
     return labels.loc[:, columns].reset_index(drop=True)
+
+
+def person_periods(observations: pd.DataFrame) -> pd.DataFrame:
+    """Reshape one row per city-day into one row per city-day *per horizon day*.
+
+    ML-13. ``risk_horizon.py`` says plainly that it will not spread a weekly
+    score across seven days, because the model has no per-day resolution and a
+    chart claiming otherwise would be a lie. This earns the resolution instead
+    of faking it: the target becomes
+
+        h_k = P(anomaly on day t+k | none on t+1 .. t+k-1)
+
+    and the weekly probability is recovered as ``1 - prod(1 - h_k)``, so the
+    existing number is preserved rather than replaced.
+
+    **A city-day contributes rows until it fails, and then stops.** That is what
+    makes the hazard a hazard: day 5's row exists only for the city-days that
+    got that far without an anomaly, so ``h_5`` is a probability conditional on
+    surviving to day 5 rather than a marginal rate. A frame that kept all seven
+    rows regardless would be seven correlated copies of the weekly label and
+    would compose to nonsense.
+
+    **Both halves of "survived" have to be earned**, exactly as the weekly
+    label's negative does. A row at day *k* exists when no flagged day appears
+    in t+1 .. t+k-1 **and** every one of those days was scored: a gap in the
+    record does not establish that nothing happened in it. Day *k* itself must
+    also be scored, since an unknown outcome is not a zero.
+
+    The rows multiply roughly sevenfold and are heavily correlated within a
+    city-day, which is why every caller splits the *city-day* frame first and
+    reshapes each part afterwards. Reshaping and then splitting would put day 1
+    of a city-day in training and day 4 of the same city-day in test, and the
+    leak would be invisible: both frames would still be in date order.
+
+    Returns:
+        ``city_id``, ``date_key`` and :data:`HAZARD_COLUMNS`, sorted by
+        ``(city_id, date_key, horizon_day)``. Never longer than
+        ``HORIZON_DAYS`` times the input, and usually far shorter.
+    """
+    frame = require_grain(observations, LABEL_REQUIRED_COLUMNS)
+    calendar = on_daily_calendar(frame)
+
+    flag = calendar["is_anomaly"]
+    observed = calendar["is_observed"]
+    hit = pd.Series(
+        np.where(observed, flag.fillna(False).to_numpy(dtype=bool), False),
+        index=calendar.index,
+    )
+    known = pd.Series(
+        np.where(observed, flag.notna().to_numpy(dtype=bool), False),
+        index=calendar.index,
+    )
+    calendar["_hit"], calendar["_known"] = hit, known
+    grouped = calendar.groupby("city_id", sort=False)
+
+    # The forward window, day by day, in the same shifts build_labels uses. Kept
+    # as explicit offsets rather than a rolling frame for the same reason: the
+    # offsets t+1 .. t+7 *are* the specification.
+    days: list[pd.DataFrame] = []
+    survived_hits = pd.Series(0, index=calendar.index, dtype="int64")
+    survived_known = pd.Series(0, index=calendar.index, dtype="int64")
+
+    for offset in range(WINDOW_START, WINDOW_END + 1):
+        event = grouped["_hit"].shift(-offset).fillna(False).astype(bool)
+        scored = grouped["_known"].shift(-offset).fillna(False).astype(bool)
+
+        # At risk: nothing has happened yet, and we know nothing has happened
+        # yet. The second clause is what a hole in the record fails.
+        at_risk = (survived_hits == 0) & (survived_known == offset - 1)
+        usable = at_risk & scored & calendar["is_observed"]
+
+        days.append(
+            pd.DataFrame(
+                {
+                    "city_id": calendar["city_id"],
+                    "date_key": calendar["date_key"],
+                    HAZARD_DAY: offset,
+                    HAZARD_EVENT: event,
+                    HAZARD_AT_RISK: offset - 1,
+                }
+            ).loc[usable]
+        )
+        survived_hits = survived_hits + event.astype("int64")
+        survived_known = survived_known + scored.astype("int64")
+
+    periods = pd.concat(days, ignore_index=True)
+    return periods.sort_values(
+        ["city_id", "date_key", HAZARD_DAY], kind="stable"
+    ).reset_index(drop=True)
+
+
+def compose_weekly(hazards, horizon_days: int = HORIZON_DAYS) -> float:
+    """``1 - prod(1 - h_k)``: the weekly probability the hazards imply.
+
+    The identity the whole ticket rests on. It is exact rather than an
+    approximation -- the events are mutually exclusive by construction, since
+    each hazard is conditional on the previous days having passed without one --
+    so a weekly number composed this way is the same quantity the direct model
+    estimates, arrived at differently.
+
+    Raises:
+        ValueError: The wrong number of hazards. Composing six days into a
+            seven-day probability is an off-by-one that produces a slightly
+            lower number and no error at all.
+    """
+    values = np.asarray(hazards, dtype=float)
+    if values.shape[-1] != horizon_days:
+        raise ValueError(
+            f"expected {horizon_days} hazards to compose, got "
+            f"{values.shape[-1]}. A short product silently understates the week."
+        )
+    return 1.0 - np.prod(1.0 - values, axis=-1)
 
 
 def load_labels(

@@ -81,6 +81,7 @@ _LATEST_SQL = f"""
     with latest as (
         select max(forecast_date) as forecast_date
           from {GOLD_SCHEMA}.fact_ml_predictions
+         where horizon_day = 0
     )
     select c.city_id,
            c.name,
@@ -101,6 +102,11 @@ _LATEST_SQL = f"""
       left join {GOLD_SCHEMA}.fact_ml_predictions p
              on p.city_id = c.city_id
             and p.forecast_date = l.forecast_date
+            -- The window row, not the seven day rows ML-13 added beside it.
+            -- Without this the grid gets eight rows per city and draws each
+            -- one as its own band: fifteen cities become a hundred and twenty,
+            -- and nothing in the picture says which is which.
+            and p.horizon_day = 0
      order by c.name
 """
 

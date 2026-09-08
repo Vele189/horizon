@@ -33,6 +33,8 @@ from machine_learning.features import (  # noqa: E402
 )
 from machine_learning.labels import (  # noqa: E402
     FORWARD_COUNT,
+    HAZARD_DAY,
+    HAZARD_EVENT,
     HORIZON_DAYS,
     LABEL,
     LABEL_COLUMNS,
@@ -40,7 +42,9 @@ from machine_learning.labels import (  # noqa: E402
     WINDOW_END,
     WINDOW_START,
     build_labels,
+    compose_weekly,
     drop_unlabelled,
+    person_periods,
     positive_rate_by_city,
     positives,
     single_feature_auc,
@@ -452,3 +456,167 @@ def test_the_per_city_report_accounts_for_every_row(frame) -> None:
     assert report["rows"].sum() == len(frame)
     assert (report["labelled"] + report["unlabelled"] == report["rows"]).all()
     assert (report["positives"] <= report["labelled"]).all()
+
+
+# ---------------------------------------------------------------------------
+# Discrete-time hazard (ML-13)
+# ---------------------------------------------------------------------------
+
+
+def test_a_city_day_stops_contributing_once_it_fails() -> None:
+    """What makes a hazard a hazard rather than seven copies of the week.
+
+    Day five's row exists only for the city-days that reached day five without
+    an anomaly, so ``h_5`` is conditional on having survived. A frame that kept
+    all seven rows regardless would be seven correlated copies of the weekly
+    label and would compose to nonsense.
+    """
+    quiet = _series("alpha", "2020-01-01", [False] * 20)
+    one_hit = quiet.copy()
+    one_hit.loc[one_hit["date_key"] == pd.Timestamp("2020-01-04"), "is_anomaly"] = True
+
+    periods = person_periods(one_hit)
+    day = periods.loc[periods["date_key"] == pd.Timestamp("2020-01-01")]
+    # The anomaly is three days out, so days 1..3 exist and the row stops there.
+    assert list(day[HAZARD_DAY]) == [1, 2, 3]
+    assert list(day[HAZARD_EVENT]) == [False, False, True]
+
+    # A city-day whose whole window is quiet contributes all seven.
+    untouched = periods.loc[periods["date_key"] == pd.Timestamp("2020-01-05")]
+    assert list(untouched[HAZARD_DAY]) == [1, 2, 3, 4, 5, 6, 7]
+    assert not untouched[HAZARD_EVENT].any()
+
+
+def test_survival_has_to_be_known_and_not_merely_unflagged() -> None:
+    """The same rule the weekly label's negative follows.
+
+    A gap in the record does not establish that nothing happened in it. If day
+    t+2 was never scored then day t+3's row cannot claim the event had not
+    happened yet, so it does not exist.
+    """
+    holed = _series("alpha", "2020-01-01", [False] * 20)
+    holed.loc[holed["date_key"] == pd.Timestamp("2020-01-03"), "is_anomaly"] = pd.NA
+
+    periods = person_periods(holed)
+    day = periods.loc[periods["date_key"] == pd.Timestamp("2020-01-01")]
+    # t+2 is unknown, so the row for t+2 cannot exist and nothing after it can
+    # claim to have survived it either.
+    assert list(day[HAZARD_DAY]) == [1]
+
+
+def test_the_empirical_hazards_compose_to_the_observed_weekly_rate() -> None:
+    """The identity the whole ticket rests on, checked exactly.
+
+    Composed from the *empirical* hazards -- events over at-risk rows at each
+    day -- the product telescopes to the share of city-days that survived all
+    seven, which is one minus the weekly rate. It is an identity rather than an
+    approximation, so it is asserted to floating-point rather than to a
+    tolerance, and it tests the reshaping and the composition rather than two
+    fitted models agreeing.
+    """
+    rng = np.random.default_rng(11)
+    flags = rng.random(4000) < 0.03
+    frame = _series("alpha", "2015-01-01", list(flags))
+
+    labels = build_labels(frame)
+    labelled = labels.loc[labels[LABEL].notna()]
+    # Over the *same* city-days, which is what makes it an identity. The two
+    # populations differ at the end of the record on purpose: the weekly label
+    # needs all seven days known, while a person-period row needs only its own
+    # day, so the last week of a series contributes hazards and no label. That
+    # is the right behaviour for training -- those rows are real observations --
+    # and it means the telescoping product only closes exactly on the city-days
+    # both agree about.
+    periods = person_periods(frame).merge(
+        labelled[["city_id", "date_key"]], on=["city_id", "date_key"], how="inner"
+    )
+
+    hazards = periods.groupby(HAZARD_DAY)[HAZARD_EVENT].mean().to_numpy()
+    composed = compose_weekly(hazards)
+    observed = float(positives(labelled[LABEL]).mean())
+
+    assert composed == pytest.approx(observed, abs=1e-9), (
+        f"composed {composed:.9f} against observed {observed:.9f}; the "
+        "person-period reshaping and the weekly label disagree"
+    )
+
+
+def test_composing_the_wrong_number_of_days_is_an_error() -> None:
+    """A short product silently understates the week and raises nothing."""
+    with pytest.raises(ValueError, match="hazards to compose"):
+        compose_weekly([0.01] * (HORIZON_DAYS - 1))
+    assert compose_weekly([0.0] * HORIZON_DAYS) == pytest.approx(0.0)
+    assert compose_weekly([1.0] + [0.0] * (HORIZON_DAYS - 1)) == pytest.approx(1.0)
+
+
+def test_the_purge_covers_the_hazards_reach() -> None:
+    """The acceptance's "purge extended to cover the full hazard horizon".
+
+    The hazard's outcomes are days t+1 .. t+7, the same span the weekly label
+    already reaches, so the existing purge covers it. Asserting it is what makes
+    that a checked coincidence rather than a silent one: lengthen the hazard
+    horizon past the label's and this fails, instead of a training row quietly
+    acquiring an outcome from the validation period.
+    """
+    from machine_learning.evaluation import HAZARD_REACH_DAYS, PURGE_DAYS
+
+    assert PURGE_DAYS >= HAZARD_REACH_DAYS
+
+
+def test_no_training_person_period_reaches_into_a_later_split() -> None:
+    """The leak the purge exists to prevent, asserted on the reshaped frame.
+
+    A person-period row's outcome is its own day of the horizon, so the
+    furthest a training row reaches is its date plus ``horizon_day``. Every one
+    of those has to land before the next split opens.
+    """
+    from machine_learning.evaluation import split_frame
+
+    rng = np.random.default_rng(3)
+    frame = _series("alpha", "1995-01-01", list(rng.random(11000) < 0.02))
+    parts = split_frame(person_periods(frame))
+
+    ordered = ("train", "validation", "test")
+    for earlier, later in zip(ordered, ordered[1:]):
+        before, after = parts[earlier], parts[later]
+        if before.empty or after.empty:
+            continue
+        reach = (
+            before["date_key"] + pd.to_timedelta(before[HAZARD_DAY], unit="D")
+        ).max()
+        assert reach < after["date_key"].min(), (
+            f"a {earlier} person-period's outcome falls on {reach.date()}, "
+            f"inside {later}, which starts {after['date_key'].min().date()}"
+        )
+
+
+def test_reshaping_never_splits_a_city_day_across_two_splits() -> None:
+    """The trap ML-13 names: split by city-day, never by person-period row.
+
+    Reshaping and then splitting would put day 1 of a city-day in training and
+    day 4 of the same city-day in test, and the leak would be invisible -- both
+    frames would still be in date order and both would still look purged.
+    """
+    from machine_learning.evaluation import split_frame
+
+    rng = np.random.default_rng(5)
+    frame = _series("alpha", "1995-01-01", list(rng.random(11000) < 0.02))
+    parts = split_frame(person_periods(frame))
+
+    seen: dict[tuple, str] = {}
+    for name, part in parts.items():
+        for key in part.groupby(["city_id", "date_key"]).groups:
+            assert seen.setdefault(key, name) == name, (
+                f"{key} appears in both {seen[key]} and {name}"
+            )
+
+
+def _series(city: str, start: str, flags: list) -> pd.DataFrame:
+    """A gold-shaped frame with the given anomaly flags, one per day."""
+    return pd.DataFrame(
+        {
+            "city_id": city,
+            "date_key": pd.date_range(start, periods=len(flags), freq="D"),
+            "is_anomaly": pd.array(flags, dtype="boolean"),
+        }
+    )

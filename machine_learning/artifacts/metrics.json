@@ -1891,6 +1891,137 @@
   },
   "model": {
     "artifacts": {
+      "hazard": {
+        "baseline_comparison": {
+          "base_rate": {
+            "beaten_on_brier": true,
+            "beaten_on_pr_auc": true,
+            "brier": 0.10434935866228692,
+            "brier_delta": 0.012225793736755072,
+            "pr_auc": 0.11298342541436464,
+            "pr_auc_delta": 0.21565596434772688
+          },
+          "climatology": {
+            "beaten_on_brier": true,
+            "beaten_on_pr_auc": true,
+            "brier": 0.10454837056958848,
+            "brier_delta": 0.012424805644056625,
+            "pr_auc": 0.12501478198445667,
+            "pr_auc_delta": 0.20362460777763483
+          },
+          "persistence": {
+            "beaten_on_brier": true,
+            "beaten_on_pr_auc": true,
+            "brier": 0.0976018171420808,
+            "brier_delta": 0.005478252216548948,
+            "pr_auc": 0.19132679242697442,
+            "pr_auc_delta": 0.13731259733511708
+          }
+        },
+        "bytes": 210389,
+        "committable": true,
+        "created_at": "2026-09-08T17:08:29+00:00",
+        "feature_count": 28,
+        "features": [
+          "temperature_2m_mean",
+          "temperature_2m_mean_lag1",
+          "temperature_2m_mean_lag3",
+          "temperature_2m_mean_lag7",
+          "temperature_2m_mean_lag14",
+          "temperature_2m_mean_roll7_mean",
+          "temperature_2m_mean_roll7_var",
+          "temperature_2m_mean_roll30_mean",
+          "temperature_2m_mean_roll30_var",
+          "pressure_msl_mean",
+          "pressure_msl_mean_lag1",
+          "pressure_msl_mean_lag3",
+          "pressure_msl_mean_lag7",
+          "pressure_msl_mean_lag14",
+          "pressure_msl_mean_roll7_mean",
+          "pressure_msl_mean_roll7_var",
+          "pressure_msl_mean_roll30_mean",
+          "pressure_msl_mean_roll30_var",
+          "temperature_2m_mean_z_trailing30",
+          "pressure_tendency_24h",
+          "pressure_tendency_72h",
+          "z_temperature_2m_mean",
+          "anomaly_days_trailing30",
+          "day_of_year_sin",
+          "day_of_year_cos",
+          "latitude",
+          "elevation_m",
+          "horizon_day"
+        ],
+        "filename": "model-hazard-v1-c04ed6bca847.joblib",
+        "fingerprint": "c04ed6bca847",
+        "format_version": 1,
+        "git": {
+          "branch": "phase-two",
+          "commit": "e500eeb81f98acf39f9d139287f88c5c9d343399",
+          "dirty": true,
+          "short_commit": "e500eeb81f98"
+        },
+        "hyperparameters": {
+          "early_stopping_rounds": 50,
+          "learning_rate": 0.1,
+          "max_depth": 6,
+          "min_child_weight": 10,
+          "n_estimators": 17,
+          "n_jobs": 1,
+          "scale_pos_weight": 1.0,
+          "seed": 42
+        },
+        "libraries": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit_learn": "1.9.0",
+          "xgboost": "3.4.1"
+        },
+        "metrics": {
+          "test": {
+            "base_rate": 0.11298342541436464,
+            "brier": 0.09212356492553185,
+            "lift": 2.90873983114614,
+            "mean_predicted": 0.06507508490810521,
+            "positives": 2045,
+            "pr_auc": 0.3286393897620915,
+            "rows": 18100
+          },
+          "validation": {
+            "base_rate": 0.06840744139484442,
+            "brier": 0.05890467887762977,
+            "lift": 3.488970093276609,
+            "mean_predicted": 0.05266215841807761,
+            "positives": 820,
+            "pr_auc": 0.2386715171841845,
+            "rows": 11987
+          }
+        },
+        "recommended": false,
+        "sha256": "996e8a4a080061f768fbde007fa00fcb4df2925daf02dc7bad76ee628a8d52e7",
+        "training_window": {
+          "cities": [
+            "cairo",
+            "delhi",
+            "lagos",
+            "london",
+            "moscow",
+            "phoenix",
+            "portland",
+            "reykjavik",
+            "sao_paulo",
+            "singapore",
+            "tokyo"
+          ],
+          "end": "2018-12-24",
+          "positive_rate": 0.04870910965538071,
+          "positives": 4677,
+          "rows": 96019,
+          "start": "1995-01-31"
+        },
+        "variant": "hazard"
+      },
       "unweighted": {
         "baseline_comparison": {
           "base_rate": {
@@ -1920,7 +2051,7 @@
         },
         "bytes": 489093,
         "committable": true,
-        "created_at": "2026-09-08T16:13:28+00:00",
+        "created_at": "2026-09-08T17:08:29+00:00",
         "feature_count": 27,
         "features": [
           "temperature_2m_mean",
@@ -1956,9 +2087,9 @@
         "format_version": 1,
         "git": {
           "branch": "phase-two",
-          "commit": "60df811adaa83d953770b5916941ba504d6891df",
+          "commit": "e500eeb81f98acf39f9d139287f88c5c9d343399",
           "dirty": true,
-          "short_commit": "60df811adaa8"
+          "short_commit": "e500eeb81f98"
         },
         "hyperparameters": {
           "early_stopping_rounds": 50,
@@ -2059,7 +2190,7 @@
         },
         "bytes": 128929,
         "committable": true,
-        "created_at": "2026-09-08T16:13:28+00:00",
+        "created_at": "2026-09-08T17:08:29+00:00",
         "feature_count": 27,
         "features": [
           "temperature_2m_mean",
@@ -2095,9 +2226,9 @@
         "format_version": 1,
         "git": {
           "branch": "phase-two",
-          "commit": "60df811adaa83d953770b5916941ba504d6891df",
+          "commit": "e500eeb81f98acf39f9d139287f88c5c9d343399",
           "dirty": true,
-          "short_commit": "60df811adaa8"
+          "short_commit": "e500eeb81f98"
         },
         "hyperparameters": {
           "early_stopping_rounds": 50,
@@ -2629,6 +2760,335 @@
     },
     "estimator": "xgboost.XGBClassifier",
     "fitted_on": "train",
+    "hazard": {
+      "city_days": {
+        "test": 18100,
+        "train": 96019,
+        "validation": 11987
+      },
+      "composed": {
+        "test": {
+          "direct": {
+            "base_rate": 0.11298342541436464,
+            "brier": 0.09455165259216793,
+            "lift": 2.554703670526944,
+            "mean_predicted": 0.061113741248846054,
+            "positives": 2045,
+            "pr_auc": 0.2886391716147846,
+            "rows": 18100
+          },
+          "hazard": {
+            "base_rate": 0.11298342541436464,
+            "brier": 0.09212356492553185,
+            "lift": 2.90873983114614,
+            "mean_predicted": 0.06507508490810521,
+            "positives": 2045,
+            "pr_auc": 0.3286393897620915,
+            "rows": 18100
+          },
+          "mean_absolute_difference": 0.025698277358353592,
+          "rank_correlation": 0.7662182528947585
+        },
+        "validation": {
+          "direct": {
+            "base_rate": 0.06840744139484442,
+            "brier": 0.05881129330549262,
+            "lift": 3.5335079439671015,
+            "mean_predicted": 0.04779747873544693,
+            "positives": 820,
+            "pr_auc": 0.2417182375951467,
+            "rows": 11987
+          },
+          "hazard": {
+            "base_rate": 0.06840744139484442,
+            "brier": 0.05890467887762977,
+            "lift": 3.488970093276609,
+            "mean_predicted": 0.05266215841807761,
+            "positives": 820,
+            "pr_auc": 0.2386715171841845,
+            "rows": 11987
+          },
+          "mean_absolute_difference": 0.021146543744154728,
+          "rank_correlation": 0.7246501175892038
+        }
+      },
+      "composition": "weekly = 1 - prod(1 - h_k)",
+      "horizon_days": 7,
+      "model": {
+        "early_stopping_rounds": 50,
+        "feature_count": 28,
+        "features": [
+          "temperature_2m_mean",
+          "temperature_2m_mean_lag1",
+          "temperature_2m_mean_lag3",
+          "temperature_2m_mean_lag7",
+          "temperature_2m_mean_lag14",
+          "temperature_2m_mean_roll7_mean",
+          "temperature_2m_mean_roll7_var",
+          "temperature_2m_mean_roll30_mean",
+          "temperature_2m_mean_roll30_var",
+          "pressure_msl_mean",
+          "pressure_msl_mean_lag1",
+          "pressure_msl_mean_lag3",
+          "pressure_msl_mean_lag7",
+          "pressure_msl_mean_lag14",
+          "pressure_msl_mean_roll7_mean",
+          "pressure_msl_mean_roll7_var",
+          "pressure_msl_mean_roll30_mean",
+          "pressure_msl_mean_roll30_var",
+          "temperature_2m_mean_z_trailing30",
+          "pressure_tendency_24h",
+          "pressure_tendency_72h",
+          "z_temperature_2m_mean",
+          "anomaly_days_trailing30",
+          "day_of_year_sin",
+          "day_of_year_cos",
+          "latitude",
+          "elevation_m",
+          "horizon_day"
+        ],
+        "max_rounds": 2000,
+        "n_estimators": 17,
+        "n_jobs": 1,
+        "params": {
+          "learning_rate": 0.1,
+          "max_depth": 6,
+          "min_child_weight": 10
+        },
+        "scale_pos_weight": 1.0,
+        "seed": 42,
+        "top_importances": [
+          {
+            "feature": "horizon_day",
+            "gain": 0.16473275423049927
+          },
+          {
+            "feature": "z_temperature_2m_mean",
+            "gain": 0.114087775349617
+          },
+          {
+            "feature": "anomaly_days_trailing30",
+            "gain": 0.08614164590835571
+          },
+          {
+            "feature": "temperature_2m_mean_z_trailing30",
+            "gain": 0.05767061188817024
+          },
+          {
+            "feature": "temperature_2m_mean",
+            "gain": 0.03931531682610512
+          },
+          {
+            "feature": "elevation_m",
+            "gain": 0.032910410314798355
+          },
+          {
+            "feature": "latitude",
+            "gain": 0.029432855546474457
+          },
+          {
+            "feature": "temperature_2m_mean_lag1",
+            "gain": 0.029409801587462425
+          },
+          {
+            "feature": "pressure_msl_mean",
+            "gain": 0.02849220484495163
+          },
+          {
+            "feature": "temperature_2m_mean_roll7_mean",
+            "gain": 0.028365859761834145
+          }
+        ],
+        "validation_search": [
+          {
+            "learning_rate": 0.03,
+            "max_depth": 3,
+            "min_child_weight": 1,
+            "n_estimators": 32,
+            "validation_weekly_brier": 0.06016806475166261,
+            "validation_weekly_pr_auc": 0.2183337029428608
+          },
+          {
+            "learning_rate": 0.03,
+            "max_depth": 3,
+            "min_child_weight": 10,
+            "n_estimators": 29,
+            "validation_weekly_brier": 0.060291359337594365,
+            "validation_weekly_pr_auc": 0.21420226783548413
+          },
+          {
+            "learning_rate": 0.1,
+            "max_depth": 3,
+            "min_child_weight": 1,
+            "n_estimators": 30,
+            "validation_weekly_brier": 0.05933928764380767,
+            "validation_weekly_pr_auc": 0.22320853087689474
+          },
+          {
+            "learning_rate": 0.1,
+            "max_depth": 3,
+            "min_child_weight": 10,
+            "n_estimators": 132,
+            "validation_weekly_brier": 0.059288425271677596,
+            "validation_weekly_pr_auc": 0.2183746822075958
+          },
+          {
+            "learning_rate": 0.03,
+            "max_depth": 4,
+            "min_child_weight": 1,
+            "n_estimators": 94,
+            "validation_weekly_brier": 0.059024822806671644,
+            "validation_weekly_pr_auc": 0.22913659167872452
+          },
+          {
+            "learning_rate": 0.03,
+            "max_depth": 4,
+            "min_child_weight": 10,
+            "n_estimators": 192,
+            "validation_weekly_brier": 0.058975517722555444,
+            "validation_weekly_pr_auc": 0.22922643042121227
+          },
+          {
+            "learning_rate": 0.1,
+            "max_depth": 4,
+            "min_child_weight": 1,
+            "n_estimators": 28,
+            "validation_weekly_brier": 0.059237397082701516,
+            "validation_weekly_pr_auc": 0.22597028743756814
+          },
+          {
+            "learning_rate": 0.1,
+            "max_depth": 4,
+            "min_child_weight": 10,
+            "n_estimators": 258,
+            "validation_weekly_brier": 0.05928780353721166,
+            "validation_weekly_pr_auc": 0.22411003960386738
+          },
+          {
+            "learning_rate": 0.03,
+            "max_depth": 6,
+            "min_child_weight": 1,
+            "n_estimators": 36,
+            "validation_weekly_brier": 0.05997469093475612,
+            "validation_weekly_pr_auc": 0.22663761338105948
+          },
+          {
+            "learning_rate": 0.03,
+            "max_depth": 6,
+            "min_child_weight": 10,
+            "n_estimators": 29,
+            "validation_weekly_brier": 0.05987540124738439,
+            "validation_weekly_pr_auc": 0.23402416248934516
+          },
+          {
+            "learning_rate": 0.1,
+            "max_depth": 6,
+            "min_child_weight": 1,
+            "n_estimators": 17,
+            "validation_weekly_brier": 0.05953929751140337,
+            "validation_weekly_pr_auc": 0.2200320454327363
+          },
+          {
+            "learning_rate": 0.1,
+            "max_depth": 6,
+            "min_child_weight": 10,
+            "n_estimators": 17,
+            "validation_weekly_brier": 0.05890467887762977,
+            "validation_weekly_pr_auc": 0.2386715171841845
+          }
+        ]
+      },
+      "profile": {
+        "by_todays_flag": [
+          {
+            "city_days": 517,
+            "mean_hazard_by_day": [
+              0.25996727169251765,
+              0.05322544340483801,
+              0.045764110217724766,
+              0.03723276627467985,
+              0.031383835470098535,
+              0.030572617851644467,
+              0.030572617851644467
+            ],
+            "today": "flagged"
+          },
+          {
+            "city_days": 17583,
+            "mean_hazard_by_day": [
+              0.011627828202134677,
+              0.008787173064522412,
+              0.007872915208398591,
+              0.007469034159712496,
+              0.00721455240520042,
+              0.007183911481178648,
+              0.007183911481178648
+            ],
+            "today": "quiet"
+          }
+        ],
+        "distinct_levels": 2,
+        "marginal_spread": 2.384276478120527,
+        "predicted_by_day": [
+          {
+            "at_risk_rows": 18100,
+            "horizon_day": 1,
+            "mean_hazard": 0.01872128081453954,
+            "observed_hazard": 0.02867403314917127
+          },
+          {
+            "at_risk_rows": 17581,
+            "horizon_day": 2,
+            "mean_hazard": 0.010056487195237504,
+            "observed_hazard": 0.017120755360900974
+          },
+          {
+            "at_risk_rows": 17280,
+            "horizon_day": 3,
+            "mean_hazard": 0.008955221717781,
+            "observed_hazard": 0.01574074074074074
+          },
+          {
+            "at_risk_rows": 17008,
+            "horizon_day": 4,
+            "mean_hazard": 0.008319191590841674,
+            "observed_hazard": 0.015051740357478834
+          },
+          {
+            "at_risk_rows": 16752,
+            "horizon_day": 5,
+            "mean_hazard": 0.007904912589982317,
+            "observed_hazard": 0.014505730659025788
+          },
+          {
+            "at_risk_rows": 16509,
+            "horizon_day": 6,
+            "mean_hazard": 0.007851975635517369,
+            "observed_hazard": 0.01423465988248834
+          },
+          {
+            "at_risk_rows": 16274,
+            "horizon_day": 7,
+            "mean_hazard": 0.007851975635517369,
+            "observed_hazard": 0.013457048052107656
+          }
+        ],
+        "share_with_day_one_highest": 0.2869060773480663,
+        "share_with_day_one_lowest": 0.6849723756906078,
+        "share_with_flat_tail": 0.7051381215469613,
+        "within_city_day_ratio": 1.9184578507933392,
+        "within_city_day_ratio_after_day_one": 1.0,
+        "within_city_day_ratio_p90": 3.281542404700153,
+        "worth_drawing_per_day": false
+      },
+      "rows": {
+        "test": 119504,
+        "train": 656334,
+        "validation": 81123
+      },
+      "split_by": "city-day, never person-period row",
+      "target": "P(first anomaly on day t+k | none through t+k-1)"
+    },
     "recency": {
       "ablation": [
         {
@@ -2806,7 +3266,7 @@
       "weighting": "exponential in the age of the row"
     },
     "recommended_variant": "unweighted",
-    "recorded_at": "2026-09-08T16:13:28+00:00",
+    "recorded_at": "2026-09-08T17:08:29+00:00",
     "resampling": "none",
     "scale_pos_weight_observed": 19.530040624331836,
     "specified_variant": "weighted",

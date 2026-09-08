@@ -103,8 +103,16 @@ from machine_learning.evaluation import (  # noqa: E402
     split_frame,
     threshold_for_budget,
 )
-from machine_learning.features import feature_columns  # noqa: E402
-from machine_learning.labels import LABEL, positives  # noqa: E402
+from machine_learning.features import feature_columns, gold_frame  # noqa: E402
+from machine_learning.labels import (  # noqa: E402
+    HAZARD_DAY,
+    HAZARD_EVENT,
+    HORIZON_DAYS,
+    LABEL,
+    compose_weekly,
+    person_periods,
+    positives,
+)
 
 __all__ = [
     "CALIBRATION_METHOD",
@@ -116,10 +124,15 @@ __all__ = [
     "SEED",
     "TrainingError",
     "Fit",
+    "HAZARD_FEATURES",
+    "HazardFit",
     "calibration_report",
     "decision_report",
+    "hazard_periods",
+    "hazard_report",
     "recency_ablation",
     "recency_weights",
+    "tune_hazard",
     "fit_calibrator",
     "fit_once",
     "save_models",
@@ -416,6 +429,346 @@ def tune(
     assert best is not None
     best.search = search
     return best
+
+
+# --------------------------------------------------------------------------
+# Discrete-time hazard (ML-13)
+# --------------------------------------------------------------------------
+
+#: The hazard model's design matrix: the weekly model's features, plus which
+#: day of the horizon the row is about.
+#:
+#: ``horizon_day`` as a *covariate* is what makes this one model rather than
+#: seven. Seven separate fits would divide the positives seven ways and each
+#: would be estimating its own copy of the same seasonal structure; one fit
+#: with the period index shares everything except what genuinely differs
+#: between days, which is the whole reason discrete-time hazard models are
+#: written this way.
+HAZARD_FEATURES: Final[tuple[str, ...]] = tuple(feature_columns()) + (HAZARD_DAY,)
+
+
+@dataclass
+class HazardFit:
+    """A fitted hazard model, and the composition that turns it back into a week."""
+
+    estimator: XGBClassifier
+    params: dict[str, Any]
+    best_iteration: int
+    feature_names: tuple[str, ...]
+    #: Always one. Carried because :func:`~machine_learning.artifact.save_artifact`
+    #: fingerprints on it, and a hazard fitted with a class weight would be a
+    #: different model that had to be distinguishable from this one.
+    scale_pos_weight: float = 1.0
+    search: list[dict[str, Any]] = field(default_factory=list)
+
+    def predict(self, periods: pd.DataFrame) -> np.ndarray:
+        """One hazard per person-period row."""
+        return self.estimator.predict_proba(periods.loc[:, list(self.feature_names)])[
+            :, 1
+        ]
+
+    def hazards(self, city_days: pd.DataFrame) -> np.ndarray:
+        """Seven hazards per city-day, as a ``(rows, 7)`` array.
+
+        **No at-risk filtering here, and that is the point.** The training
+        frame keeps a city-day only until its first anomaly, because a hazard is
+        conditional on having survived. At prediction time nothing has happened
+        yet -- the week has not occurred -- so all seven days are asked for, and
+        the conditioning is expressed by the composition rather than by dropping
+        rows.
+        """
+        wide = np.empty((len(city_days), HORIZON_DAYS), dtype=float)
+        for offset in range(1, HORIZON_DAYS + 1):
+            day = city_days.assign(**{HAZARD_DAY: offset})
+            wide[:, offset - 1] = self.predict(day)
+        return wide
+
+    def weekly(self, city_days: pd.DataFrame) -> np.ndarray:
+        """The weekly probability the seven hazards compose to."""
+        return compose_weekly(self.hazards(city_days))
+
+    def describe(self) -> dict[str, Any]:
+        gains = self.estimator.feature_importances_
+        order = np.argsort(gains)[::-1][:10]
+        return {
+            "params": dict(sorted(self.params.items())),
+            "n_estimators": self.best_iteration + 1,
+            "early_stopping_rounds": EARLY_STOPPING_ROUNDS,
+            "max_rounds": MAX_ROUNDS,
+            "seed": SEED,
+            "n_jobs": N_JOBS,
+            "scale_pos_weight": self.scale_pos_weight,
+            "features": list(self.feature_names),
+            "feature_count": len(self.feature_names),
+            "top_importances": [
+                {"feature": self.feature_names[index], "gain": float(gains[index])}
+                for index in order
+            ],
+            "validation_search": self.search,
+        }
+
+
+def hazard_periods(population: pd.DataFrame, gold: pd.DataFrame) -> pd.DataFrame:
+    """Person-periods for the scored population, with their features attached.
+
+    Reshaped from **gold** and joined onto the population, never reshaped from
+    the population itself. The population has had its warm-up and its
+    unlabellable rows removed, so its calendar has holes; asking "did anything
+    happen on t+3" of a frame with holes in it would answer from whichever rows
+    happened to survive the trim, and the answer would be quietly wrong rather
+    than missing.
+    """
+    periods = person_periods(gold)
+    merged = periods.merge(population, on=["city_id", "date_key"], how="inner")
+    if len(merged) > HORIZON_DAYS * len(population):
+        raise TrainingError(
+            f"{len(merged)} person-periods from {len(population)} city-days is "
+            f"more than {HORIZON_DAYS} each; the join changed the grain."
+        )
+    return merged.sort_values(
+        ["city_id", "date_key", HAZARD_DAY], kind="stable"
+    ).reset_index(drop=True)
+
+
+def tune_hazard(train: pd.DataFrame, validation: pd.DataFrame) -> HazardFit:
+    """Search the same grid, on the reshaped data, choosing on validation.
+
+    The same grid as the weekly model, deliberately: this is meant to be an
+    ablation of the *target's shape*, and re-tuning the search space at the same
+    time would make any difference between the two unattributable.
+    """
+    names = list(SEARCH_SPACE)
+    columns = list(HAZARD_FEATURES)
+    x_train = train.loc[:, columns]
+    y_train = train[HAZARD_EVENT].to_numpy(dtype=bool)
+    x_validation = validation.loc[:, columns]
+    y_validation = validation[HAZARD_EVENT].to_numpy(dtype=bool)
+
+    search: list[dict[str, Any]] = []
+    best: HazardFit | None = None
+    best_key: tuple[float, int] | None = None
+
+    for index, values in enumerate(product(*(SEARCH_SPACE[name] for name in names))):
+        params = dict(zip(names, values))
+        estimator = XGBClassifier(
+            **FIXED_PARAMS,
+            **params,
+            n_estimators=MAX_ROUNDS,
+            early_stopping_rounds=EARLY_STOPPING_ROUNDS,
+        )
+        estimator.fit(
+            x_train, y_train, eval_set=[(x_validation, y_validation)], verbose=False
+        )
+        candidate = HazardFit(
+            estimator=estimator,
+            params=params,
+            best_iteration=int(estimator.best_iteration),
+            feature_names=tuple(columns),
+        )
+        # Chosen on the *composed weekly* score, not on the person-period one.
+        # The product is what a reader is shown, and a hazard model that ranks
+        # person-periods well but composes badly would win a search run on the
+        # wrong quantity.
+        weekly = score(
+            validation.drop_duplicates(["city_id", "date_key"])[LABEL],
+            candidate.weekly(validation.drop_duplicates(["city_id", "date_key"])),
+        )
+        search.append(
+            {
+                **params,
+                "n_estimators": candidate.best_iteration + 1,
+                "validation_weekly_pr_auc": weekly.pr_auc,
+                "validation_weekly_brier": weekly.brier,
+            }
+        )
+        key = (-weekly.pr_auc, index)
+        if best_key is None or key < best_key:
+            best, best_key = candidate, key
+
+    assert best is not None
+    best.search = search
+    return best
+
+
+def hazard_report(
+    parts: Mapping[str, pd.DataFrame],
+    periods: Mapping[str, pd.DataFrame],
+    weekly_fit: "Fit",
+    fitted: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Fit the hazard, compose it back into a week, and price the difference.
+
+    The composition is the claim: the weekly probability falls out as
+    ``1 - prod(1 - h_k)``, so the existing number is preserved rather than
+    replaced. What the hazard adds is *resolution* -- seven numbers where there
+    was one -- and the honest question is whether those seven differ enough from
+    each other to be worth drawing.
+
+    ``profile`` answers it. If the fitted hazards are near-uniform in *k*, then
+    a seven-cell heatmap says exactly what the flat band already said, and the
+    view should keep the band and say so. That is a legitimate outcome and it is
+    reported as one rather than designed around.
+    """
+    fit = tune_hazard(periods["train"], periods["validation"])
+    city_days = {name: parts[name] for name in ("validation", "test")}
+    if fitted is not None:
+        # Handed back so main() can persist it: predict.py needs the estimator
+        # to write per-day rows, and refitting a twelve-point search at scoring
+        # time is not a serving story.
+        fitted["hazard"] = fit
+
+    composed: dict[str, Any] = {}
+    for name, frame in city_days.items():
+        weekly = fit.weekly(frame)
+        direct = weekly_fit.predict(frame)
+        composed[name] = {
+            "hazard": {
+                **score(frame[LABEL], weekly).as_dict(),
+                "mean_predicted": float(weekly.mean()),
+            },
+            "direct": {
+                **score(frame[LABEL], direct).as_dict(),
+                "mean_predicted": float(direct.mean()),
+            },
+            # The acceptance's "matches the direct model within tolerance". Two
+            # models fitted on differently shaped data will not agree row for
+            # row, so what is recorded is how far apart they are: the mean
+            # absolute gap between the two weekly probabilities, and how nearly
+            # they rank the same weeks.
+            "mean_absolute_difference": float(np.abs(weekly - direct).mean()),
+            "rank_correlation": float(
+                pd.Series(weekly).corr(pd.Series(direct), method="spearman")
+            ),
+        }
+
+    return {
+        "target": "P(first anomaly on day t+k | none through t+k-1)",
+        "composition": "weekly = 1 - prod(1 - h_k)",
+        "horizon_days": HORIZON_DAYS,
+        "split_by": "city-day, never person-period row",
+        "rows": {name: int(len(frame)) for name, frame in periods.items()},
+        "city_days": {
+            name: int(frame.groupby(["city_id", "date_key"]).ngroups)
+            for name, frame in periods.items()
+        },
+        "model": fit.describe(),
+        "composed": composed,
+        "profile": _hazard_profile(fit, parts["test"], periods["test"]),
+    }
+
+
+def _hazard_profile(
+    fit: HazardFit, city_days: pd.DataFrame, periods: pd.DataFrame
+) -> dict[str, Any]:
+    """How many distinct days the model actually resolves. Not seven.
+
+    The trap ML-13 names, measured, and it materialised in a sharper form than
+    the ticket anticipated. The seven hazards are not *near*-uniform: within a
+    city-day, days two through seven are **identical**, to the last bit. The
+    median ratio of the largest to the smallest across those six is exactly
+    1.000.
+
+    ``horizon_day`` is the only column that varies across a city-day's seven
+    rows, so the ensemble can only separate them by splitting on it -- and it
+    splits once, between day one and the rest. Day one carries the persistence
+    signal, an anomaly today making one tomorrow far likelier, and the model
+    found nothing in the remaining six worth a second split.
+
+    So the resolution earned is **two levels, not seven**: tomorrow, and the
+    rest of the week. ``distinct_levels`` records that, and
+    ``worth_drawing_per_day`` is false because seven cells drawn from two
+    numbers is a chart claiming a resolution the model does not have -- which
+    is the same objection ``risk_horizon.py`` raised against spreading the
+    weekly score in the first place.
+    """
+    wide = fit.hazards(city_days)
+    observed = periods.groupby(HAZARD_DAY)[HAZARD_EVENT].agg(["mean", "size"])
+    ratios = wide.max(axis=1) / np.maximum(wide.min(axis=1), 1e-12)
+    # And the same ratio with day 1 removed. The first day carries the
+    # persistence signal -- an anomaly today makes one tomorrow far likelier --
+    # and if it alone accounts for the spread then the honest chart is one
+    # bright cell and a flat tail rather than a gradient across the week.
+    tail = wide[:, 1:]
+    tail_ratios = tail.max(axis=1) / np.maximum(tail.min(axis=1), 1e-12)
+    return {
+        "predicted_by_day": [
+            {
+                "horizon_day": day + 1,
+                "mean_hazard": float(wide[:, day].mean()),
+                "observed_hazard": float(observed["mean"].get(day + 1, float("nan"))),
+                "at_risk_rows": int(observed["size"].get(day + 1, 0)),
+            }
+            for day in range(HORIZON_DAYS)
+        ],
+        "marginal_spread": float(
+            wide.mean(axis=0).max() / max(wide.mean(axis=0).min(), 1e-12)
+        ),
+        "within_city_day_ratio": float(np.median(ratios)),
+        "within_city_day_ratio_p90": float(np.quantile(ratios, 0.9)),
+        "within_city_day_ratio_after_day_one": float(np.median(tail_ratios)),
+        # How many genuinely different numbers a city-day's seven days hold.
+        # Rounded before counting, because two hazards that differ in the
+        # fifteenth decimal are the same number to any reader and to any
+        # colour scale.
+        "distinct_levels": int(
+            np.median([len(np.unique(np.round(row, 9))) for row in wide])
+        ),
+        # The finding, evaluated rather than asserted. Seven cells drawn from
+        # two distinct numbers claim a resolution the model does not have,
+        # which is the objection risk_horizon.py raised against spreading the
+        # weekly score in the first place.
+        "worth_drawing_per_day": bool(
+            np.median([len(np.unique(np.round(row, 9))) for row in wide])
+            >= HORIZON_DAYS - 1
+        ),
+        # The shape BI-09 needs, stated as a share rather than as a grouping.
+        # A fixed grouping like [[1], [2..7]] would be the wrong object: which
+        # days share a level varies city-day by city-day, and days 2 and 3 do
+        # differ for *some* of them. What is stable, and what a chart can be
+        # built on, is that the tail is flat on almost every city-day.
+        "share_with_flat_tail": float(
+            np.mean(
+                [len(np.unique(np.round(row[1:], 9))) == 1 for row in wide]
+            )
+        ),
+        "share_with_day_one_highest": float(
+            np.mean(wide[:, 0] > wide[:, 1:].max(axis=1))
+        ),
+        "share_with_day_one_lowest": float(
+            np.mean(wide[:, 0] < wide[:, 1:].min(axis=1))
+        ),
+        # The finding, and the reason the two levels are worth drawing: which
+        # of them is higher depends on the city-day, so a chart that fixed the
+        # order would be wrong most of the time in one direction or the other.
+        "by_todays_flag": _hazard_by_todays_flag(wide, city_days),
+    }
+
+
+def _hazard_by_todays_flag(wide: np.ndarray, city_days: pd.DataFrame) -> list[dict]:
+    """The per-day profile, split on whether today itself was flagged.
+
+    Where the two levels come from. On a city-day that is *currently*
+    anomalous the hazard for tomorrow is an order of magnitude above the rest
+    of the week and falls away sharply; on a quiet one it is slightly *below*
+    the rest, because a week that has been ordinary so far still has six days
+    left to go wrong and only one of them is tomorrow.
+
+    Pooling the two hides both. The marginal profile shows day one at roughly
+    twice day seven, which reads as a gentle decay and is not what either
+    population does.
+    """
+    flagged = city_days["is_anomaly"].fillna(False).to_numpy(dtype=bool)
+    return [
+        {
+            "today": label,
+            "city_days": int(mask.sum()),
+            "mean_hazard_by_day": [
+                float(wide[mask, day].mean()) for day in range(wide.shape[1])
+            ],
+        }
+        for label, mask in (("flagged", flagged), ("quiet", ~flagged))
+        if mask.any()
+    ]
 
 
 # --------------------------------------------------------------------------
@@ -1010,6 +1363,24 @@ def _quantifier_diagnostics(
     }
 
 
+def _hazard_metrics(block: Mapping[str, Any]) -> dict[str, Any]:
+    """The hazard's composed scores, in the per-split shape the sidecar wants.
+
+    ``block["hazard"]["composed"]`` nests each split under the arm it belongs
+    to, because its job is to sit the hazard beside the direct model. The
+    artefact sidecar wants one predictor's scores per split, so the hazard arm
+    is lifted out. The *composed weekly* scores, not the person-period ones: a
+    reader comparing this artefact with the baselines is asking about the
+    number it produces, and the number it produces is a week.
+    """
+    composed = block.get("hazard", {}).get("composed", {})
+    return {
+        split: entry["hazard"]
+        for split, entry in composed.items()
+        if "hazard" in entry
+    }
+
+
 def save_models(
     fits: Mapping[str, "Fit"],
     block: Mapping[str, Any],
@@ -1033,12 +1404,21 @@ def save_models(
     recommended = block.get("recommended_variant")
     saved: dict[str, Any] = {}
     for variant, fit in fits.items():
+        # The hazard is a variant of the *target's shape* rather than of the
+        # class weighting, so it has no row in `block["variants"]`; its scores
+        # live in `block["hazard"]`. Saved through the same path all the same,
+        # because predict.py has to be able to load it by name and validate its
+        # features against the frame it is handed.
         saved[variant] = save_artifact(
             fit,
             variant=variant,
             train=parts["train"],
             target=y_train,
-            metrics=block["variants"][variant],
+            metrics=(
+                block["variants"][variant]
+                if variant in block["variants"]
+                else _hazard_metrics(block)
+            ),
             baselines=baselines,
             snapshot=snapshot,
             recommended=variant == recommended,
@@ -1051,8 +1431,17 @@ def train_model(
     engine: Engine | None = None,
     *,
     frame: pd.DataFrame | None = None,
+    hazard: pd.DataFrame | None = None,
 ) -> tuple[dict[str, Any], dict[str, Fit]]:
     """Fit both variants, score them on every split, and describe them.
+
+    Args:
+        hazard: The person-period frame from :func:`hazard_periods`, if the
+            discrete-time hazard (ML-13) is to be fitted too. Passed in rather
+            than built here because it needs the *gold* frame, which this
+            function does not otherwise read, and because it costs a
+            twelve-point search over 656 000 rows that most callers -- the
+            leave-one-city-out folds above all -- have no use for.
 
     Returns the ``model`` block for ``metrics.json`` and both fitted models by
     variant name. Both, because ML-06 draws curves for each and the difference
@@ -1060,6 +1449,7 @@ def train_model(
     specifies and the one saved, ``variants["unweighted"]`` is the one its
     stated goal asks for.
     """
+    hazard_fits: dict[str, Any] = {}
     population = frame if frame is not None else evaluation_frame(engine)
     population = population.sort_values(
         ["city_id", "date_key"], kind="stable"
@@ -1110,9 +1500,17 @@ def train_model(
         other["pr_auc"] > specified["pr_auc"] and other["brier"] < specified["brier"]
     )
     block["recommended_variant"] = "unweighted" if better else "weighted"
+    fits = dict(fits)
     # After the recommendation, because it is the recommended model that gets
     # calibrated, and before returning, so metrics.json cannot carry a model
     # block without the account of what its probabilities are worth.
+    if hazard is not None:
+        block["hazard"] = hazard_report(
+            parts,
+            split_frame(hazard),
+            fits[block["recommended_variant"]],
+            fitted=hazard_fits,
+        )
     block["recency"] = recency_ablation(
         parts,
         scale_pos_weight=variants[block["recommended_variant"]],
@@ -1121,6 +1519,7 @@ def train_model(
     block["calibration"] = calibration_report(
         fits, parts, variant=block["recommended_variant"]
     )
+    fits.update(hazard_fits)
     return block, fits
 
 
@@ -1188,6 +1587,15 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Merge the model block into metrics.json and save the artefact.",
     )
     parser.add_argument("--out", help="Write metrics somewhere other than the default.")
+    parser.add_argument(
+        "--hazard",
+        action="store_true",
+        help=(
+            "Also fit the discrete-time hazard (ML-13): seven per-day "
+            "probabilities per city-day, composed back into the weekly number. "
+            "Reshapes to ~656 000 training rows and searches the same grid."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -1196,7 +1604,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     population = evaluation_frame()
-    block, fits = train_model(frame=population)
+    periods = None
+    if args.hazard:
+        # Read gold once, here, rather than inside train_model: the hazard
+        # needs the *complete* calendar to know what happened on t+3, and the
+        # population has had its warm-up trimmed out of it.
+        periods = hazard_periods(population, gold_frame())
+        print(
+            f"hazard     {len(periods):,} person-periods from "
+            f"{len(population):,} city-days\n"
+        )
+    block, fits = train_model(frame=population, hazard=periods)
 
     print(f"train      {_split_window('train')}")
     print(f"seed {SEED}   threads {N_JOBS}   resampling {block['resampling']}")
@@ -1229,6 +1647,26 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"against a true base rate of {weighted['base_rate']:.3f}. The Risk "
             "Horizon view shows these numbers to a reader directly."
         )
+
+    hazard = block.get("hazard")
+    if hazard:
+        profile = hazard["profile"]
+        print("\nhazard, per-day probabilities composed back into the week")
+        for split, entry in hazard["composed"].items():
+            print(
+                f"  {split:<11} composed PR-AUC {entry['hazard']['pr_auc']:.4f}  "
+                f"direct {entry['direct']['pr_auc']:.4f}  "
+                f"rank corr {entry['rank_correlation']:.3f}"
+            )
+        print(
+            f"\n  the model resolves {profile['distinct_levels']} distinct "
+            f"levels across the seven days, not {HORIZON_DAYS}: "
+            f"{profile['share_with_flat_tail']:.0%} of city-days have days "
+            "2-7 identical."
+        )
+        for entry in profile["by_todays_flag"]:
+            days = "  ".join(f"{value:.4f}" for value in entry["mean_hazard_by_day"])
+            print(f"  today {entry['today']:<8} ({entry['city_days']:>6}): {days}")
 
     if args.write or args.out:
         destination = Path(args.out) if args.out else metrics_path()

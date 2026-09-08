@@ -43,13 +43,14 @@ import sys
 from pathlib import Path
 from typing import Any, Final, Sequence
 
+import numpy as np
 import pandas as pd
 from sqlalchemy import Engine, text
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from ingestion.loader import engine_from_settings  # noqa: E402
-from machine_learning.artifact import load_model  # noqa: E402
+from machine_learning.artifact import ArtifactError, load_model  # noqa: E402
 from machine_learning.baselines import metrics_path  # noqa: E402
 from machine_learning.features import (  # noqa: E402
     WARMUP_DAYS,
@@ -57,7 +58,7 @@ from machine_learning.features import (  # noqa: E402
     feature_columns,
     load_features,
 )
-from machine_learning.labels import HORIZON_DAYS  # noqa: E402
+from machine_learning.labels import HAZARD_DAY, HORIZON_DAYS  # noqa: E402
 
 __all__ = [
     "DEFAULT_DATES",
@@ -205,6 +206,7 @@ def score_horizon(
         {
             "city_id": recent["city_id"].astype(str),
             "forecast_date": forecast_date,
+            "horizon_day": 0,
             "horizon_start": forecast_date + dt.timedelta(days=1),
             "horizon_end": forecast_date + dt.timedelta(days=HORIZON_DAYS),
             "horizon_days": HORIZON_DAYS,
@@ -216,7 +218,67 @@ def score_horizon(
             "feature_count": len(loaded.features),
         }
     )
+    days = hazard_rows(recent, predictions)
+    if not days.empty:
+        predictions = pd.concat([predictions, days], ignore_index=True)
     return predictions, coverage(frame, recent, roster, ingested)
+
+
+def hazard_rows(recent: pd.DataFrame, weekly: pd.DataFrame) -> pd.DataFrame:
+    """One row per city per horizon day, from the discrete-time hazard (ML-13).
+
+    Empty when no hazard artefact is on disk, which is not a failure: the
+    weekly rows stand on their own and the Risk Horizon view falls back to the
+    flat band it drew before. A per-day chart with no per-day model behind it
+    is the thing this project has refused twice now.
+
+    **The label and the threshold belong to the week, not to a day.** A day row
+    carries the hazard as its ``risk_score`` and repeats the weekly decision, so
+    a reader filtering to one day cannot come away with a per-day "flagged"
+    that no threshold was ever chosen for. ML-11's budget is a budget of
+    *alerts*, and there is one alert a week.
+    """
+    try:
+        hazard = load_model(variant="hazard")
+    except (ArtifactError, FileNotFoundError):
+        return pd.DataFrame()
+
+    # Aligned positionally, not by city. `--dates` scores several forecast
+    # dates per city, so `weekly` holds one row per (city, forecast_date) and a
+    # lookup on city alone would fan every day row out sevenfold. `weekly` was
+    # built from `recent` in this order, which makes position exact and a join
+    # unnecessary.
+    if len(weekly) != len(recent):
+        raise ValueError(
+            f"{len(weekly)} weekly rows against {len(recent)} scored city-days; "
+            "the day rows cannot be aligned positionally."
+        )
+    forecast_date = recent["date_key"].dt.date
+    label = weekly["prediction_label"].to_numpy()
+    threshold = weekly["decision_threshold"].to_numpy()
+
+    frames = []
+    for offset in range(1, HORIZON_DAYS + 1):
+        scores = hazard.predict(recent.assign(**{HAZARD_DAY: offset}))
+        frames.append(
+            pd.DataFrame(
+                {
+                    "city_id": recent["city_id"].astype(str),
+                    "forecast_date": forecast_date,
+                    "horizon_day": offset,
+                    "horizon_start": forecast_date + dt.timedelta(days=offset),
+                    "horizon_end": forecast_date + dt.timedelta(days=offset),
+                    "horizon_days": HORIZON_DAYS,
+                    "risk_score": np.asarray(scores, dtype=float),
+                    "prediction_label": label,
+                    "decision_threshold": threshold,
+                    "model_version": hazard.path.stem,
+                    "model_variant": "hazard",
+                    "feature_count": len(hazard.features),
+                }
+            )
+        )
+    return pd.concat(frames, ignore_index=True)
 
 
 def _variant_of(loaded) -> str:
@@ -283,7 +345,7 @@ def coverage(
 
 
 def write_predictions(engine: Engine, predictions: pd.DataFrame) -> int:
-    """Upsert on ``(city_id, forecast_date)``. Re-running replaces.
+    """Upsert on ``(city_id, forecast_date, horizon_day)``. Re-running replaces.
 
     One statement per row inside one transaction rather than a bulk COPY: this
     is at most a few hundred rows, the upsert is what makes the run repeatable,
@@ -295,15 +357,17 @@ def write_predictions(engine: Engine, predictions: pd.DataFrame) -> int:
     statement = text(
         f"""
         insert into {PREDICTIONS_TABLE} (
-            city_id, forecast_date, horizon_start, horizon_end, horizon_days,
+            city_id, forecast_date, horizon_day,
+            horizon_start, horizon_end, horizon_days,
             risk_score, prediction_label, decision_threshold,
             model_version, model_variant, feature_count, scored_at
         ) values (
-            :city_id, :forecast_date, :horizon_start, :horizon_end, :horizon_days,
+            :city_id, :forecast_date, :horizon_day,
+            :horizon_start, :horizon_end, :horizon_days,
             :risk_score, :prediction_label, :decision_threshold,
             :model_version, :model_variant, :feature_count, now()
         )
-        on conflict (city_id, forecast_date) do update set
+        on conflict (city_id, forecast_date, horizon_day) do update set
             horizon_start      = excluded.horizon_start,
             horizon_end        = excluded.horizon_end,
             horizon_days       = excluded.horizon_days,
@@ -321,6 +385,7 @@ def write_predictions(engine: Engine, predictions: pd.DataFrame) -> int:
         row["risk_score"] = float(row["risk_score"])
         row["prediction_label"] = bool(row["prediction_label"])
         row["horizon_days"] = int(row["horizon_days"])
+        row["horizon_day"] = int(row["horizon_day"])
         row["feature_count"] = int(row["feature_count"])
     with engine.begin() as connection:
         connection.execute(statement, rows)

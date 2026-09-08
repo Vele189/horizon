@@ -4459,6 +4459,117 @@ on**, and that the geometry of the split — a validation window adjacent to
 training, in a record whose drift is concentrated at the far end — is what
 makes it unusable rather than anything about the method.
 
+## The chart the project refused to draw, and what it turned out to be worth
+
+ML-13. `risk_horizon.py` says plainly that it will not spread a weekly score
+across seven days, because the model has no per-day resolution and a chart
+claiming otherwise would be a lie. This earns the resolution instead of faking
+it: model
+
+    h_k = P(anomaly on day t+k | none on t+1 .. t+k-1)
+
+and recover the week as `1 - prod(1 - h_k)`, so the existing number is preserved
+rather than replaced.
+
+### The reshaping, and the two rules that make it a hazard
+
+127 028 city-days become 860 527 person-periods, 6.8 per city-day. A city-day
+contributes rows **until it fails and then stops**: day five's row exists only
+for the city-days that got that far without an anomaly, which is what makes
+`h_5` conditional on surviving to day five rather than a marginal rate. A frame
+that kept all seven rows regardless would be seven correlated copies of the
+weekly label.
+
+And survival has to be *known*, not merely unflagged — the same rule the weekly
+label's negative already follows. If day t+2 was never scored, day t+3's row
+cannot claim the event had not happened yet, so it does not exist.
+
+The composition is an identity rather than an approximation, and it is asserted
+to floating point:
+
+| | |
+|---|---:|
+| composed from empirical hazards | 0.190195475 |
+| observed weekly rate | 0.190195475 |
+
+It only closes exactly over the *same* city-days, and getting that wrong is the
+first thing that happened. The weekly label needs all seven days known; a
+person-period row needs only its own day, so the last week of every series
+contributes hazards and no label. That is the right behaviour for training —
+those rows are real observations — and it means the two populations differ at
+the edge of the record. The first version of the test compared them anyway and
+missed by 1.4e-4, which looked like a rounding problem and was a population
+problem.
+
+### The trap materialised, in a sharper form than the ticket expected
+
+The ticket warned the hazard might decay smoothly in *k* and produce a
+near-uniform heatmap. It is not near-uniform. Within a city-day, **days two
+through seven are identical**, to the last bit, on 71% of them. The model
+resolves **two levels, not seven**.
+
+`horizon_day` is the only column that varies across a city-day's seven rows, so
+the ensemble can only separate them by splitting on it — and it splits once,
+between day one and the rest. Day one carries the persistence signal; the model
+found nothing in the remaining six worth a second split.
+
+Which level is higher is not fixed, and that is the part the marginal profile
+hides. Pooled, day one averages 0.0187 against day seven's 0.0079, which reads
+as a gentle decay. Split on whether today was itself flagged:
+
+| today | city-days | day 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| flagged | 517 | **0.2600** | 0.0532 | 0.0458 | 0.0372 | 0.0314 | 0.0306 | 0.0306 |
+| quiet | 17 583 | 0.0116 | 0.0088 | 0.0079 | 0.0075 | 0.0072 | 0.0072 | 0.0072 |
+
+A city that is anomalous *today* has a 26% chance of being anomalous tomorrow
+and then falls away sharply. A quiet one is nearly flat. Only 29% of city-days
+have day one as their highest, and 68% have it as their lowest: for most weeks
+the risk is slightly *lower* tomorrow than later, because six days have more
+chances to go wrong than one does.
+
+So the honest chart is not a gradient across the week. It is tomorrow, and the
+rest of the week, and BI-09 draws that rather than seven cells carrying two
+numbers — which would be the same overclaim `risk_horizon.py` refused in the
+first place, wearing a different shape.
+
+### Composed against direct
+
+| split | composed PR-AUC | direct | rank correlation |
+|---|---:|---:|---:|
+| validation | 0.2387 | **0.2417** | 0.725 |
+| test | **0.3286** | 0.2886 | 0.766 |
+
+The same pattern ML-12 found: better on test, slightly worse on validation, and
+therefore not selectable. The weekly band stays the direct model's number.
+
+That leaves a real inconsistency in the table, and it is stated rather than
+smoothed over: the `horizon_day = 0` row and the seven day rows come from two
+different models, and the day rows do **not** compose to the band. For Lagos on
+the last forecast date the days compose to 0.48 against a band of 0.40. A
+reader who adds them up is entitled to notice, so the schema comment says so.
+
+### `horizon_day` in the grain
+
+`fact_ml_predictions` grows from one row per city-forecast to one per
+city-forecast-day, with `horizon_day = 0` meaning the whole window and 1..7 the
+single days. Zero is not a sentinel anybody has to look up: `horizon_start` and
+`horizon_end` on the same row already say what it covers, and the check
+constraints enforce that they agree with `horizon_day`. `risk_score` therefore
+has one meaning everywhere — the probability of an anomaly in the span this row
+covers.
+
+Three of those constraints kept their names and changed their meanings, which
+is the one case `if not exists` cannot detect: on a pre-ML-13 database they
+would still say `horizon_end = forecast_date + horizon_days`, reject every day
+row, and report as present. They are dropped unconditionally and re-added.
+
+`prediction_label` is the one column a day row cannot derive. ML-11 chose a
+threshold for a weekly *alert budget* and no threshold has ever been chosen for
+a single day, so the day rows repeat the week's decision and the check that ties
+label to score is scoped to `horizon_day = 0` rather than dropped — the property
+still holds everywhere it means anything.
+
 ## Publishing
 
 Community Cloud requires a public repository, which makes deployment the moment

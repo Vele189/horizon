@@ -427,7 +427,15 @@ def test_the_committed_sidecar_and_artefacts_agree() -> None:
         assert record["variant"] == variant
         assert beside.stat().st_size == record["bytes"]
         assert hashlib.sha256(beside.read_bytes()).hexdigest() == record["sha256"]
-        assert record["features"] == list(feature_columns())
+        # The hazard carries `horizon_day` as a twenty-eighth input (ML-13):
+        # one model expressing seven days, rather than seven models dividing
+        # the positives between them. Every other artefact is the plain
+        # matrix, and an extra column on one of those would be a feature that
+        # had escaped `feature_columns()`.
+        expected = list(feature_columns())
+        if variant == "hazard":
+            expected = [*expected, "horizon_day"]
+        assert record["features"] == expected, variant
 
 
 def test_the_recommended_model_loads_from_the_sidecar_alone() -> None:

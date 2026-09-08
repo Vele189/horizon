@@ -97,6 +97,7 @@ __all__ = [
     "Split",
     "assert_splits_are_disjoint",
     "EMBARGO_DAYS",
+    "HAZARD_REACH_DAYS",
     "add_persistence_signal",
     "assert_city_is_held_out",
     "assert_splits_are_ordered",
@@ -169,6 +170,19 @@ PERSISTENCE_COUNT: Final[str] = f"anomaly_days_trailing{PERSISTENCE_WINDOW}"
 #: the alternative is a training set that has been told the first week of the
 #: period it is about to be validated on.
 PURGE_DAYS: Final[int] = HORIZON_DAYS
+
+#: How far the *hazard's* outcome window reaches (ML-13), which the purge must
+#: also cover.
+#:
+#: Derived rather than asserted equal. The discrete-time hazard reshapes each
+#: city-day into up to seven person-period rows whose outcomes are days t+1 ..
+#: t+7 -- the same span the weekly label already reaches, so :data:`PURGE_DAYS`
+#: covers it today and this constant is 7 as well. Writing it down as its own
+#: name is what makes that a checkable coincidence instead of a silent one: if
+#: the hazard horizon is ever lengthened past the label's, the assertion in
+#: ``tests/test_labels.py`` fails rather than a training row quietly acquiring
+#: an outcome from the validation period.
+HAZARD_REACH_DAYS: Final[int] = HORIZON_DAYS
 
 
 #: Days optionally dropped from the *start* of every split that has an earlier
