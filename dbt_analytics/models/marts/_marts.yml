@@ -612,6 +612,38 @@ models:
       A null sigma means no leakage-free baseline exists: the city has a single
       reference year, and excluding it leaves nothing. That is the honest
       answer rather than a silent fallback to the leaky value.
+
+
+      **The detrended baseline (DBT-12).** The exclusion removes the labelled
+      observation from its own baseline. It does nothing about the other reason
+      a late observation reads hot: the record has warmed within it, so a
+      baseline spanning 1995-2026 sits below the climate of 2024 and
+      "anomalously hot" drifts towards meaning "recent". A per-city,
+      per-climatology_day linear trend in year is therefore fitted and
+      subtracted before standardising, producing
+      `mean_temperature_2m_mean_detrended` and its sigma beside the plain pair
+      rather than in place of them.
+
+
+      **The trend is fitted on years strictly before the one it labels.** A
+      trend fitted across the whole record would use 2026 to decide what was
+      normal in 2023, which is the same defect the leave-one-year-out exclusion
+      exists to prevent, one window larger, and it would be invisible: a
+      forward-looking slope is a perfectly plausible slope. The window is an
+      expanding one, expressed as a frame rather than a predicate, and
+      `assert_the_trend_window_stops_before_the_year_it_labels` counts what it
+      accumulated against what it should have.
+
+
+      Below `climatology_trend_min_years` (15) no trend is fitted and the
+      detrended baseline is *identical* to the plain one, which is the honest
+      content of an expanding window rather than a fallback: in 1997 there is
+      no trend to know yet. The floor was swept rather than chosen - at five
+      years the detrended flag drifts more than the plain one, because a slope
+      from five years is mostly noise and subtracting noise adds exceedances.
+      `trend_stderr_c_per_year` is published beside the slope for the same
+      reason: only about half the fitted slopes are two standard errors from
+      zero.
     tests:
       - unique_combination_of_columns:
           arguments:
@@ -690,6 +722,44 @@ models:
       - name: stddev_temperature_2m_mean_all_years
         description: >
           The all-years standard deviation. See `mean_temperature_2m_mean_all_years`.
+      - name: trend_reference_years
+        description: >
+          Years strictly before `for_year` that contributed to this day's window, and so the years the trend was fitted on. Zero for the first year of a city's record.
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 0}
+      - name: trend_observations
+        description: >
+          Observations behind the trend fit, across those years. About 15 per year at the +/-7 day window.
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 0}
+      - name: trend_slope_c_per_year
+        description: >
+          Ordinary least squares slope of daily mean temperature on year, over the prior-years window. Degrees per year. Null below `climatology_trend_min_years`, where the detrended baseline is defined to equal the plain one.
+        tests:
+          - accepted_range:
+              arguments: {min_value: -1, max_value: 1}
+      - name: trend_stderr_c_per_year
+        description: >
+          Standard error of that slope. Published rather than kept, because at these sample sizes it is the same order as the slope itself - a fit over K years has a standard error falling only as K^-1.5, and about half the slopes here are inside two of them. A trend that cannot be told from zero should not be subtracted with confidence.
+        tests:
+          - accepted_range:
+              arguments: {min_value: 0}
+      - name: mean_temperature_2m_mean_detrended
+        description: >
+          The baseline mean with the fitted trend removed and the result referenced to `for_year`: the plain mean walked along the trend to meet the year being labelled. Identical to `mean_temperature_2m_mean` where no trend was fitted.
+        tests:
+          - accepted_range:
+              arguments: {min_value: -90, max_value: 60}
+      - name: stddev_temperature_2m_mean_detrended
+        description: >
+          The standard deviation of the same detrended window. Not always smaller than the plain sigma: the slope comes from earlier years than the window it is subtracted from, so where the two disagree it adds spread rather than removing it.
+        tests:
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 30}
 
   - name: fact_weather_anomalies
     description: >
@@ -716,27 +786,51 @@ models:
       would put those days in the denominator of every anomaly rate.
 
 
-      **Measured rate: 1.65% of scored city-days**, against 1.24% for a normal
-      distribution and a plausible band of 0.5-3%. Hot 524, cold 452.
+      **Measured rate: 1.45% of scored city-days**, against 1.24% for a normal
+      distribution and a plausible band of 0.5-3%. Hot 924, cold 919.
 
 
-      Three per-city outliers, each investigated rather than accepted:
-      Tokyo at 3.90% has a baseline of 45 observations rather than 455 because
-      only four years have backfilled, and a sigma from 45 points is noisy -
-      its sd(Z) is 1.14 where every complete city sits at 1.00. Cairo skews hot
-      (208/25) because its residual distribution is the most right-skewed in
-      the set at +0.59. Phoenix skews cold (20/125) because its is the only
-      left-skewed one at -0.39: desert heat has a radiative ceiling while cold
-      outbreaks are sharp.
+      Two per-city skews, each investigated rather than accepted. Cairo skews
+      hot (208/25) because its residual distribution is the most right-skewed
+      in the set; Phoenix skews cold (20/125) because its is the only
+      left-skewed one: desert heat has a radiative ceiling while cold outbreaks
+      are sharp. Every complete city now has a 459-observation baseline and
+      sd(Z) within 0.99-1.02 of one. Sydney is the exception and the only one
+      left: five observations behind its baseline, sd(Z) = 1.67, and 16.7% of
+      its eighteen scored days flagged. That is DBT-14's defect, not a fact
+      about Sydney's weather.
 
 
       **A warming trend runs through every city** - corr(year, Z) is positive
-      everywhere, from +0.05 in Delhi to +0.38 in Lagos. The baseline spans the
+      in nine of eleven complete cities, from +0.05 in Delhi to +0.40 in Lagos,
+      and slightly negative in Reykjavik and Sao Paulo. The baseline spans the
       whole reference period, so a trending series produces hot anomalies late
       and cold anomalies early. That is a real signal rather than an artefact,
-      but it means the flag currently conflates "unusual for this day of year"
-      with "warmer than the thirty-year mean because the climate has warmed" -
-      a distinction ML-05 will need to make deliberately.
+      but it means the flag conflates "unusual for this day of year" with
+      "warmer than the thirty-year mean because the climate has warmed".
+
+
+      **Two flags, and nothing switches over yet (DBT-12).**
+      `is_anomaly_detrended` scores the same observation against a baseline
+      with that conflation taken out of it: a per-city, per-day linear trend in
+      year, fitted only on years before the one being labelled, subtracted
+      before standardising. Both flags are carried in full, side by side.
+      Nothing downstream reads the second one - the two are different products,
+      *unusual for this era* against *unusual for the record*, and DBT-13 is
+      the ticket that answers in writing which question this project is asking.
+      Letting a default settle it is the failure this shape exists to prevent.
+
+
+      **What detrending actually does, measured.** It removes about half of the
+      linear year-correlation it was built to remove: pooled corr(year, Z)
+      falls from +0.150 to +0.078, in Cairo from +0.283 to +0.121 and in
+      Singapore from +0.149 to +0.022. It does **not** remove the drift in the
+      label's base rate, which is the reason the ticket existed: across the
+      chronological split the seven-day label rises 2.29x from the training
+      period to the test one before detrending and 2.22x after, so 5% of the
+      excess drift goes. The drift lives in the tail rather than in the centre,
+      and a trend that moves the mean by a tenth of a sigma does not move a
+      2.5-sigma exceedance rate. See `docs/build-log.md`.
     tests:
       - unique_combination_of_columns:
           arguments:
@@ -807,4 +901,37 @@ models:
       - name: z_temperature_2m_min
         description: >
           Z-score of the daily minimum. Often the most anomalous of the three in a heat wave, since hot nights are its distinguishing feature.
+      - name: mean_temperature_2m_mean_detrended
+        description: >
+          The baseline mean with the fitted trend removed, referenced to this row's own year. See `fact_climatology`.
+      - name: stddev_temperature_2m_mean_detrended
+        description: >
+          The standard deviation of that detrended baseline. See `fact_climatology`.
+      - name: trend_slope_c_per_year
+        description: >
+          The trend subtracted, in degrees per year, fitted on years strictly before this row's. Null where too few prior years exist, in which case both flags are identical by construction.
+      - name: trend_stderr_c_per_year
+        description: >
+          Standard error of that slope, carried so a reader can see how well the trend was known before believing the difference between the two flags.
+      - name: trend_reference_years
+        description: >
+          Years the trend was fitted on. Zero at the start of a city's record.
+      - name: departure_c_detrended
+        description: >
+          Departure in degrees from the detrended baseline. The companion to `departure_c`, and the difference between the two is the trend this row was credited with.
+      - name: z_temperature_2m_mean_detrended
+        description: >
+          (observed - detrended mu) / detrended sigma. The observation itself is not adjusted and does not need to be: the baseline was detrended to this row's own year, so the trend term for the observation is exactly zero.
+        tests:
+          - accepted_range:
+              arguments: {min_value: -12, max_value: 12}
+      - name: is_anomaly_detrended
+        description: >
+          abs(z) over the threshold, against the detrended baseline. Null where that z is null. Nothing downstream reads it until DBT-13 decides which definition ships.
+      - name: anomaly_direction_detrended
+        description: hot, cold, none - or null where the day could not be scored, against the detrended baseline.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['hot', 'cold', 'none']
 

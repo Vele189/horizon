@@ -369,3 +369,241 @@ def test_the_smoothing_width_is_configurable() -> None:
 def test_every_calendar_day_has_a_baseline(engine, built) -> None:
     days = query(engine, f"select count(distinct month_day) from {CLIMATOLOGY}")[0][0]
     assert days == 366
+
+
+# ---------------------------------------------------------------------------
+# The detrended baseline, and the window it is fitted on (DBT-12)
+# ---------------------------------------------------------------------------
+
+
+COMPILED = Path("compiled") / "horizon" / "models" / "marts" / "fact_climatology.sql"
+
+
+def compile_climatology(target: Path, variables: str | None = None) -> str:
+    """Compile the model into a scratch target and return the SQL it produced.
+
+    Compiled rather than built. `int_climatology_contributions` is ephemeral,
+    so the compiled model is one self-contained SELECT with the year filters
+    inlined, which means a variant can be *run as a query* instead of
+    materialised. That matters more than tidiness: the alternative is rebuilding
+    `fact_climatology` into the warehouse with a non-default variable and
+    putting it back afterwards, and a run interrupted between the two would
+    leave every committed number in `metrics.json` describing a mart nobody
+    could reconstruct.
+    """
+    import os
+    import subprocess
+
+    from dbt_analytics.dbt_env import dbt_environment
+
+    command = [
+        sys.executable, "-m", "dbt.cli.main", "compile",
+        "--select", "fact_climatology",
+        "--project-dir", str(DBT_DIR),
+        "--target-path", str(target),
+    ]
+    if variables:
+        command += ["--vars", variables]
+    result = subprocess.run(
+        command, cwd=REPO_ROOT, capture_output=True, text=True,
+        env={**os.environ, **dbt_environment()}, check=False,
+    )
+    assert result.returncode == 0, result.stdout[-3000:]
+    return (target / COMPILED).read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def last_year(engine) -> int:
+    rows = query(engine, f"select max(for_year) from {CLIMATOLOGY}")
+    if not rows or rows[0][0] is None:
+        pytest.skip("fact_climatology not built")
+    return int(rows[0][0])
+
+
+def test_the_trend_matches_postgres_over_exactly_the_prior_years(engine, built) -> None:
+    """The regression, checked against an implementation that is not ours.
+
+    The slope is recovered from the same power sums the leave-one-year-out
+    exclusion uses, accumulated over a window frame. That is two pieces of
+    algebra away from "fit a line", and both are easy to get wrong in a way
+    that still produces a plausible number. `regr_slope` is Postgres's own, run
+    over the raw observations of exactly the years before each target year, so
+    it checks the arithmetic and the window boundary at once and shares no code
+    with either.
+    """
+    compared, stored_null, error, year_error, row_error = query(
+        engine,
+        f"""with windows as (
+              select gs.d as target_day,
+                     ((gs.d - 1 + o.off) % 366 + 366) % 366 + 1 as source_day
+              from generate_series(1,366) gs(d), generate_series(-7,7) o(off)),
+            direct as (
+              select f.city_id, w.target_day, y.for_year,
+                     regr_slope(f.temperature_2m_mean::numeric,
+                                d.year::numeric)::double precision as slope,
+                     count(*) as rows_used,
+                     count(distinct d.year) as years_used
+              from {GOLD}.fact_weather_observations f
+              join {GOLD}.dim_date d on d.date_day = f.date_key
+              join windows w on w.source_day = d.climatology_day
+              join (select distinct city_id, for_year from {CLIMATOLOGY}) y
+                on y.city_id = f.city_id
+              where f.temperature_2m_mean is not null and d.year < y.for_year
+              group by 1, 2, 3)
+            select count(*),
+                   count(*) filter (where c.trend_slope_c_per_year is null),
+                   max(abs(direct.slope - c.trend_slope_c_per_year)),
+                   max(abs(direct.years_used - c.trend_reference_years)),
+                   max(abs(direct.rows_used - c.trend_observations))
+            from direct
+            join {CLIMATOLOGY} c
+              on c.city_id = direct.city_id
+             and c.climatology_day = direct.target_day
+             and c.for_year = direct.for_year
+            where c.trend_slope_c_per_year is not null""",
+    )[0]
+    assert compared > 10_000, compared
+    assert stored_null == 0
+    assert year_error == 0, "the frame did not accumulate the years it claims"
+    assert row_error == 0
+    assert error < 1e-12, error
+
+
+def test_the_trend_for_a_year_survives_dropping_the_year_after_it(
+    engine, last_year, tmp_path
+) -> None:
+    """The boundary the whole ticket is about, tested by removing the future.
+
+    An expanding window is only expanding if nothing later can reach it. The
+    model is compiled twice - once over the whole record, once with the last
+    year of it excluded - and every trend both builds have an opinion about is
+    required to be *identical*. A trend fitted over all years would move here:
+    dropping 2026 would change what the model thought was normal in 2019, which
+    is precisely the defect that would otherwise be invisible.
+
+    Compared exactly rather than within a tolerance. Removing rows a fit never
+    saw is not an approximation of leaving them in.
+    """
+    pytest.importorskip("dbt.cli.main")
+    if not (DBT_DIR / "profiles.yml").exists():
+        pytest.skip("profiles.yml not generated; run dbt_env.py --write-profile")
+
+    whole = compile_climatology(tmp_path / "whole")
+    truncated = compile_climatology(
+        tmp_path / "truncated", f"{{climatology_end_year: {last_year - 1}}}"
+    )
+
+    compared, differing, worst = query(
+        engine,
+        f"""with whole as ({whole}), truncated as ({truncated})
+            select count(*),
+                   count(*) filter (
+                       where whole.trend_slope_c_per_year
+                             is distinct from truncated.trend_slope_c_per_year),
+                   max(abs(coalesce(whole.trend_slope_c_per_year, 0)
+                           - coalesce(truncated.trend_slope_c_per_year, 0)))
+            from whole
+            join truncated
+              on truncated.city_id = whole.city_id
+             and truncated.month_day = whole.month_day
+             and truncated.for_year = whole.for_year""",
+    )[0]
+    assert compared > 10_000, compared
+    assert differing == 0, (
+        f"{differing} of {compared} trends changed when {last_year} was removed "
+        f"from the record, by up to {worst}. The window is looking forward."
+    )
+
+
+def test_dropping_the_last_year_would_move_a_trend_fitted_over_everything(
+    engine, last_year, tmp_path
+) -> None:
+    """The companion: prove the test above could fail.
+
+    A comparison that would pass however the trend were fitted asserts nothing.
+    The same two builds are compared on the *all-years* baseline, which is
+    computed over the whole record on purpose, and it has to move. If it does
+    not, the truncation did nothing and the test above was measuring an empty
+    difference.
+    """
+    pytest.importorskip("dbt.cli.main")
+    if not (DBT_DIR / "profiles.yml").exists():
+        pytest.skip("profiles.yml not generated; run dbt_env.py --write-profile")
+
+    whole = compile_climatology(tmp_path / "whole")
+    truncated = compile_climatology(
+        tmp_path / "truncated", f"{{climatology_end_year: {last_year - 1}}}"
+    )
+    moved = query(
+        engine,
+        f"""with whole as ({whole}), truncated as ({truncated})
+            select count(*) filter (
+                where abs(whole.mean_temperature_2m_mean_all_years
+                          - truncated.mean_temperature_2m_mean_all_years) > 1e-9)
+            from whole
+            join truncated
+              on truncated.city_id = whole.city_id
+             and truncated.month_day = whole.month_day
+             and truncated.for_year = whole.for_year""",
+    )[0][0]
+    assert moved > 0, (
+        f"removing {last_year} changed nothing at all, so the previous test "
+        "compared a build against itself"
+    )
+
+
+def test_no_trend_means_the_detrended_baseline_is_the_plain_one(engine, built) -> None:
+    """Asserted here as well as in dbt, because it is what makes the two
+    comparable.
+
+    The early years of every city have no expanding window to fit on, so the
+    detrended flag is defined there as the plain flag rather than as null. That
+    keeps a per-split comparison between the two a comparison over the same
+    rows. It is only honest if "no trend" means bit-identical, which is why the
+    model branches on a null slope instead of multiplying by a zero one.
+    """
+    unfitted, differing = query(
+        engine,
+        f"""select count(*),
+                   count(*) filter (
+                       where mean_temperature_2m_mean
+                             is distinct from mean_temperature_2m_mean_detrended
+                          or stddev_temperature_2m_mean
+                             is distinct from stddev_temperature_2m_mean_detrended)
+            from {CLIMATOLOGY} where trend_slope_c_per_year is null""",
+    )[0]
+    assert unfitted > 0, "no unfitted years at all; the floor is not being exercised"
+    assert differing == 0
+
+
+def test_the_detrended_baseline_leans_the_way_the_trend_does(engine, built) -> None:
+    """The direction, which is the half a range test cannot see.
+
+    Detrending references the baseline to the year being labelled, so under a
+    warming trend a late year should be scored against a *warmer* normal than
+    the plain one and an early year against a cooler one. Get the sign wrong
+    and every number stays in range, every test above still passes, and the
+    flag becomes more sensitive to recent heat rather than less.
+    """
+    rows = query(
+        engine,
+        f"""select avg(mean_temperature_2m_mean_detrended - mean_temperature_2m_mean)
+                     filter (where for_year >= 2020),
+                   avg(mean_temperature_2m_mean_detrended - mean_temperature_2m_mean)
+                     filter (where for_year between 2005 and 2010)
+            from {CLIMATOLOGY}
+            where trend_slope_c_per_year > 0""",
+    )[0]
+    late, early = rows
+    if late is None or early is None:
+        pytest.skip("not enough of the record backfilled to span both periods")
+    assert late > 0, f"a warming trend lowered the late baseline by {late}"
+    assert early < late
+
+
+def test_the_floor_is_documented_and_configurable() -> None:
+    model = (DBT_DIR / "models" / "marts" / "fact_climatology.sql").read_text(
+        encoding="utf-8"
+    )
+    assert "var('climatology_trend_min_years', 15)" in model
+    assert "rows between unbounded preceding and 1 preceding" in model

@@ -26,6 +26,18 @@
 -- Z is null, and so are the flags. "Unknown" is the honest answer; coercing to
 -- `none` would assert the day was ordinary on no evidence, and would put those
 -- days in the denominator of every anomaly rate.
+--
+-- **Two flags, and nothing switches over yet (DBT-12).** `is_anomaly` scores
+-- against a baseline spanning the whole record, so a warming city is measured
+-- against a mean that includes its own cooler decades and "anomalously hot"
+-- drifts towards meaning "recent". `is_anomaly_detrended` scores against a
+-- baseline with a per-city, per-day linear trend in year taken out of it,
+-- fitted only on years before the one being labelled. Both are carried, in
+-- full, side by side. Nothing downstream reads the second one: the two are
+-- different products -- *unusual for this era* against *unusual for the
+-- record* -- and DBT-13 is the ticket that answers, in writing, which question
+-- this project is asking. Letting a default settle it is the failure mode this
+-- shape exists to prevent.
 with joined as (
 
     select
@@ -46,7 +58,13 @@ with joined as (
         climatology.mean_temperature_2m_min,
         climatology.stddev_temperature_2m_min,
         climatology.observations as baseline_observations,
-        climatology.excludes_own_year
+        climatology.excludes_own_year,
+
+        climatology.mean_temperature_2m_mean_detrended,
+        climatology.stddev_temperature_2m_mean_detrended,
+        climatology.trend_slope_c_per_year,
+        climatology.trend_stderr_c_per_year,
+        climatology.trend_reference_years
 
     from {{ ref('fact_weather_observations') }} as facts
     join {{ ref('dim_date') }} as calendar
@@ -67,7 +85,15 @@ scored as (
         {{ z_score('temperature_2m_max', 'mean_temperature_2m_max',
                    'stddev_temperature_2m_max') }} as z_temperature_2m_max,
         {{ z_score('temperature_2m_min', 'mean_temperature_2m_min',
-                   'stddev_temperature_2m_min') }} as z_temperature_2m_min
+                   'stddev_temperature_2m_min') }} as z_temperature_2m_min,
+
+        -- The observation itself is not adjusted, and does not need to be: the
+        -- baseline was detrended *to this row's own year*, so the trend term
+        -- for the observation is exactly zero. What moved is the mean it is
+        -- measured from.
+        {{ z_score('temperature_2m_mean', 'mean_temperature_2m_mean_detrended',
+                   'stddev_temperature_2m_mean_detrended') }}
+            as z_temperature_2m_mean_detrended
     from joined
 
 )
@@ -100,6 +126,29 @@ select
      end) as is_anomaly,
 
     {{ anomaly_direction('z_temperature_2m_mean',
-                         var('anomaly_z_threshold', 2.5)) }} as anomaly_direction
+                         var('anomaly_z_threshold', 2.5)) }} as anomaly_direction,
+
+    -- DBT-12. The same three columns against the detrended baseline, and the
+    -- trend that produced it, so a reader can see how much was taken out and
+    -- how well it was known before deciding whether to believe the difference.
+    mean_temperature_2m_mean_detrended,
+    stddev_temperature_2m_mean_detrended,
+    trend_slope_c_per_year,
+    trend_stderr_c_per_year,
+    trend_reference_years,
+
+    (temperature_2m_mean - mean_temperature_2m_mean_detrended)
+        as departure_c_detrended,
+
+    z_temperature_2m_mean_detrended,
+
+    (case when z_temperature_2m_mean_detrended is null then null
+          else abs(z_temperature_2m_mean_detrended)
+               > {{ var('anomaly_z_threshold', 2.5) }}
+     end) as is_anomaly_detrended,
+
+    {{ anomaly_direction('z_temperature_2m_mean_detrended',
+                         var('anomaly_z_threshold', 2.5)) }}
+        as anomaly_direction_detrended
 
 from scored
