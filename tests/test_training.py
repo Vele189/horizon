@@ -41,12 +41,19 @@ pytest.importorskip("joblib")
 from ml_fixtures import labelled_span, repository_sources  # noqa: E402
 
 from machine_learning.evaluation import (  # noqa: E402
+    DECISION_PLACES,
+    alerts_per_city_year,
     apply_prior_shift,
+    decision_table,
     estimate_prior,
     evaluation_frame,
     expected_calibration_error,
+    implied_cost_ratio,
+    operating_points,
     score,
+    scored_city_years,
     split_frame,
+    threshold_for_budget,
 )
 from machine_learning.features import feature_columns  # noqa: E402
 from machine_learning.labels import LABEL, positives  # noqa: E402
@@ -677,3 +684,191 @@ def test_the_estimated_prior_is_recorded_beside_the_observed_one(synthetic) -> N
     assert diagnostics["validation_picks_the_better_quantifier"] is (
         diagnostics["closest_on_validation"] == diagnostics["closest_on_test"]
     )
+
+
+# --------------------------------------------------------------------------
+# A threshold that encodes a decision (ML-11)
+# --------------------------------------------------------------------------
+
+
+def test_the_threshold_respects_the_budget_and_is_the_most_sensitive_that_does(
+    synthetic,
+) -> None:
+    """Both halves. Under the budget, and no further under it than necessary.
+
+    A rule that alerts less than it is allowed to is not conservative, it is
+    leaving recall on the table for nothing: the budget is the constraint, and
+    the best rule is the one that saturates it. So the chosen threshold must
+    keep alerts at or under the budget, and the next rule *looser* than it must
+    break the budget -- otherwise a better rule was available and was not taken.
+    """
+    parts = split_frame(synthetic)
+    fit = tune(parts["train"], parts["validation"], scale_pos_weight=1.0)
+    validation = parts["validation"]
+    calibrated = fit_calibrator(fit, validation).predict(fit.predict(validation))
+
+    budget = 20.0
+    chosen = threshold_for_budget(
+        validation, validation[LABEL], calibrated, budget
+    )
+    points = operating_points(validation, validation[LABEL], calibrated)
+    at = points.loc[points["threshold"] == chosen].iloc[0]
+    assert at["alerts_per_city_year"] <= budget
+
+    looser = points.loc[points["threshold"] < chosen]
+    if not looser.empty:
+        assert looser["alerts_per_city_year"].min() > budget, (
+            "a looser rule also fits the budget, so the chosen one is needlessly "
+            "quiet and is giving up recall for nothing"
+        )
+
+
+def test_an_impossible_budget_is_refused_rather_than_approximated(synthetic) -> None:
+    parts = split_frame(synthetic)
+    fit = tune(parts["train"], parts["validation"], scale_pos_weight=1.0)
+    validation = parts["validation"]
+    calibrated = fit_calibrator(fit, validation).predict(fit.predict(validation))
+
+    with pytest.raises(ValueError, match="quietest available"):
+        threshold_for_budget(validation, validation[LABEL], calibrated, 0.0)
+
+
+def test_the_alert_rate_counts_years_watched_and_not_years_spanned() -> None:
+    """A city with a hole in its record was not watched during the hole.
+
+    Counting the span instead of the rows would divide the same alerts by a
+    longer period and quietly report a calmer product than the one a reader
+    gets.
+    """
+    dense = pd.DataFrame({"date_key": pd.date_range("2020-01-01", periods=365)})
+    holed = pd.concat(
+        [dense.head(100), pd.DataFrame({"date_key": [pd.Timestamp("2029-01-01")]})],
+        ignore_index=True,
+    )
+    assert scored_city_years(dense) == pytest.approx(365 / 365.25)
+    assert scored_city_years(holed) == pytest.approx(101 / 365.25)
+
+    flagged = np.zeros(len(dense), dtype=bool)
+    flagged[:20] = True
+    assert alerts_per_city_year(dense, flagged) == pytest.approx(20 * 365.25 / 365)
+
+
+def test_the_implied_cost_ratio_inverts_the_bayes_rule() -> None:
+    """A threshold on a calibrated probability *is* a cost ratio.
+
+    Flagging when ``p >= 1 / (1 + c)`` minimises expected cost when a miss
+    costs ``c`` false alarms, so the ratio can be read straight off the
+    threshold. That is only true because ML-10 calibrated the probabilities; on
+    a raw score it would be arithmetic with no meaning attached.
+    """
+    for ratio in (1.0, 4.0, 9.0):
+        threshold = 1.0 / (1.0 + ratio)
+        assert implied_cost_ratio(threshold) == pytest.approx(ratio)
+    assert implied_cost_ratio(0.5) == pytest.approx(1.0), "F1's implicit claim"
+    # The endpoints are limits, not errors: isotonic clips to [0, 1].
+    assert implied_cost_ratio(0.0) == float("inf")
+    assert implied_cost_ratio(1.0) == 0.0
+    with pytest.raises(ValueError, match=r"outside \[0, 1\]"):
+        implied_cost_ratio(1.5)
+
+
+def test_the_operating_points_are_rules_and_not_arithmetic_dust(synthetic) -> None:
+    """The defect that made the first decision table useless.
+
+    ``IsotonicRegression.predict`` interpolates between knots, so rows the
+    calibrator maps to one level come back spread across a window narrower than
+    a nanometre. Swept as distinct thresholds they became distinct "rules", and
+    the table offered a reader neighbours whose thresholds agreed to eight
+    decimal places and whose alert rates differed by 4.5 a year.
+
+    Two properties keep it honest: no two rules may sit closer together than
+    the resolution the project states them at, and no two may flag the same
+    days.
+    """
+    parts = split_frame(synthetic)
+    fit = tune(parts["train"], parts["validation"], scale_pos_weight=1.0)
+    validation = parts["validation"]
+    calibrated = fit_calibrator(fit, validation).predict(fit.predict(validation))
+    points = operating_points(validation, validation[LABEL], calibrated)
+
+    gaps = np.diff(points["threshold"].to_numpy())
+    assert (gaps >= 10.0**-DECISION_PLACES / 2).all(), (
+        "two operating points are closer than the resolution a threshold is "
+        "stated at, so they are the same rule printed twice"
+    )
+    assert not points.duplicated(subset=["flagged", "true_positive"]).any()
+    assert points["alerts_per_city_year"].is_monotonic_decreasing
+
+
+def test_the_decision_table_shows_a_trade_and_marks_the_choice(synthetic) -> None:
+    parts = split_frame(synthetic)
+    fit = tune(parts["train"], parts["validation"], scale_pos_weight=1.0)
+    validation = parts["validation"]
+    calibrated = fit_calibrator(fit, validation).predict(fit.predict(validation))
+    chosen = threshold_for_budget(validation, validation[LABEL], calibrated, 20.0)
+
+    table = decision_table(validation, validation[LABEL], calibrated, chosen)
+    assert list(table["position"]).count("chosen") == 1
+    assert len(table) >= 2, "a decision with no alternative beside it is not a decision"
+
+    marked = table.loc[table["position"] == "chosen"].iloc[0]
+    assert marked["threshold"] == pytest.approx(chosen)
+    # A looser rule alerts more and catches more; a tighter one does the reverse.
+    for _, row in table.iterrows():
+        if row["position"] == "looser":
+            assert row["alerts_per_city_year"] > marked["alerts_per_city_year"]
+            assert row["recall"] >= marked["recall"]
+        elif row["position"] == "tighter":
+            assert row["alerts_per_city_year"] < marked["alerts_per_city_year"]
+            assert row["recall"] <= marked["recall"]
+
+
+def test_the_recorded_decision_states_its_rule_and_what_it_replaced(
+    synthetic,
+) -> None:
+    """The block a reader disagrees with, rather than a number they must accept."""
+    block, _ = train_model(frame=synthetic)
+    decision = block["calibration"]["decision"]
+
+    assert decision["rule"] == "alert budget"
+    assert decision["rejected_rule"] == "f1"
+    assert decision["chosen_on"] == "validation"
+    assert "calibrated" in decision["computed_on"]
+    assert decision["implied_cost_ratio"] == pytest.approx(
+        implied_cost_ratio(decision["threshold"])
+    )
+    assert decision["f1_alternative"]["threshold"] != decision["threshold"], (
+        "the budget rule picked exactly what F1 did, so the ticket changed "
+        "nothing and the model card should not claim otherwise"
+    )
+    for period in ("validation", "test"):
+        rows = decision["periods"][period]["neighbourhood"]
+        assert any(row["position"] == "chosen" for row in rows)
+        for row in rows:
+            assert {"precision", "recall", "alerts_per_city_year"} <= set(row)
+
+
+def test_the_budget_is_set_on_validation_and_the_overshoot_is_recorded(
+    synthetic,
+) -> None:
+    """A budget set on one period and spent on another is not a guarantee.
+
+    The base rate rises across this split, so a threshold that fits the budget
+    on validation overspends it on test. That is the same drift every other
+    ticket in this phase is about, and the point of recording both periods is
+    that the overspend is a number rather than a surprise.
+    """
+    block, _ = train_model(frame=synthetic)
+    decision = block["calibration"]["decision"]
+    chosen = {
+        period: next(
+            row for row in decision["periods"][period]["neighbourhood"]
+            if row["position"] == "chosen"
+        )
+        for period in ("validation", "test")
+    }
+    assert (
+        chosen["validation"]["alerts_per_city_year"]
+        <= decision["budget_alerts_per_city_year"]
+    ), "the budget is not even met on the period it was chosen on"
+    assert chosen["test"]["alerts_per_city_year"] > 0

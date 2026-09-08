@@ -4078,6 +4078,93 @@ takes the set of keys the committed file actually has, rewrites it, and requires
 every one to survive — checked against the file rather than against a second
 list that could drift from the first in the same way.
 
+## A threshold that encodes a decision
+
+ML-11. `metrics.json` recorded `threshold_metric: f1`. F1 is the harmonic mean
+of precision and recall, which is a way of saying that a false alarm and a
+missed heatwave cost the same — not a claim anyone would defend out loud, and
+one nobody had been asked to. And an F1-optimal threshold found where positives
+are 7.1% of rows is not F1-optimal where they are 11.5%, so even the
+indefensible rule was being applied off its own terms.
+
+### A budget, because a cost ratio would have been invented
+
+Two candidates could replace it. A cost ratio is the more fundamental object —
+how many false alarms are worth one missed extreme week — and nobody here has
+that number. This project ships a dashboard, not a warning system with a loss
+function behind it, and picking a ratio to justify a threshold would be
+dressing an arbitrary choice as an analysis.
+
+An alert budget can be defended without pricing anything. "A tile in this view
+should not light up more than twenty days a year" is a claim about what a
+reader will keep paying attention to, and the person making it needs to know
+the product rather than the cost of a heatwave.
+
+Twenty, and the number was measured rather than felt. Alerts arrive in runs,
+because the label is a seven-day window: at this threshold a run averages 2.3
+days, so twenty alert-days is roughly nine separate alert periods a year, one
+every six weeks. Often enough to be worth looking at, rare enough to become
+wallpaper. The F1 threshold costs twice that.
+
+**And the two candidates turn out not to be rivals.** On a *calibrated*
+probability the expected-cost-minimising cut for a cost ratio *c* is 1/(1+*c*),
+so a threshold **is** a cost ratio, and it can be read straight off. This one
+asserts that 3.84 false alarms are worth one missed week. F1 at 0.5 was
+asserting 1.0, silently. ML-10 is what makes that translation legal; on a raw
+score it would be arithmetic with nothing attached.
+
+### The trade, shown rather than asserted
+
+Chosen on validation, on the calibrated probabilities, with the adjacent rules
+either side:
+
+| | threshold | precision | recall | alerts per city-year |
+|---|---:|---:|---:|---:|
+| looser | 0.1963 | 0.317 | 0.270 | 22.0 |
+| **chosen** | **0.2065** | **0.352** | **0.232** | **17.0** |
+| tighter | 0.2500 | 0.468 | 0.172 | 9.5 |
+
+On test the same threshold delivers 32.2 alerts per city-year at precision
+0.409 and recall 0.314 — **the budget is overspent by 61%**, because validation
+has 25.9 anomalous days per city-year and test has 42.0. A budget set on one
+period and spent on another is not a guarantee. It is the same drift the whole
+of Phase 1 has been circling, arriving this time in the units a reader
+experiences, and it is recorded as a number rather than left to be discovered.
+
+### The defect that made the first table useless
+
+The first version of that table offered three neighbours whose thresholds
+agreed to eight decimal places and whose alert rates differed by 4.5 a year.
+
+`IsotonicRegression.predict` interpolates linearly between knots, so a flat run
+of the fitted step function does not come back flat. About 150 validation rows
+that the calibrator maps to one level emerged spread across a window 1.5e-8
+wide. Enumerated as distinct thresholds those became distinct *rules*, and a
+decision table built from them presents a reader with alternatives separated by
+a nanometre — arithmetic dust wearing the costume of a trade-off.
+
+Decision rules are now quantised to six decimal places before the operating
+points are enumerated: far finer than anything the project displays, far
+coarser than the interpolation. Two properties are asserted — no two rules may
+sit closer than the resolution a threshold is stated at, and no two may flag
+the same days. The second was already there and was not enough; the first is
+what the interpolation needed.
+
+The neighbours are *rules*, not numbers, in both directions. Isotonic also
+collapses thousands of scores into a few dozen levels, so 0.25 and 0.325 flag
+exactly the same days, and a table built by stepping the threshold would have
+printed one row three times and looked as though a trade-off had been examined.
+
+### What the dashboard still applies
+
+The F1 threshold, and the view says so. `fact_ml_predictions` holds raw model
+scores; the budget rule is defined on calibrated ones. Wiring it through means
+shipping the calibrator alongside the model artefact, which is a serving change
+and belongs to whichever ticket takes it on. The Risk Horizon view now states
+the budget, the cost ratio it implies, and the fact that the number beside it
+was chosen by the rule the model card argues against — which is the honest
+arrangement until the two agree.
+
 ## Publishing
 
 Community Cloud requires a public repository, which makes deployment the moment

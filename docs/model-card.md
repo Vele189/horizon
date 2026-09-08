@@ -44,6 +44,9 @@ describes. If a retrain moves a score, this card fails until it is updated.
 | test_precision | 0.3640 |
 | test_recall | 0.3518 |
 | decision_threshold | 0.1075 |
+| alert_budget_per_city_year | 20 |
+| alert_budget_threshold | 0.2065 |
+| implied_cost_ratio | 3.84 |
 | test_mean_predicted | 0.0658 |
 | baseline_persistence_pr_auc | 0.1915 |
 | baseline_climatology_pr_auc | 0.1145 |
@@ -163,6 +166,59 @@ model is not living on the easy half of the distribution. One qualification: at
 
 **Accuracy is not reported.** At a 13.58% base rate, always answering "no
 anomaly" scores 86.4% and predicts nothing.
+
+### The decision the threshold encodes
+
+`threshold_metric: f1` was what this file used to record, and F1 is the
+harmonic mean of precision and recall — a way of saying that a false alarm and
+a missed heatwave are equally bad. Nobody would defend that out loud, and
+nobody had been asked to. Worse, an F1-optimal threshold found where positives
+are 7.1% of rows is not F1-optimal where they are 11.5%, so even the
+indefensible rule was being applied off its own terms.
+
+**The rule is now an alert budget: a city may light up no more than 20 days a
+year.** A cost ratio would be the more fundamental object — how many false
+alarms are worth one missed extreme week — and nobody here has that number.
+This project ships a dashboard, not a warning system with a loss function
+behind it, and inventing a ratio to justify a threshold would be dressing an
+arbitrary choice as an analysis. A budget can be defended by someone who knows
+the product rather than the cost of a heatwave.
+
+Twenty, because alerts arrive in runs rather than singly — the label is a
+seven-day window, and at this threshold a run averages 2.3 days — so twenty
+alert-days is roughly nine separate alert periods a year, one every six weeks.
+Often enough to be worth looking at, rare enough not to become wallpaper.
+
+The two rules are not really rivals, and that is the useful part. On a
+**calibrated** probability the expected-cost-minimising cut for a cost ratio
+*c* is 1/(1+*c*), so a threshold *is* a cost ratio, and this one asserts that
+**3.84 false alarms are worth one missed week**. F1 at 0.5 was asserting 1.0,
+silently. ML-10 is what makes that translation legal; on a raw score it would
+be arithmetic with no meaning attached.
+
+The threshold is chosen on **validation** and the neighbours either side are
+recorded so the trade is visible rather than asserted:
+
+| | threshold | precision | recall | alerts per city-year |
+|---|---:|---:|---:|---:|
+| looser | 0.1963 | 0.317 | 0.270 | 22.0 |
+| **chosen** | **0.2065** | **0.352** | **0.232** | **17.0** |
+| tighter | 0.2500 | 0.468 | 0.172 | 9.5 |
+
+**And the budget is overspent on test, by 61%.** The same threshold delivers
+32.2 alerts per city-year there, at precision 0.409 and recall 0.314, because
+validation has 25.9 anomalous days per city-year and test has 42.0. A budget
+set on one period and spent on another is not a guarantee; it is the same drift
+every other ticket in this phase is about, and it is recorded as a number
+rather than left to be discovered. F1 on the same calibrated probabilities
+would have chosen 0.1273 and spent 40.7.
+
+**What the dashboard currently applies is still the F1 threshold**, because
+`fact_ml_predictions` holds raw model scores and the budget rule is defined on
+calibrated ones. Shipping it means shipping the calibrator alongside the model
+artefact, which is a serving change and not this ticket's.
+
+---
 
 **F1 is reported at 0.1075**, the threshold that maximises F1 on the
 *validation* split. At 0.5 this model flags nothing at all and scores F1 =

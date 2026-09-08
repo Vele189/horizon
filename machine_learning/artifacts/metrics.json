@@ -1920,7 +1920,7 @@
         },
         "bytes": 415801,
         "committable": true,
-        "created_at": "2026-09-08T14:40:17+00:00",
+        "created_at": "2026-09-08T15:09:16+00:00",
         "feature_count": 27,
         "features": [
           "temperature_2m_mean",
@@ -1956,9 +1956,9 @@
         "format_version": 1,
         "git": {
           "branch": "phase-two",
-          "commit": "b9e86e02f0d947bc1f05519360c6419c7f8224cc",
+          "commit": "7fc1310073a8a8ad56490d711770c2e51eeac2bb",
           "dirty": true,
-          "short_commit": "b9e86e02f0d9"
+          "short_commit": "7fc1310073a8"
         },
         "hyperparameters": {
           "early_stopping_rounds": 50,
@@ -2059,7 +2059,7 @@
         },
         "bytes": 213167,
         "committable": true,
-        "created_at": "2026-09-08T14:40:17+00:00",
+        "created_at": "2026-09-08T15:09:16+00:00",
         "feature_count": 27,
         "features": [
           "temperature_2m_mean",
@@ -2095,9 +2095,9 @@
         "format_version": 1,
         "git": {
           "branch": "phase-two",
-          "commit": "b9e86e02f0d947bc1f05519360c6419c7f8224cc",
+          "commit": "7fc1310073a8a8ad56490d711770c2e51eeac2bb",
           "dirty": true,
-          "short_commit": "b9e86e02f0d9"
+          "short_commit": "7fc1310073a8"
         },
         "hyperparameters": {
           "early_stopping_rounds": 50,
@@ -2175,6 +2175,95 @@
       "bin_strategy": "quantile",
       "bins": 10,
       "calibrated_variant": "unweighted",
+      "decision": {
+        "budget_alerts_per_city_year": 20.0,
+        "chosen_on": "validation",
+        "computed_on": "calibrated probabilities",
+        "f1_alternative": {
+          "alerts_per_city_year_on_test": 40.70216850828729,
+          "implied_cost_ratio": 6.855262207613026,
+          "threshold": 0.12730319797992706,
+          "validation_f1": 0.2924348378893833
+        },
+        "implied_cost_ratio": 3.8431309873206834,
+        "periods": {
+          "test": {
+            "anomalous_days_per_city_year": 41.99366022099447,
+            "city_years": 49.555099247091036,
+            "neighbourhood": [
+              {
+                "alerts_per_city_year": 32.267113259668506,
+                "flagged": 1599,
+                "implied_cost_ratio": 3.916275822738759,
+                "position": "looser",
+                "precision": 0.4090056285178236,
+                "recall": 0.3142719846227775,
+                "threshold": 0.203406,
+                "true_positive": 654
+              },
+              {
+                "alerts_per_city_year": 32.246933701657454,
+                "flagged": 1598,
+                "implied_cost_ratio": 3.8431309873206834,
+                "position": "chosen",
+                "precision": 0.409261576971214,
+                "recall": 0.3142719846227775,
+                "threshold": 0.206478,
+                "true_positive": 654
+              },
+              {
+                "alerts_per_city_year": 19.775966850828727,
+                "flagged": 980,
+                "implied_cost_ratio": 3.348601272400732,
+                "position": "tighter",
+                "precision": 0.5040816326530613,
+                "recall": 0.23738587217683807,
+                "threshold": 0.229959,
+                "true_positive": 494
+              }
+            ]
+          },
+          "validation": {
+            "anomalous_days_per_city_year": 25.856520470274326,
+            "city_years": 32.83504449007529,
+            "neighbourhood": [
+              {
+                "alerts_per_city_year": 21.988701742683233,
+                "flagged": 722,
+                "implied_cost_ratio": 4.093750477539107,
+                "position": "looser",
+                "precision": 0.3171745152354571,
+                "recall": 0.2697290930506478,
+                "threshold": 0.196319,
+                "true_positive": 229
+              },
+              {
+                "alerts_per_city_year": 17.024493454515135,
+                "flagged": 559,
+                "implied_cost_ratio": 3.8431309873206834,
+                "position": "chosen",
+                "precision": 0.35241502683363146,
+                "recall": 0.232037691401649,
+                "threshold": 0.206478,
+                "true_positive": 197
+              },
+              {
+                "alerts_per_city_year": 9.502042858334029,
+                "flagged": 312,
+                "implied_cost_ratio": 3.0,
+                "position": "tighter",
+                "precision": 0.46794871794871795,
+                "recall": 0.17196702002355713,
+                "threshold": 0.25,
+                "true_positive": 146
+              }
+            ]
+          }
+        },
+        "rejected_rule": "f1",
+        "rule": "alert budget",
+        "threshold": 0.206478
+      },
       "em_iterations": 139,
       "estimated_target_prior": 0.2992128485100286,
       "fitted_on": "validation",
@@ -2559,7 +2648,7 @@
     "estimator": "xgboost.XGBClassifier",
     "fitted_on": "train",
     "recommended_variant": "unweighted",
-    "recorded_at": "2026-09-08T14:40:17+00:00",
+    "recorded_at": "2026-09-08T15:09:16+00:00",
     "resampling": "none",
     "scale_pos_weight_observed": 18.93336101307868,
     "specified_variant": "weighted",

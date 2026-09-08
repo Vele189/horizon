@@ -57,7 +57,11 @@ from typing import Final, Mapping, Sequence
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import average_precision_score, brier_score_loss
+from sklearn.metrics import (
+    average_precision_score,
+    brier_score_loss,
+    precision_recall_curve,
+)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -77,8 +81,10 @@ from machine_learning.features import (  # noqa: E402
 )
 
 __all__ = [
+    "ALERT_BUDGET_PER_CITY_YEAR",
     "ANOMALY_THRESHOLD",
     "CALIBRATION_BINS",
+    "DECISION_PLACES",
     "ANOMALY_THRESHOLDS",
     "MIN_HELD_OUT_POSITIVES",
     "MIN_HELD_OUT_ROWS",
@@ -95,17 +101,24 @@ __all__ = [
     "assert_city_is_held_out",
     "assert_splits_are_ordered",
     "base_rate",
+    "best_threshold",
+    "alerts_per_city_year",
     "apply_prior_shift",
     "boundary_report",
+    "decision_table",
     "drop_scorable_gaps",
     "estimate_prior",
     "expected_calibration_error",
     "evaluation_frame",
     "hold_out_city",
+    "implied_cost_ratio",
     "lift_over",
+    "operating_points",
     "reflag",
     "reliability_points",
     "scorable_cities",
+    "scored_city_years",
+    "threshold_for_budget",
     "score",
     "split_frame",
     "split_summary",
@@ -443,6 +456,243 @@ def estimate_prior(
             return updated, iteration
         prior = updated
     return prior, max_iterations
+
+
+# --------------------------------------------------------------------------
+# A threshold that encodes a decision (ML-11)
+# --------------------------------------------------------------------------
+
+#: Alert-days a city may cost a reader in a year. The decision, written down.
+#:
+#: ``metrics.json`` used to record ``threshold_metric: f1``, and F1 treats a
+#: false alarm and a missed heatwave as equally costly, which is not a claim
+#: anyone would defend out loud. Something has to replace it, and there are two
+#: candidates.
+#:
+#: **A cost ratio was considered and rejected.** It is the more fundamental
+#: object -- how many false alarms are worth one missed extreme week -- and
+#: nobody here has that number. This project ships a dashboard, not a warning
+#: system with a loss function behind it, and inventing a ratio to justify a
+#: threshold would be dressing an arbitrary choice as an analysis.
+#:
+#: **An alert budget can be defended without pricing anything.** "A tile in this
+#: view should not light up more than twenty days a year" is a claim about what
+#: a reader will keep paying attention to, and the person choosing it needs to
+#: know the product rather than the cost of a heatwave.
+#:
+#: Twenty, because alerts arrive in runs rather than singly -- the label is a
+#: seven-day window, and at this threshold a run averages 2.3 days -- so twenty
+#: alert-days is roughly nine separate alert periods a year, one every six
+#: weeks. Often enough to be worth looking at, rare enough not to become
+#: wallpaper. The F1-optimal threshold costs twice that.
+#:
+#: The two candidates are not really rivals, and that is the useful part: on a
+#: *calibrated* probability the Bayes-optimal cut for a cost ratio ``c`` is
+#: ``1 / (1 + c)``, so a threshold is a cost ratio and
+#: :func:`implied_cost_ratio` reports the one this budget buys. ML-10 is what
+#: makes that translation legal; on the raw scores it would be arithmetic
+#: without meaning.
+ALERT_BUDGET_PER_CITY_YEAR: Final[float] = 20.0
+
+#: Decimal places a decision rule is stated to, and quantised to before the
+#: operating points are enumerated.
+#:
+#: Not cosmetic. ``IsotonicRegression.predict`` interpolates linearly between
+#: knots, so a flat run of the fitted step function does not come back flat: on
+#: the validation split about 150 rows that the calibrator maps to one level
+#: emerge spread across a window 1.5e-8 wide. Enumerated as distinct
+#: thresholds, those become distinct "rules" -- and the decision table built
+#: from them offered a reader three neighbouring options whose thresholds
+#: agreed to eight decimal places and whose alert rates differed by 4.5 a year.
+#:
+#: That is not a trade-off, it is arithmetic dust presented as a choice. Six
+#: decimal places is far finer than anything this project displays (the model
+#: card quotes four, the dashboard tooltip three) and far coarser than the
+#: interpolation, so it merges what the calibrator meant to merge and separates
+#: nothing a reader could act on.
+DECISION_PLACES: Final[int] = 6
+
+
+def scored_city_years(frame: pd.DataFrame) -> float:
+    """Years of operation the alerts are counted over.
+
+    Rows over 365.25, not the span from first date to last. A city with a hole
+    in its record was not being watched during the hole and cannot have raised
+    an alert there, so counting the gap would quietly lower every rate.
+    """
+    return len(frame) / 365.25
+
+
+def alerts_per_city_year(frame: pd.DataFrame, flagged) -> float:
+    """How often a reader sees this city light up, per year of watching it."""
+    years = scored_city_years(frame)
+    if years <= 0:
+        raise ValueError("cannot rate alerts over an empty period.")
+    return float(np.asarray(flagged, dtype=bool).sum()) / years
+
+
+def implied_cost_ratio(threshold: float) -> float:
+    """False alarms per missed week that this threshold treats as a fair trade.
+
+    For a calibrated probability the expected-cost-minimising rule flags when
+    ``p >= 1 / (1 + c)``, with ``c`` the cost of a miss over the cost of a false
+    alarm. Inverting gives the ratio a threshold is *already* asserting,
+    whether or not anyone chose it that way -- which is the point: F1 at 0.5 was
+    asserting one, silently, and nobody had written it down.
+
+    The endpoints are limits rather than errors, because isotonic regression
+    clips to [0, 1] and both are operating points a reader could ask for. A
+    threshold of zero flags every day and is optimal only if a miss costs
+    infinitely more than a false alarm; a threshold of one flags nothing and is
+    optimal only if a miss costs nothing.
+    """
+    if not 0.0 <= threshold <= 1.0:
+        raise ValueError(f"a threshold outside [0, 1] implies no ratio: {threshold}.")
+    if threshold == 0.0:
+        return float("inf")
+    return (1.0 - threshold) / threshold
+
+
+def operating_points(
+    frame: pd.DataFrame, labels: pd.Series, predictions
+) -> pd.DataFrame:
+    """Every *distinct* rule this predictor can be run at, best precision first.
+
+    Distinct, and that word is doing work twice.
+
+    Isotonic calibration collapses thousands of scores into a few dozen levels,
+    so most thresholds are the same rule under another name: on this data 0.25
+    and 0.325 flag exactly the same days. A table of "the chosen threshold and
+    two neighbours" built by stepping the *number* would print the same row
+    three times and look as though a trade-off had been examined.
+
+    And in the other direction, the calibrator's own interpolation invents
+    distinctions it does not mean: see :data:`DECISION_PLACES`, which is why
+    the values are quantised before they are swept. Without it the neighbours
+    are separated by a nanometre and differ by several alerts a year, which is
+    a worse table than none.
+    """
+    truth = positives(labels).to_numpy()
+    values = np.round(np.asarray(predictions, dtype=float), DECISION_PLACES)
+    years = scored_city_years(frame)
+
+    rows = []
+    for threshold in np.unique(values):
+        flagged = values >= threshold
+        true_positive = int((flagged & truth).sum())
+        flagged_total = int(flagged.sum())
+        rows.append(
+            {
+                "threshold": float(threshold),
+                "precision": (
+                    true_positive / flagged_total if flagged_total else float("nan")
+                ),
+                "recall": true_positive / int(truth.sum()) if truth.any() else 0.0,
+                "alerts_per_city_year": flagged_total / years,
+                "flagged": flagged_total,
+                "true_positive": true_positive,
+                # None rather than inf at a threshold of zero: this table is
+                # written to metrics.json, which is parsed strictly, and JSON
+                # has no word for infinity.
+                "implied_cost_ratio": (
+                    ratio if np.isfinite(ratio := implied_cost_ratio(float(threshold)))
+                    else None
+                ),
+            }
+        )
+    points = pd.DataFrame(rows)
+    # Keep the *lowest* threshold of each identical rule: of two thresholds that
+    # flag the same days, the lower one is the more sensitive statement of the
+    # same decision, and it is the one that survives a probability drifting down.
+    return (
+        points.drop_duplicates(subset=["flagged", "true_positive"], keep="first")
+        .sort_values("threshold")
+        .reset_index(drop=True)
+    )
+
+
+def threshold_for_budget(
+    frame: pd.DataFrame,
+    labels: pd.Series,
+    predictions,
+    budget: float = ALERT_BUDGET_PER_CITY_YEAR,
+) -> float:
+    """The most sensitive rule that stays inside the alert budget.
+
+    The lowest threshold whose alert rate is at or under the budget: of the
+    rules a reader would tolerate, the one that catches the most. Ties break
+    downwards for the same reason :func:`operating_points` keeps the lower
+    threshold of an identical pair.
+
+    Chosen on whatever frame it is given, and the caller is expected to give it
+    **validation**. A budget set on the period the model is then scored on is
+    not a budget, it is a description.
+    """
+    points = operating_points(frame, labels, predictions)
+    affordable = points.loc[points["alerts_per_city_year"] <= budget]
+    if affordable.empty:
+        raise ValueError(
+            f"no threshold keeps alerts under {budget} per city-year; the "
+            f"quietest available is {points['alerts_per_city_year'].min():.1f}."
+        )
+    return float(affordable["threshold"].iloc[0])
+
+
+def decision_table(
+    frame: pd.DataFrame,
+    labels: pd.Series,
+    predictions,
+    threshold: float,
+    *,
+    neighbours: int = 1,
+) -> pd.DataFrame:
+    """The chosen rule and the ones either side of it, so the trade is visible.
+
+    A threshold quoted alone is a number a reader has to take on trust. Quoted
+    with its neighbours it is a choice: this many alerts for this much recall,
+    and here is what the next rule along would cost. ``position`` marks which
+    row was taken.
+    """
+    points = operating_points(frame, labels, predictions)
+    distance = (points["threshold"] - threshold).abs()
+    chosen = int(distance.idxmin())
+    window = points.iloc[
+        max(0, chosen - neighbours) : chosen + neighbours + 1
+    ].copy()
+    window["position"] = [
+        "chosen" if index == chosen else ("looser" if index < chosen else "tighter")
+        for index in window.index
+    ]
+    return window.reset_index(drop=True)
+
+
+def best_threshold(labels: pd.Series, predictions) -> tuple[float, float]:
+    """The threshold maximising F1, and the F1 it reaches.
+
+    Chosen on **validation**, applied to test. Never 0.5: a threshold is a
+    decision about the cost of a false alarm against a missed week, and 0.5 is
+    only that decision by coincidence. On a model whose mean prediction is 0.07
+    it is the decision to never raise an alarm at all.
+
+    Ties break towards the **lower** threshold, the more sensitive of two
+    equally good rules, and the sweep is over the thresholds the data itself
+    produces, so no grid resolution is being chosen invisibly.
+    """
+    truth = positives(labels).to_numpy()
+    values = np.asarray(predictions, dtype=float)
+    precision, recall, thresholds = precision_recall_curve(truth, values)
+    # precision_recall_curve returns one more point than thresholds: the final
+    # point is recall 0, precision 1, which no threshold produces.
+    precision, recall = precision[:-1], recall[:-1]
+    denominator = precision + recall
+    f1 = np.divide(
+        2 * precision * recall,
+        denominator,
+        out=np.zeros_like(denominator),
+        where=denominator > 0,
+    )
+    best = int(np.argmax(f1))
+    return float(thresholds[best]), float(f1[best])
 
 
 def lift_over(result: Score, reference: Score) -> dict[str, float]:

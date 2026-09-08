@@ -118,6 +118,34 @@ def top_drivers(limit: int = 8) -> pd.DataFrame:
     return frame.loc[:, [c for c in ("feature", "mean_abs", "mean_signed") if c in frame]]
 
 
+def alert_budget() -> Mapping[str, Any]:
+    """The decision the project's threshold encodes, read from the record.
+
+    A threshold shown on its own is a number a reader has to take on trust.
+    ML-11 replaced "whatever maximises F1" -- which asserts that a false alarm
+    and a missed heatwave cost the same -- with a budget somebody can argue
+    with, and the point of putting it here is that they can argue with it
+    without opening ``metrics.json``.
+    """
+    return model_report().get("model", {}).get("calibration", {}).get("decision", {})
+
+
+def budget_sentence() -> str:
+    """The budget in plain English, or nothing if it has not been recorded."""
+    decision = alert_budget()
+    if not decision:
+        return ""
+    budget = decision["budget_alerts_per_city_year"]
+    ratio = decision["implied_cost_ratio"]
+    return (
+        f"The threshold is set by an **alert budget**: no city should light up "
+        f"more than **{budget:.0f} days a year**. On a calibrated probability "
+        f"that is the same as saying **{ratio:.1f} false alarms are worth one "
+        f"missed extreme week** — F1, the rule this replaced, silently said "
+        f"one."
+    )
+
+
 def absence_reasons() -> dict[str, str]:
     """Why a city has no score, in the model's own words.
 
@@ -162,6 +190,18 @@ def vintage(frame: pd.DataFrame) -> Mapping[str, Any]:
         "feature_count": int(row["feature_count"]),
         "threshold": float(row["decision_threshold"]),
     }
+
+
+def _threshold_rule() -> str:
+    """How the threshold was arrived at, named rather than left implicit."""
+    decision = alert_budget()
+    if not decision:
+        return "F1 on validation"
+    return (
+        f"{decision['rejected_rule'].upper()} on validation "
+        f"(the recorded rule is an alert budget of "
+        f"{decision['budget_alerts_per_city_year']:.0f} a year)"
+    )
 
 
 def _cell_text(row: pd.Series, day: dt.date, reasons: Mapping[str, str]) -> str:
@@ -330,6 +370,7 @@ def render() -> None:
 | Variant | {stamp['model_variant']} |
 | Features | {stamp['feature_count']} |
 | Decision threshold | {stamp['threshold']:.4f} |
+| Chosen by | {_threshold_rule()} |
 | Forecast issued for | {stamp['forecast_date']:%d %B %Y} |
 | Scored at | {stamp['scored_at']:%Y-%m-%d %H:%M %Z} |
 """
@@ -340,3 +381,13 @@ def render() -> None:
             "when `predict.py` ran, which is a different question from how "
             "fresh the weather behind it is."
         )
+        sentence = budget_sentence()
+        if sentence:
+            st.markdown(sentence)
+            st.caption(
+                "The scores in this view are the model's raw output and the "
+                "threshold applied to them is still the F1 one, because the "
+                "budget rule is defined on calibrated probabilities and the "
+                "calibrator is not yet shipped with the model artefact. The "
+                "budget and what it buys are recorded in the model card."
+            )

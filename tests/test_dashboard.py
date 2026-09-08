@@ -2716,3 +2716,48 @@ def test_the_entrypoint_streamlit_cloud_is_pointed_at_exists() -> None:
     source = (PROJECT_ROOT / "dashboard" / "app.py").read_text("utf-8")
     assert "st.set_page_config" in source, "the entrypoint sets no page config"
     assert 'if __name__ == "__main__"' in source or "main()" in source
+
+
+def test_the_view_states_the_decision_its_threshold_encodes() -> None:
+    """ML-11's threshold is a claim, and the view has to make it out loud.
+
+    A threshold printed alone is a number a reader takes on trust. The budget
+    that produced it, and the cost ratio that budget implies, are the two
+    figures that let someone disagree with the project rather than accept it,
+    and they come from the committed record rather than from prose that could
+    drift away from the model.
+    """
+    import json
+
+    from dashboard.views import risk_horizon as risk
+
+    decision = risk.alert_budget()
+    if not decision:
+        pytest.skip("no decision recorded; run train.py --write first")
+
+    sentence = risk.budget_sentence()
+    assert f"{decision['budget_alerts_per_city_year']:.0f} days a year" in sentence
+    assert f"{decision['implied_cost_ratio']:.1f} false alarms" in sentence
+    assert "F1" in sentence, "the rule that was replaced should be named"
+
+    # And it comes from the file, not from a constant that could drift.
+    path = risk.get_settings().model_artifact_dir / "metrics.json"
+    recorded = json.loads(path.read_text())["model"]["calibration"]["decision"]
+    assert decision["threshold"] == recorded["threshold"]
+
+
+def test_the_view_says_which_threshold_it_is_actually_applying() -> None:
+    """The gap between the recorded rule and the shipped one, stated.
+
+    The budget rule is defined on calibrated probabilities and the predictions
+    table holds raw scores, so the dashboard still applies the F1 threshold.
+    Saying so is the difference between a documented limitation and a view that
+    quietly contradicts the model card.
+    """
+    from dashboard.views import risk_horizon as risk
+
+    if not risk.alert_budget():
+        pytest.skip("no decision recorded; run train.py --write first")
+    rule = risk._threshold_rule()
+    assert "F1" in rule.upper()
+    assert "budget" in rule

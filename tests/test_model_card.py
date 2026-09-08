@@ -49,6 +49,9 @@ FIGURES = {
     "test_precision": lambda d: _evaluation_row(d)["precision"],
     "test_recall": lambda d: _evaluation_row(d)["recall"],
     "decision_threshold": lambda d: _evaluation_row(d)["threshold"],
+    "alert_budget_per_city_year": lambda d: _decision(d)["budget_alerts_per_city_year"],
+    "alert_budget_threshold": lambda d: _decision(d)["threshold"],
+    "implied_cost_ratio": lambda d: _decision(d)["implied_cost_ratio"],
     "baseline_persistence_pr_auc": lambda d: d["baselines"]["persistence"]["test"][
         "pr_auc"
     ],
@@ -79,6 +82,10 @@ def _recommended(payload):
 
 def _artifact(payload):
     return payload["model"]["artifacts"][payload["model"]["recommended_variant"]]
+
+
+def _decision(payload):
+    return payload["model"]["calibration"]["decision"]
 
 
 def _evaluation_row(payload):

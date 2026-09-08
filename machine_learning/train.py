@@ -84,18 +84,24 @@ from machine_learning.artifact import (  # noqa: E402
 )
 from machine_learning.baselines import build_metrics, metrics_path  # noqa: E402
 from machine_learning.evaluation import (  # noqa: E402
+    ALERT_BUDGET_PER_CITY_YEAR,
     CALIBRATION_BINS,
     SPLITS,
     Score,
+    alerts_per_city_year,
     apply_prior_shift,
     assert_splits_are_disjoint,
     base_rate,
+    best_threshold,
+    decision_table,
     estimate_prior,
     evaluation_frame,
     expected_calibration_error,
+    implied_cost_ratio,
     reliability_points,
     score,
     split_frame,
+    threshold_for_budget,
 )
 from machine_learning.features import feature_columns  # noqa: E402
 from machine_learning.labels import LABEL, positives  # noqa: E402
@@ -110,6 +116,7 @@ __all__ = [
     "TrainingError",
     "Fit",
     "calibration_report",
+    "decision_report",
     "fit_calibrator",
     "fit_once",
     "save_models",
@@ -466,6 +473,7 @@ def calibration_report(
             apply_prior_shift(calibrated, source_prior, observed).mean()
         ),
         "quantifier_diagnostics": _quantifier_diagnostics(fits, parts),
+        "decision": decision_report(calibrator, fits[variant], parts),
         "recommended": "calibrated",
         "recommendation_note": (
             "Isotonic on validation halves the calibration error and is worth "
@@ -503,6 +511,78 @@ def calibration_report(
     for name, (predictions, note) in entries.items():
         report["variants"][name] = _calibration_entry(test[LABEL], predictions, note)
     report["variants"]["prior_shifted_oracle"]["uses_test_labels"] = True
+    return report
+
+
+def decision_report(
+    calibrator, fit: "Fit", parts: Mapping[str, pd.DataFrame]
+) -> dict[str, Any]:
+    """Where the threshold comes from, and what it costs (ML-11).
+
+    ``metrics.json`` used to record ``threshold_metric: f1``. F1 is the
+    harmonic mean of precision and recall, which is a way of saying a false
+    alarm and a missed heatwave are equally bad -- not a claim anyone would
+    defend out loud, and one nobody had been asked to. Worse, an F1-optimal
+    threshold found where positives are 7% of rows is not F1-optimal where they
+    are 11.5%, so even the indefensible rule was being applied off its own
+    terms.
+
+    The threshold is now the most sensitive rule that keeps a city under
+    :data:`ALERT_BUDGET_PER_CITY_YEAR` alert-days a year, chosen on
+    **validation**, applied to test, and computed on the **calibrated**
+    probabilities, because a budget is a statement about how often a tile
+    lights up and only a calibrated probability makes the threshold that
+    delivers it mean anything.
+
+    Everything a reader needs to disagree with the choice is recorded: the
+    budget, the threshold it produced, the cost ratio that threshold implies,
+    and the two adjacent rules with their precision, recall and alert rate. The
+    F1 threshold is recorded beside them, unchosen, so the change is a
+    comparison rather than an assertion.
+    """
+    validation, test = parts["validation"], parts["test"]
+    calibrated = {
+        name: np.asarray(calibrator.predict(fit.predict(part)), dtype=float)
+        for name, part in (("validation", validation), ("test", test))
+    }
+    chosen = threshold_for_budget(
+        validation, validation[LABEL], calibrated["validation"]
+    )
+
+    report: dict[str, Any] = {
+        "rule": "alert budget",
+        "budget_alerts_per_city_year": ALERT_BUDGET_PER_CITY_YEAR,
+        "chosen_on": "validation",
+        "computed_on": "calibrated probabilities",
+        "threshold": chosen,
+        "implied_cost_ratio": implied_cost_ratio(chosen),
+        "rejected_rule": "f1",
+        "periods": {},
+    }
+    for name, part in (("validation", validation), ("test", test)):
+        table = decision_table(part, part[LABEL], calibrated[name], chosen)
+        report["periods"][name] = {
+            "city_years": len(part) / 365.25,
+            "anomalous_days_per_city_year": alerts_per_city_year(
+                part, positives(part[LABEL]).to_numpy()
+            ),
+            "neighbourhood": table.to_dict("records"),
+        }
+
+    # What F1 would have picked on the same calibrated probabilities, so the
+    # two rules can be read against each other. Not chosen, and recorded to be
+    # compared rather than used.
+    f1_threshold, f1_score = best_threshold(
+        validation[LABEL], calibrated["validation"]
+    )
+    report["f1_alternative"] = {
+        "threshold": f1_threshold,
+        "validation_f1": f1_score,
+        "alerts_per_city_year_on_test": alerts_per_city_year(
+            test, calibrated["test"] >= f1_threshold
+        ),
+        "implied_cost_ratio": implied_cost_ratio(f1_threshold),
+    }
     return report
 
 

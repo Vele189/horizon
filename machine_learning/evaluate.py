@@ -88,6 +88,10 @@ from machine_learning.baselines import (  # noqa: E402
 from machine_learning.evaluation import (  # noqa: E402
     ANOMALY_THRESHOLD,
     ANOMALY_THRESHOLDS,
+    # Moved here from this module so train.py can reach it without importing
+    # evaluate.py, which imports train.py. Re-exported below: it is still part
+    # of this module's surface, it just no longer lives in it.
+    best_threshold,
     # Defined beside the prior-shift correction that also reads it, so the
     # figure this module draws and the calibration error ML-10 records cannot
     # end up binning differently.
@@ -150,35 +154,6 @@ ACCURACY_NOTE: Final[str] = (
     "Accuracy is excluded: at this base rate, always answering \"no anomaly\" "
     "scores {:.1%} and predicts nothing."
 )
-
-
-def best_threshold(labels: pd.Series, predictions) -> tuple[float, float]:
-    """The threshold maximising F1, and the F1 it reaches.
-
-    Chosen on **validation**, applied to test. Never 0.5: a threshold is a
-    decision about the cost of a false alarm against a missed week, and 0.5 is
-    only that decision by coincidence. On a model whose mean prediction is 0.07
-    it is the decision to never raise an alarm at all.
-
-    Ties break towards the **lower** threshold, the more sensitive of two
-    equally good rules, and the sweep is over the thresholds the data itself
-    produces, so no grid resolution is being chosen invisibly.
-    """
-    truth = positives(labels).to_numpy()
-    values = np.asarray(predictions, dtype=float)
-    precision, recall, thresholds = precision_recall_curve(truth, values)
-    # precision_recall_curve returns one more point than thresholds: the final
-    # point is recall 0, precision 1, which no threshold produces.
-    precision, recall = precision[:-1], recall[:-1]
-    denominator = precision + recall
-    f1 = np.divide(
-        2 * precision * recall,
-        denominator,
-        out=np.zeros_like(denominator),
-        where=denominator > 0,
-    )
-    best = int(np.argmax(f1))
-    return float(thresholds[best]), float(f1[best])
 
 
 def classification_at(labels: pd.Series, predictions, threshold: float) -> dict:
