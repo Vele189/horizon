@@ -70,7 +70,7 @@ import datetime as dt
 import logging
 import sys
 from pathlib import Path
-from typing import Final, Sequence
+from typing import Any, Final, Sequence
 
 import numpy as np
 import pandas as pd
@@ -194,12 +194,21 @@ class FeatureError(RuntimeError):
     """
 
 
-def feature_columns() -> tuple[str, ...]:
+def feature_columns(*, teleconnections: bool = False) -> tuple[str, ...]:
     """The model input columns, in a stable order.
 
     Built from the same constants the features are, so the list and the matrix
     cannot drift apart. A test asserts the built frame carries exactly these
     plus :data:`PASSTHROUGH_COLUMNS`.
+
+    ``teleconnections`` is **off by default, and that is the ticket's own
+    framing.** ING-04 asks for an ablation *against the current feature set*,
+    which requires the current feature set to still exist: switching the four
+    NOAA indices on here would change the shipped model's inputs before any
+    evidence said they help, and would silently invalidate the committed
+    artefact whose feature list the model card asserts. They go on when a
+    caller asks for them, the ablation measures what they are worth, and the
+    default changes only if the answer justifies it.
     """
     columns: list[str] = []
     for series in (TEMPERATURE, PRESSURE):
@@ -213,6 +222,8 @@ def feature_columns() -> tuple[str, ...]:
     columns.append("z_temperature_2m_mean")
     columns.append(f"anomaly_days_trailing{ANOMALY_COUNT_WINDOW}")
     columns.extend(("day_of_year_sin", "day_of_year_cos", "latitude", "elevation_m"))
+    if teleconnections:
+        columns.extend(TELECONNECTION_FEATURES)
     return tuple(columns)
 
 
@@ -653,6 +664,7 @@ def load_features(
     cities: Sequence[str] | None = None,
     start: dt.date | str | None = None,
     end: dt.date | str | None = None,
+    teleconnections: bool = False,
 ) -> pd.DataFrame:
     """Read gold and build the matrix, padding ``start`` by the warm-up.
 
@@ -668,6 +680,8 @@ def load_features(
         cities: Restrict to these ``city_id`` values.
         start: Earliest ``date_key`` in the **result**, inclusive.
         end: Latest ``date_key`` in the result, inclusive.
+        teleconnections: Attach the four NOAA indices, joined on the date each
+            became readable. Off by default; see :func:`feature_columns`.
 
     Note:
         Every feature and ``is_warmup`` match a full build exactly.
@@ -679,6 +693,16 @@ def load_features(
         padded = pd.Timestamp(start) - pd.Timedelta(days=WARMUP_DAYS)
     frame = gold_frame(engine, cities=cities, start=padded, end=end)
     features = build_features(frame)
+    if teleconnections:
+        from ingestion.teleconnections import read_vintages
+
+        owned = engine is None
+        connection = engine or engine_from_settings()
+        try:
+            features = attach_teleconnections(features, read_vintages(connection))
+        finally:
+            if owned:
+                connection.dispose()
     if start is not None:
         keep = features["date_key"] >= pd.Timestamp(start)
         features = features.loc[keep].reset_index(drop=True)
@@ -704,6 +728,106 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--out", help="Write the matrix to this CSV path.")
     return parser.parse_args(argv)
+
+
+# ===========================================================================
+# Teleconnection indices (ING-04/ML-17)
+# ===========================================================================
+
+#: The large-scale indices, in a stable order.
+#:
+#: Every other feature is one city's own history. These four are the first that
+#: are not: ENSO, the North Atlantic and Arctic Oscillations, and the Indian
+#: Ocean Dipole.
+TELECONNECTION_FEATURES: Final[tuple[str, ...]] = ("oni", "nao", "ao", "dmi")
+
+
+def teleconnection_steps(vintages: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    """Per index, the value that was current at each moment it changed.
+
+    **Why this is a walk and not a `merge_asof`.** The obvious join takes, for
+    a date *D*, the index row with the greatest `publication_date` at or before
+    it. That is right until the first revision and wrong afterwards: a restated
+    value for January 2024 published in 2029 has a *late* publication date and
+    an *old* nominal period, so the naive join would answer "what is the ENSO
+    state today" with a correction to a five-year-old month.
+
+    What is wanted is the value of the most recent *period* known at *D*, using
+    the most recent *version* of that period known at *D*. So the vintages are
+    walked in publication order, holding a dict of period to current value, and
+    at each publication a step is emitted carrying the value of the newest
+    period in the dict. A revision updates its own period and only changes the
+    answer if that period is still the newest one.
+
+    Returns:
+        One frame per index, columns ``publication_date`` and ``value``, sorted
+        and deduplicated to the last step on each date.
+    """
+    steps: dict[str, pd.DataFrame] = {}
+    for index_id, rows in vintages.groupby("index_id", sort=True):
+        ordered = rows.sort_values(["publication_date", "vintage_at"], kind="stable")
+        current: dict[Any, float] = {}
+        emitted: list[tuple[Any, float]] = []
+        for row in ordered.itertuples():
+            current[row.nominal_period] = float(row.value)
+            newest = max(current)
+            emitted.append((row.publication_date, current[newest]))
+        frame = pd.DataFrame(emitted, columns=["publication_date", "value"])
+        # Nanosecond resolution on both sides. `date_key` arrives from the
+        # warehouse as datetime64[us] or [s] depending on the driver, and
+        # `merge_asof` refuses to join two datetime columns of different
+        # resolution rather than coercing them.
+        frame["publication_date"] = pd.to_datetime(
+            frame["publication_date"]
+        ).astype("datetime64[ns]")
+        # Several periods can publish on one date; the last one written wins,
+        # which is the same answer a reader on that date would get.
+        steps[str(index_id)] = (
+            frame.drop_duplicates("publication_date", keep="last")
+            .sort_values("publication_date")
+            .reset_index(drop=True)
+        )
+    return steps
+
+
+def attach_teleconnections(
+    features: pd.DataFrame, vintages: pd.DataFrame
+) -> pd.DataFrame:
+    """Join each index as it stood on the row's own date.
+
+    The join key is `publication_date`, never `nominal_period`. Joining on the
+    label is the leak this whole feature exists to avoid: the ONI labelled
+    January cannot be computed until February has ended, so a nominal join
+    reads six weeks into the future while looking entirely correct.
+
+    A row earlier than an index's first publication gets a null rather than a
+    back-filled first value. The 1995 rows genuinely had no DMI vintage
+    available under this pipeline's rule, and filling them would assert
+    knowledge that did not exist.
+    """
+    if vintages.empty:
+        raise FeatureError("no teleconnection vintages; run ingestion/teleconnections.py")
+    out = features.copy()
+    dates = pd.to_datetime(out["date_key"])
+    steps = teleconnection_steps(vintages)
+
+    missing = [name for name in TELECONNECTION_FEATURES if name not in steps]
+    if missing:
+        raise FeatureError(f"teleconnection vintages are missing {missing}.")
+
+    ordering = dates.argsort(kind="stable")
+    sorted_dates = dates.iloc[ordering].astype("datetime64[ns]")
+    for name in TELECONNECTION_FEATURES:
+        joined = pd.merge_asof(
+            pd.DataFrame({"date_key": sorted_dates.to_numpy()}),
+            steps[name].rename(columns={"publication_date": "date_key"}),
+            on="date_key",
+            direction="backward",
+        )
+        values = pd.Series(index=out.index, dtype="float64")
+        values.iloc[ordering.to_numpy()] = joined["value"].to_numpy()
+        out[name] = values
+    return out
 
 
 # ===========================================================================

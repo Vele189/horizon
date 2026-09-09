@@ -4044,6 +4044,467 @@
       }
     ]
   },
+  "teleconnections": {
+    "arms": {
+      "with": {
+        "best_iteration": 10,
+        "feature_count": 31,
+        "test": {
+          "base_rate": 0.11298342541436464,
+          "brier": 0.09371964463465887,
+          "lift_over_base_rate": 2.9123082271781984,
+          "pr_auc": 0.3290425593690285,
+          "rows": 18100
+        },
+        "top_importances": [
+          {
+            "feature": "z_temperature_2m_mean",
+            "gain": 0.18752668797969818
+          },
+          {
+            "feature": "anomaly_days_trailing30",
+            "gain": 0.06432221084833145
+          },
+          {
+            "feature": "temperature_2m_mean",
+            "gain": 0.04965030401945114
+          },
+          {
+            "feature": "elevation_m",
+            "gain": 0.03455568104982376
+          },
+          {
+            "feature": "temperature_2m_mean_lag7",
+            "gain": 0.0333869531750679
+          },
+          {
+            "feature": "pressure_msl_mean_roll30_var",
+            "gain": 0.03116174414753914
+          },
+          {
+            "feature": "temperature_2m_mean_roll30_mean",
+            "gain": 0.030171334743499756
+          },
+          {
+            "feature": "temperature_2m_mean_lag14",
+            "gain": 0.029754294082522392
+          },
+          {
+            "feature": "dmi",
+            "gain": 0.029554689303040504
+          },
+          {
+            "feature": "temperature_2m_mean_roll30_var",
+            "gain": 0.029385078698396683
+          }
+        ],
+        "validation": {
+          "base_rate": 0.06840744139484442,
+          "brier": 0.05955653441021667,
+          "lift_over_base_rate": 3.385994698628355,
+          "pr_auc": 0.23162723390967307,
+          "rows": 11987
+        }
+      },
+      "without": {
+        "best_iteration": 125,
+        "feature_count": 27,
+        "test": {
+          "base_rate": 0.11298342541436464,
+          "brier": 0.09455165259216793,
+          "lift_over_base_rate": 2.554703670526944,
+          "pr_auc": 0.2886391716147846,
+          "rows": 18100
+        },
+        "top_importances": [
+          {
+            "feature": "z_temperature_2m_mean",
+            "gain": 0.1634475588798523
+          },
+          {
+            "feature": "anomaly_days_trailing30",
+            "gain": 0.08595626801252365
+          },
+          {
+            "feature": "elevation_m",
+            "gain": 0.045341234654188156
+          },
+          {
+            "feature": "temperature_2m_mean",
+            "gain": 0.044265151023864746
+          },
+          {
+            "feature": "temperature_2m_mean_roll30_mean",
+            "gain": 0.036701008677482605
+          },
+          {
+            "feature": "latitude",
+            "gain": 0.03519490733742714
+          },
+          {
+            "feature": "day_of_year_cos",
+            "gain": 0.03445915877819061
+          },
+          {
+            "feature": "pressure_msl_mean_roll30_var",
+            "gain": 0.034411851316690445
+          },
+          {
+            "feature": "temperature_2m_mean_roll30_var",
+            "gain": 0.03343653306365013
+          },
+          {
+            "feature": "day_of_year_sin",
+            "gain": 0.03278830647468567
+          }
+        ],
+        "validation": {
+          "base_rate": 0.06840744139484442,
+          "brier": 0.05881129330549262,
+          "lift_over_base_rate": 3.5335079439671015,
+          "pr_auc": 0.2417182375951467,
+          "rows": 11987
+        }
+      }
+    },
+    "block": [
+      "oni",
+      "nao",
+      "ao",
+      "dmi"
+    ],
+    "by_city": {
+      "test": {
+        "cairo": {
+          "base_rate": 0.17588235294117646,
+          "delta_pr_auc": 0.029061695146876343,
+          "rows": 1700,
+          "with": {
+            "brier": 0.14133071651369686,
+            "pr_auc": 0.39360518317564813
+          },
+          "without": {
+            "brier": 0.13838284228246492,
+            "pr_auc": 0.3645434880287718
+          }
+        },
+        "delhi": {
+          "base_rate": 0.04764705882352941,
+          "delta_pr_auc": 0.0978483886262371,
+          "rows": 1700,
+          "with": {
+            "brier": 0.03957924719001577,
+            "pr_auc": 0.3308365067734741
+          },
+          "without": {
+            "brier": 0.041359333946562694,
+            "pr_auc": 0.232988118147237
+          }
+        },
+        "lagos": {
+          "base_rate": 0.15123094958968347,
+          "delta_pr_auc": 0.053230213998342324,
+          "rows": 1706,
+          "with": {
+            "brier": 0.11542376136192589,
+            "pr_auc": 0.4920790216006841
+          },
+          "without": {
+            "brier": 0.11943032910625365,
+            "pr_auc": 0.4388488076023418
+          }
+        },
+        "london": {
+          "base_rate": 0.10352941176470588,
+          "delta_pr_auc": 0.0015502655880379468,
+          "rows": 1700,
+          "with": {
+            "brier": 0.08268315288625916,
+            "pr_auc": 0.4127326175596756
+          },
+          "without": {
+            "brier": 0.08026097720380292,
+            "pr_auc": 0.41118235197163766
+          }
+        },
+        "moscow": {
+          "base_rate": 0.05352941176470588,
+          "delta_pr_auc": 0.0367476706844726,
+          "rows": 1700,
+          "with": {
+            "brier": 0.04783315920293478,
+            "pr_auc": 0.18744269964414567
+          },
+          "without": {
+            "brier": 0.04946725919145847,
+            "pr_auc": 0.15069502895967307
+          }
+        },
+        "phoenix": {
+          "base_rate": 0.05529411764705883,
+          "delta_pr_auc": 0.06696827689430945,
+          "rows": 1700,
+          "with": {
+            "brier": 0.0500443118082366,
+            "pr_auc": 0.16803645920941834
+          },
+          "without": {
+            "brier": 0.05379125671786949,
+            "pr_auc": 0.10106818231510889
+          }
+        },
+        "portland": {
+          "base_rate": 0.10764705882352942,
+          "delta_pr_auc": -0.006280799960411643,
+          "rows": 1700,
+          "with": {
+            "brier": 0.09562166819023069,
+            "pr_auc": 0.17949143738557505
+          },
+          "without": {
+            "brier": 0.09705901315404182,
+            "pr_auc": 0.1857722373459867
+          }
+        },
+        "reykjavik": {
+          "base_rate": 0.03823529411764706,
+          "delta_pr_auc": 0.02938134378657116,
+          "rows": 1700,
+          "with": {
+            "brier": 0.035451448308070004,
+            "pr_auc": 0.1317044829422837
+          },
+          "without": {
+            "brier": 0.0370163289978747,
+            "pr_auc": 0.10232313915571255
+          }
+        },
+        "sao_paulo": {
+          "base_rate": 0.10927456382001836,
+          "delta_pr_auc": -0.008255674350663156,
+          "rows": 1089,
+          "with": {
+            "brier": 0.09439985175137995,
+            "pr_auc": 0.25002468315209
+          },
+          "without": {
+            "brier": 0.09513144138306219,
+            "pr_auc": 0.25828035750275313
+          }
+        },
+        "singapore": {
+          "base_rate": 0.23695014662756597,
+          "delta_pr_auc": 0.0025941489173521015,
+          "rows": 1705,
+          "with": {
+            "brier": 0.1943367958149416,
+            "pr_auc": 0.4212509492163956
+          },
+          "without": {
+            "brier": 0.1943186270885707,
+            "pr_auc": 0.4186568002990435
+          }
+        },
+        "tokyo": {
+          "base_rate": 0.16176470588235295,
+          "delta_pr_auc": 0.034318923797224954,
+          "rows": 1700,
+          "with": {
+            "brier": 0.1340839168312337,
+            "pr_auc": 0.3726967218555514
+          },
+          "without": {
+            "brier": 0.13367791298286785,
+            "pr_auc": 0.33837779805832646
+          }
+        }
+      },
+      "validation": {
+        "cairo": {
+          "base_rate": 0.12121212121212122,
+          "delta_pr_auc": -0.03385476792953601,
+          "rows": 1089,
+          "with": {
+            "brier": 0.10283470076971457,
+            "pr_auc": 0.2718896726314858
+          },
+          "without": {
+            "brier": 0.09999460091737994,
+            "pr_auc": 0.3057444405610218
+          }
+        },
+        "delhi": {
+          "base_rate": 0.048668503213957756,
+          "delta_pr_auc": 0.008171579462678713,
+          "rows": 1089,
+          "with": {
+            "brier": 0.04077064087119975,
+            "pr_auc": 0.29446211839360426
+          },
+          "without": {
+            "brier": 0.040415453457394016,
+            "pr_auc": 0.28629053893092554
+          }
+        },
+        "lagos": {
+          "base_rate": 0.0707070707070707,
+          "delta_pr_auc": 0.003368956087422381,
+          "rows": 1089,
+          "with": {
+            "brier": 0.061813101542963884,
+            "pr_auc": 0.21997059269834146
+          },
+          "without": {
+            "brier": 0.06252894933730695,
+            "pr_auc": 0.21660163661091908
+          }
+        },
+        "london": {
+          "base_rate": 0.04224058769513315,
+          "delta_pr_auc": -0.030972427356785515,
+          "rows": 1089,
+          "with": {
+            "brier": 0.03554376726661752,
+            "pr_auc": 0.3080924430877867
+          },
+          "without": {
+            "brier": 0.03428312288494572,
+            "pr_auc": 0.33906487044457223
+          }
+        },
+        "moscow": {
+          "base_rate": 0.046831955922865015,
+          "delta_pr_auc": 0.019137041765681623,
+          "rows": 1089,
+          "with": {
+            "brier": 0.04066248958208483,
+            "pr_auc": 0.23284567914444443
+          },
+          "without": {
+            "brier": 0.04135374466092838,
+            "pr_auc": 0.2137086373787628
+          }
+        },
+        "phoenix": {
+          "base_rate": 0.05234159779614325,
+          "delta_pr_auc": 0.07849171810435845,
+          "rows": 1089,
+          "with": {
+            "brier": 0.0447925924143149,
+            "pr_auc": 0.29570049522229674
+          },
+          "without": {
+            "brier": 0.04570998853302295,
+            "pr_auc": 0.2172087771179383
+          }
+        },
+        "portland": {
+          "base_rate": 0.08907254361799816,
+          "delta_pr_auc": -0.040043172831484064,
+          "rows": 1089,
+          "with": {
+            "brier": 0.07755591845239472,
+            "pr_auc": 0.21590836502815308
+          },
+          "without": {
+            "brier": 0.07562228732400356,
+            "pr_auc": 0.25595153785963715
+          }
+        },
+        "reykjavik": {
+          "base_rate": 0.03397612488521579,
+          "delta_pr_auc": 0.04106376629071852,
+          "rows": 1089,
+          "with": {
+            "brier": 0.03230453411415045,
+            "pr_auc": 0.0939820722688818
+          },
+          "without": {
+            "brier": 0.03386618498913817,
+            "pr_auc": 0.052918305978163285
+          }
+        },
+        "sao_paulo": {
+          "base_rate": 0.06152433425160698,
+          "delta_pr_auc": 0.007044240681245012,
+          "rows": 1089,
+          "with": {
+            "brier": 0.054768829305216454,
+            "pr_auc": 0.23686320215827522
+          },
+          "without": {
+            "brier": 0.054567902508113934,
+            "pr_auc": 0.2298189614770302
+          }
+        },
+        "singapore": {
+          "base_rate": 0.1258034894398531,
+          "delta_pr_auc": -0.03198781803214501,
+          "rows": 1089,
+          "with": {
+            "brier": 0.10804740756889102,
+            "pr_auc": 0.3016398797480584
+          },
+          "without": {
+            "brier": 0.10469886001526152,
+            "pr_auc": 0.3336276977802034
+          }
+        },
+        "tokyo": {
+          "base_rate": 0.06060606060606061,
+          "delta_pr_auc": -0.06846349224532082,
+          "rows": 1089,
+          "with": {
+            "brier": 0.05645056679176007,
+            "pr_auc": 0.10745714578335759
+          },
+          "without": {
+            "brier": 0.05426567097323718,
+            "pr_auc": 0.1759206380286784
+          }
+        }
+      }
+    },
+    "delta": {
+      "test": {
+        "brier": -0.0008320079575090539,
+        "pr_auc": 0.0404033877542439
+      },
+      "validation": {
+        "brier": 0.0007452411047240495,
+        "pr_auc": -0.010091003685473637
+      }
+    },
+    "hyperparameters": {
+      "learning_rate": 0.1,
+      "max_depth": 6,
+      "min_child_weight": 10,
+      "scale_pos_weight": 1.0
+    },
+    "hyperparameters_are_fixed": true,
+    "recorded_at": "2026-09-09T00:33:20+00:00",
+    "rows": {
+      "test": 18100,
+      "train": 96019,
+      "validation": 11987
+    },
+    "verdict": {
+      "cities_helped": {
+        "test": 9,
+        "validation": 6
+      },
+      "cities_scored": {
+        "test": 11,
+        "validation": 11
+      },
+      "decided_on": "validation",
+      "folds_agree": false,
+      "ships": false,
+      "statement": "Adding the four teleconnection indices moves validation PR-AUC by -0.0101 and test by +0.0404; they help 6 of 11 cities on validation and 9 of 11 on test. They do not ship: the decision is made on validation, which does not support them.",
+      "test_delta_pr_auc": 0.0404033877542439,
+      "validation_delta_pr_auc": -0.010091003685473637
+    }
+  },
   "threshold_sensitivity": {
     "holds_at_every_threshold": {
       "brier": true,

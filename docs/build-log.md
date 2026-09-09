@@ -5009,6 +5009,144 @@ would be chosen by looking at test results. The honest version of "the model
 does not help here" is a card that says which cities and by how much, and a
 test that fails if the card stops naming them.
 
+## Four features that are not the city's own history
+
+ING-04/ML-17. Every one of the twenty-seven features is one city's own past.
+ENSO, the North Atlantic and Arctic Oscillations and the Indian Ocean Dipole
+are the dominant large-scale drivers of seasonal anomalies, they are free from
+NOAA, and they were expected to help most in the tropical cities where the
+model is weakest and the label most suspect.
+
+Fetching them is an afternoon. Dating them is the ticket.
+
+### The label is not the date
+
+An index value is stamped with a nominal period -- "December 1997" -- and that
+is not when it existed. The Oceanic Niño Index is a three-month running mean
+*centred* on its label, so the December value covers November through January
+and cannot be computed until January has ended. NOAA publishes it in
+mid-February. Joining on the label reads two and a half months into the future.
+
+That leak has no symptom. The column is correctly named, correctly typed,
+correctly joined, non-null, and every existing test in this repository stays
+green. Nothing goes red. Every metric simply improves, which is exactly what a
+useful feature also does.
+
+So each value carries `covers_start`, `covers_end` and a `publication_date`,
+and every join uses the last of these. The centred case is a function rather
+than a subtraction at the call site, because it is one month different from the
+obvious answer and the obvious answer looks right:
+
+    ONI nominal 1997-12  covers 1997-11-01 .. 1998-01-31  publishes 1998-02-15
+
+The test that matters checks both sides of that boundary, per index, and a
+second one pins the counterfactual: on 15 December 1997 the newest ONI that
+existed was the one labelled *October*, and a nominal join would have reached
+for one of three values that had not been computed yet.
+
+### The lags are measured, and rounded the safe way
+
+Erring late costs a little signal. Erring early is leakage. The asymmetry is
+why every lag in `config/teleconnections.yml` is round and generous rather than
+tight. Observed against the live feeds on 2026-09-09:
+
+| index | latest nominal | last month covered | observed lag |
+|---|---|---|---|
+| nao | 2026-08 | 2026-08 | <= 9 days |
+| ao | 2026-08 | 2026-08 | <= 9 days |
+| oni | JJA 2026 | 2026-08 | <= 9 days |
+| dmi | 2026-05 | 2026-05 | >= 55 days |
+
+Three of those are upper bounds from a single snapshot. The DMI is different
+and more useful: the PSL file states its own build date -- `Created Sat Jul 25
+2026` -- and its latest month is May, which is a *lower* bound of 55 days. It
+was six weeks stale when first read. Its lag is set to 90 rather than anything
+near the observed 55, because PSL regenerates that file on no schedule this
+project controls and a lag assuming prompt regeneration would leak in the
+months when it is not.
+
+The DMI file also carries a sentinel, `-9999`, for months that have not
+happened. Carried through it would have read as a catastrophic negative dipole
+for every remaining month of 2026 -- a huge, confident, entirely fictional
+feature value. There is a test.
+
+### Vintages, because NOAA restates history
+
+The ONI's base period shifts every five years and NOAA restates the record when
+it does. "The ONI for January 2024" is therefore not a number, it is a series
+of numbers with dates, and a model scoring a day in 2024 must read the number
+that stood on that day.
+
+`bronze_raw.teleconnection_indices` is grained on `(index, nominal_period,
+vintage_at)` and is append-on-change: a re-run finding the same values writes
+nothing, one finding a different value writes a new row beside the old and
+never over it. The second run of the job wrote zero rows against 4 636, which
+is the behaviour a daily schedule needs.
+
+The as-of read is a walk rather than a `merge_asof`, and the difference is a
+bug avoided. A restatement of an old month has a *late* publication date and an
+*old* nominal period. Taking the most recently published row -- the obvious
+join -- would answer "what is the ENSO state now" with a correction to a
+five-year-old month. So the vintages are walked in publication order holding a
+dict of period to current value, emitting the value of the newest *period* at
+each step. Two tests cover it: one that a 2029 revision does not reach a 2024
+row, one that it does not become the 2029 current value either.
+
+Honest limitation, stated in the schema: NOAA distributes no historical
+vintages, so every period predating this table has an estimated publication
+date and a single vintage. `publication_is_estimated` says which rows those
+are. Revision detection begins now.
+
+### The ablation, and the fifth time this has happened
+
+Both arms are fitted from **one** population with the indices attached, the
+second arm simply not selecting those four columns -- so the two fits see
+identical rows, identical labels and an identical split. Hyperparameters are
+held at the shipped model's rather than re-tuned per arm, because a re-tuned
+comparison answers "a tuned model with indices against a tuned model without",
+which is a fair question and not the one asked. Only `n_estimators` is decided
+again per arm, by early stopping, or the wider arm would inherit a round count
+chosen for the narrower one.
+
+| fold | PR-AUC without | with | delta | cities helped |
+|---|---|---|---|---|
+| validation | 0.2417 | 0.2316 | **-0.0101** | 6 of 11 |
+| test | 0.2886 | 0.3290 | **+0.0404** | 9 of 11 |
+
+Test likes them a great deal, and likes them in precisely the places the ticket
+predicted: Delhi +0.098, Phoenix +0.067, Lagos +0.053, Moscow +0.037. Those are
+the tropical and continental cities where the seven-day model is weakest.
+Validation disagrees.
+
+They do not ship. This is the fifth time in this phase -- after the weighted
+quantifier, the sixteen-year half-life, the hazard model and the seasonal block
+in the nowcast -- that something has looked better on test than on validation,
+and the rule has not moved.
+
+There is, this time, a measurable reason to suspect validation rather than the
+indices. Counting months where the ONI clears 1.5 either way: training has 23,
+test has 6, and validation has **none**. Validation spans 2019-2021 and
+contains no ENSO extreme at all. An index whose signal lives in a handful of
+strong events cannot demonstrate its worth on a fold that contains none of
+them, and the fold that does contain them is the one that liked it.
+
+That is a hypothesis, and acting on it would still be acting on the test
+reading by a longer route. It is a reason to re-open the question when the
+folds can be redrawn, not a reason to ship, and the whole ablation is committed
+under `teleconnections` in `metrics.json` so that re-opening does not mean
+re-running.
+
+### One thing deliberately not done
+
+`evaluate.py --teleconnections --write` records its own block and stops rather
+than falling through to the ordinary write. The bulk path refreshes
+`evaluation` from the current warehouse while the `model` block beside it,
+written by `train.py`, is not refreshed -- and the daily backfill has since
+landed São Paulo. A partial refresh would leave the two halves of the file
+describing different city sets, which is worse than a file uniformly a run
+behind, because nothing about it looks stale. `merge_block` writes one key and
+leaves the rest alone; the full chain refresh is its own piece of work.
+
 ## Publishing
 
 Community Cloud requires a public repository, which makes deployment the moment

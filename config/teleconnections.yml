@@ -1,0 +1,116 @@
+# =============================================================================
+# Teleconnection indices: single source of truth
+# =============================================================================
+# Four climate indices from NOAA, and the rule that says when each one may be
+# used. Read this file through `ingestion.teleconnections.load_registry()`.
+#
+# Every feature the model has ever had is one city's own history. These are the
+# first that are not: ENSO, the NAO, the AO and the IOD are the dominant
+# drivers of seasonal temperature anomalies, and they should help most in the
+# tropical cities where the current model is weakest.
+#
+# -----------------------------------------------------------------------------
+# The publication rule, which is the whole point of this file
+# -----------------------------------------------------------------------------
+# An index value is stamped with a *nominal* period - "January 2024" - and that
+# is not when it existed. Niño 3.4 for a season is computed once the season has
+# ended and published some days later. Using a value inside its own nominal
+# period is forward-looking, and it is forward-looking in the way that is
+# hardest to see: the feature is correctly named, correctly typed, correctly
+# joined, and answers a question about the future.
+#
+# So each index carries two facts instead of one date:
+#
+#   covers_months     how many months the value summarises, ending at the
+#                     nominal month for a monthly index, and *straddling* it
+#                     for a centred seasonal one like the ONI
+#   publication_lag_days
+#                     days after the last covered month ends before the value
+#                     may be read
+#
+# `publication_date = end of last covered month + publication_lag_days`, and
+# nothing may join an index to a date earlier than that.
+#
+# -----------------------------------------------------------------------------
+# Where the lag numbers come from
+# -----------------------------------------------------------------------------
+# Measured, not guessed, and deliberately rounded up. Observed against the live
+# feeds on 2026-09-09:
+#
+#   index  latest nominal period    last month covered   observed lag
+#   nao    2026-08                  2026-08              <= 9 days
+#   ao     2026-08                  2026-08              <= 9 days
+#   oni    JJA 2026 (centre Jul)    2026-08              <= 9 days
+#   dmi    2026-05                  2026-05              >= 55 days
+#
+# Each observation is an *upper* bound on the lag from one snapshot, except the
+# DMI, where the file states its own build date - "Created Sat Jul 25 2026" -
+# and its latest month is May, giving a lower bound of 55 days. That file was
+# already six weeks stale when read, which is why its lag is set to 90 days
+# rather than to anything near the observed 55: PSL regenerates it on no
+# schedule this project controls, and a lag that assumes prompt regeneration
+# would leak on the months when it is not.
+#
+# Erring late costs a little signal. Erring early is leakage, and it is the
+# kind that no existing test would catch. The asymmetry is the reason every
+# number below is round and generous rather than tight.
+# =============================================================================
+
+indices:
+  - id: oni
+    name: Oceanic Niño Index
+    driver: ENSO
+    url: https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt
+    format: cpc_seasonal
+    # A three-month running mean of Niño 3.4 SST anomaly, labelled by season.
+    # DJF 1950 means Dec 1949 through Feb 1950, centred on January 1950.
+    covers_months: 3
+    centred: true
+    publication_lag_days: 15
+    description: >
+      The operational ENSO index. Centred on its middle month, which is the
+      trap: the value labelled "January" cannot exist until February has
+      finished, so a naive join on the nominal month reads one month into the
+      future and a join on the nominal *season* reads two.
+
+  - id: nao
+    name: North Atlantic Oscillation
+    driver: NAO
+    url: https://www.cpc.ncep.noaa.gov/products/precip/CWlink/pna/norm.nao.monthly.b5001.current.ascii
+    format: cpc_monthly
+    covers_months: 1
+    centred: false
+    publication_lag_days: 15
+    description: >
+      Normalised monthly NAO from CPC's rotated principal component analysis.
+      The dominant control on northern European winter temperature, so this is
+      the index expected to matter in London and Reykjavik if any of them do.
+
+  - id: ao
+    name: Arctic Oscillation
+    driver: AO
+    url: https://www.cpc.ncep.noaa.gov/products/precip/CWlink/daily_ao_index/monthly.ao.index.b50.current.ascii
+    format: cpc_monthly
+    covers_months: 1
+    centred: false
+    publication_lag_days: 15
+    description: >
+      Monthly AO index. Strongly correlated with the NAO by construction -
+      they share much of their spatial pattern - so the two are expected to be
+      collinear and the ablation drops them as one block.
+
+  - id: dmi
+    name: Dipole Mode Index
+    driver: IOD
+    url: https://psl.noaa.gov/gcos_wgsp/Timeseries/Data/dmi.had.long.data
+    format: psl_monthly
+    covers_months: 1
+    centred: false
+    # Ninety, against an observed 55. See the header: this file is regenerated
+    # on no schedule, and was six weeks stale when first read.
+    publication_lag_days: 90
+    missing_value: -9999.0
+    description: >
+      The Indian Ocean Dipole, as western minus eastern equatorial Indian
+      Ocean SST anomaly. The index most likely to matter in Delhi, Singapore,
+      Lagos and Johannesburg, which is where the seven-day model is weakest.

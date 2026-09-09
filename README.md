@@ -40,6 +40,8 @@ python machine_learning/evaluate.py --thresholds --leave-one-city-out --write
 python machine_learning/extremes.py --write   # fits the tails, then:
 python dbt_analytics/dbt_env.py -- dbt build --select fact_anomaly_return_periods
 python machine_learning/nowcast.py --ablate pressure recent_wind seasonal --write
+python ingestion/teleconnections.py --write         # NOAA climate indices
+python machine_learning/evaluate.py --teleconnections --write
 streamlit run dashboard/app.py
 ```
 
@@ -319,6 +321,56 @@ recent wind is worth more than twice as much, and by 72 hours they are level
 (+2.41% against +2.36%). Gain is split among correlated features close to
 arbitrarily, and every pressure column is correlated with every wind column
 through the weather that produced both.
+
+### Four indices that are not the city's own history
+
+Every one of the twenty-seven features is one city's own past. ENSO, the North
+Atlantic and Arctic Oscillations and the Indian Ocean Dipole are the dominant
+large-scale drivers of seasonal anomalies, they are free from NOAA, and they
+were expected to help most in the tropical cities where the model is weakest.
+`ingestion/teleconnections.py` lands all four, 4 636 values back to 1870.
+
+**The hard part is dating them, not fetching them.** An index is labelled with
+a nominal period and that is not when it existed. The Oceanic Niño Index
+labelled December 1997 is a three-month mean *centred* on December, so it
+covers November through January and cannot be computed until January has ended;
+NOAA publishes it in mid-February. Joining on the label would read two and a
+half months into the future, and it would do so through a column that is
+correctly named, correctly typed, non-null, and green in every existing test.
+
+So every value carries the date it became readable, and joins use that and
+never the label. The lags are measured rather than assumed and rounded up,
+because erring late costs a little signal and erring early is leakage. The
+Dipole Mode Index gets 90 days against an observed 55: its file states its own
+build date, and it was six weeks stale when first read.
+
+Values are also stored **with their vintage**. NOAA restates ENSO history when
+the base period shifts, every five years, so "the ONI for January 2024" is a
+series of numbers with dates rather than a number. A row scored in 2024 reads
+the 2024 value even after a 2029 revision, and the table is append-on-change so
+a re-run over an unchanged 76-year series writes nothing.
+
+**They do not ship, and the folds are why.** The ablation refits the shipped
+model with four more columns and nothing else changed:
+
+| fold | PR-AUC without | with | delta |
+|---|---|---|---|
+| validation | 0.2417 | 0.2316 | **−0.0101** |
+| test | 0.2886 | 0.3290 | **+0.0404** |
+
+Test likes them a great deal and in exactly the places predicted — Delhi
++0.098, Phoenix +0.067, Lagos +0.053, nine of eleven cities improving.
+Validation does not, at six of eleven. The decision is made on validation, so
+the indices stay off by default and the measurement is recorded. This is the
+fifth time in this phase that something has looked better on test than on
+validation; the rule has not changed, because shipping on a test reading is
+feature selection with test labels.
+
+There is a measurable reason to suspect validation here, which is in the model
+card and is still not a reason to ship. Validation spans 2019-2021 and contains
+**no month at all** where the ONI clears 1.5 in either direction; training has
+23 such months and test has 6. An index whose signal lives in strong events
+cannot show its worth on a fold that contains none.
 
 ## Known limitations
 

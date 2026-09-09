@@ -448,7 +448,46 @@ backfill is not finished. When cities land, the baselines must be re-run and
 re-committed **before** the model is compared against them again, or "target
 fixed in advance" stops being true.
 
-### 12. A return period is a thirty-year record extrapolated
+### 12. Large-scale climate state is measured and not used
+
+The model reads no ENSO, NAO, AO or IOD state. All four are ingested, dated to
+their publication rather than their label, and ablated against the current
+feature set; the block moves validation PR-AUC by **-0.0101** and test by
+**+0.0404**.
+
+The folds disagree, and the disagreement is not small. On test the indices help
+nine of eleven cities and help most where they were predicted to -- Delhi
++0.098, Phoenix +0.067, Lagos +0.053, the tropical cities where this model is
+weakest. On validation they help six of eleven and hurt in aggregate.
+
+They are off because the decision is made on validation. Reading the test
+column and switching them on would be feature selection performed with test
+labels, and every figure in this card would then describe a feature set chosen
+by looking at the answers. The measurement is recorded in `metrics.json` under
+`teleconnections` so the next person can re-open the question with more data
+rather than re-run the experiment.
+
+There is a concrete reason to suspect validation of being the weaker
+measurement here, and it is measurable rather than rhetorical. Counting months
+where the ONI clears 1.5 in either direction:
+
+| fold | period | months with \|ONI\| > 1.5 | ONI range |
+|---|---|---|---|
+| train | 1995-2018 | 23 | -1.76 to +2.59 |
+| validation | 2019-2021 | **0** | -1.11 to +0.99 |
+| test | 2022-2026 | 6 | -0.89 to +1.99 |
+
+Validation contains no ENSO extreme at all. An index whose signal lives in a
+handful of strong events cannot demonstrate its value on a fold that contains
+none of them, and the fold that does contain them is the one that liked it.
+
+That is a hypothesis and not a reason to ship. Acting on it would still be
+acting on the test reading, arrived at by a longer route. What it is a reason
+for is re-opening the question when the record is longer or the folds can be
+redrawn -- and the ablation is committed so that can be done without re-running
+the experiment.
+
+### 13. A return period is a thirty-year record extrapolated
 
 `fact_anomaly_return_periods` reports how often a day this far from normal
 happens, in years, from a generalised Pareto fitted per city. Four things

@@ -63,8 +63,10 @@ from sqlalchemy import Engine
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from ingestion.loader import engine_from_settings  # noqa: E402
 from machine_learning.features import (  # noqa: E402
     FeatureError,
+    attach_teleconnections,
     build_features,
     drop_warmup,
     feature_columns,
@@ -351,6 +353,7 @@ def training_frame(
     start: dt.date | str | None = None,
     end: dt.date | str | None = None,
     frame: pd.DataFrame | None = None,
+    teleconnections: bool = False,
 ) -> pd.DataFrame:
     """Features and label on one row, read in a single pass over gold.
 
@@ -377,11 +380,26 @@ def training_frame(
             in is what keeps that one merge and its alignment check in one
             place; a sweep that rebuilt them separately would be free to align
             them differently from the pipeline it is a sweep of.
+        teleconnections: Attach the four NOAA indices, each joined on the date
+            it became readable. Off by default. ING-04's ablation runs the
+            *same* pipeline with the flag flipped, so the only difference
+            between its two arms is four columns -- routing it through here
+            rather than building a parallel matrix is what makes that true.
     """
     padded_end = pd.Timestamp(end) + pd.Timedelta(days=HORIZON_DAYS) if end else None
     if frame is None:
         frame = gold_frame(engine, cities=cities, start=None, end=padded_end)
     features = build_features(frame)
+    if teleconnections:
+        from ingestion.teleconnections import read_vintages
+
+        owned = engine is None
+        connection = engine or engine_from_settings()
+        try:
+            features = attach_teleconnections(features, read_vintages(connection))
+        finally:
+            if owned:
+                connection.dispose()
     labels = build_labels(frame)
 
     merged = features.merge(labels, on=["city_id", "date_key"], how="inner")

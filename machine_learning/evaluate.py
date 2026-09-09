@@ -105,6 +105,9 @@ from machine_learning.evaluation import (  # noqa: E402
     MIN_HELD_OUT_ROWS,
     Score,
     assert_city_is_held_out,
+    assert_splits_are_disjoint,
+    assert_splits_are_ordered,
+    base_rate,
     evaluation_frame,
     hold_out_city,
     lift_over,
@@ -112,9 +115,18 @@ from machine_learning.evaluation import (  # noqa: E402
     score,
     split_frame,
 )
-from machine_learning.features import city_roster  # noqa: E402
+from machine_learning.features import (  # noqa: E402
+    TELECONNECTION_FEATURES,
+    city_roster,
+    feature_columns,
+)
 from machine_learning.labels import LABEL, positives  # noqa: E402
-from machine_learning.train import Fit, train_model  # noqa: E402
+from machine_learning.train import (  # noqa: E402
+    Fit,
+    fit_once,
+    train_model,
+    training_matrix,
+)
 
 __all__ = [
     "CALIBRATION_BINS",
@@ -124,8 +136,12 @@ __all__ = [
     "best_threshold",
     "build_evaluation",
     "build_conformal",
+    "ablation_table",
+    "merge_block",
     "build_leave_one_city_out",
     "calibration_points",
+    "shipped_params",
+    "teleconnection_ablation",
     "classification_at",
     "hold_out_reasons",
     "leave_one_city_out_fold",
@@ -1068,6 +1084,262 @@ def leave_one_city_out_table(block: Mapping[str, Any]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+# ---------------------------------------------------------------------------
+# Teleconnection ablation (ING-04/ML-17)
+# ---------------------------------------------------------------------------
+
+def shipped_params(path: Path | None = None) -> dict[str, Any]:
+    """The hyperparameters of the model that is actually committed.
+
+    Read from `metrics.json` rather than restated here, because the point of
+    the ablation is a comparison against *the current feature set* as fitted by
+    *the current model*, and a second copy of the settings would be a second
+    thing to keep in step. If the file is absent the defaults below are used
+    and the report says so, so a fresh clone gets a runnable ablation rather
+    than an import error.
+    """
+    fallback = {
+        "learning_rate": 0.1,
+        "max_depth": 6,
+        "min_child_weight": 10,
+        "scale_pos_weight": 1.0,
+    }
+    path = path or metrics_path()
+    if not path.exists():
+        return fallback
+    payload = json.loads(path.read_text())
+    try:
+        artefact = payload["model"]["artifacts"][payload["model"]["recommended_variant"]]
+        settings = artefact["hyperparameters"]
+    except (KeyError, TypeError):
+        return fallback
+    # Only the fit's shape. `n_estimators` is decided by early stopping on
+    # validation and must be decided again per arm, or the arm with more
+    # columns would inherit a round count chosen for the arm with fewer.
+    return {
+        key: settings[key]
+        for key in ("learning_rate", "max_depth", "min_child_weight",
+                    "scale_pos_weight")
+        if key in settings
+    }
+
+
+#: The block the ablation adds, as one unit.
+#:
+#: One block and not four separate ablations. The NAO and the AO share most of
+#: their spatial pattern by construction and are strongly collinear; dropping
+#: either alone would charge it for the other's splits and both would look
+#: worthless. The question the ticket asks is whether large-scale climate state
+#: helps at all, and that is a question about the block.
+TELECONNECTION_BLOCK: Final[tuple[str, ...]] = TELECONNECTION_FEATURES
+
+
+def teleconnection_ablation(
+    *,
+    engine=None,
+    params: Mapping[str, Any] | None = None,
+    min_rows: int = MIN_HELD_OUT_ROWS,
+    min_positives: int = MIN_HELD_OUT_POSITIVES,
+) -> dict[str, Any]:
+    """Refit with the four NOAA indices and report what they bought, per city.
+
+    **Hyperparameters are held fixed at the shipped model's**, rather than
+    re-tuned for each arm. Re-tuning would let the two arms differ in depth and
+    learning rate as well as in columns, and the difference reported would be
+    "a tuned model with indices against a tuned model without" -- a fair
+    comparison of two pipelines and a useless one for the question asked, which
+    is what four columns are worth.
+
+    Both arms are built from **one population**, not two. The indices are
+    attached to the same rows, and the arm without them simply does not select
+    those columns, so the two fits see identical rows, identical labels and an
+    identical split. Building the arms from separate reads would let the
+    populations diverge by a row and turn a small difference in score into a
+    difference in denominator.
+
+    Reported on validation *and* test, and the validation column is the one a
+    decision may be made on. Turning the indices on because test liked them
+    would be feature selection with test labels, which is what this project has
+    refused at every previous opportunity.
+    """
+    population = evaluation_frame(engine, teleconnections=True)
+    parts = split_frame(population)
+    assert_splits_are_ordered(parts)
+    assert_splits_are_disjoint(parts)
+
+    settings = dict(params or shipped_params())
+    weight = settings.pop("scale_pos_weight", 1.0)
+    arms = {
+        "without": tuple(feature_columns()),
+        "with": tuple(feature_columns(teleconnections=True)),
+    }
+
+    report: dict[str, Any] = {
+        "block": list(TELECONNECTION_BLOCK),
+        "hyperparameters": {**settings, "scale_pos_weight": weight},
+        "hyperparameters_are_fixed": True,
+        "rows": {name: int(len(part)) for name, part in parts.items()},
+        "arms": {},
+    }
+    scored: dict[str, dict[str, Any]] = {}
+    for name, columns in arms.items():
+        fit = fit_once(
+            parts["train"],
+            parts["validation"],
+            settings,
+            scale_pos_weight=weight,
+            columns=columns,
+        )
+        arm: dict[str, Any] = {
+            "feature_count": len(columns),
+            "best_iteration": fit.best_iteration,
+        }
+        predictions: dict[str, Any] = {}
+        for fold in ("validation", "test"):
+            part = parts[fold]
+            matrix, _ = training_matrix(part, columns)
+            probability = fit.estimator.predict_proba(matrix)[:, 1]
+            predictions[fold] = probability
+            result = score(part[LABEL], probability)
+            arm[fold] = {
+                "rows": int(len(part)),
+                "base_rate": base_rate(part[LABEL]),
+                "pr_auc": result.pr_auc,
+                "brier": result.brier,
+                "lift_over_base_rate": result.lift,
+            }
+        arm["top_importances"] = fit.importances()
+        report["arms"][name] = arm
+        scored[name] = predictions
+
+    report["delta"] = {
+        fold: {
+            metric: report["arms"]["with"][fold][metric]
+            - report["arms"]["without"][fold][metric]
+            for metric in ("pr_auc", "brier")
+        }
+        for fold in ("validation", "test")
+    }
+    report["by_city"] = _ablation_by_city(
+        parts, scored, min_rows=min_rows, min_positives=min_positives
+    )
+    report["verdict"] = _ablation_verdict(report)
+    return report
+
+
+def _ablation_by_city(
+    parts: Mapping[str, pd.DataFrame],
+    scored: Mapping[str, Mapping[str, Any]],
+    *,
+    min_rows: int,
+    min_positives: int,
+) -> dict[str, Any]:
+    """Per city, on both folds. The ticket asks for per city and means it.
+
+    A pooled PR-AUC across eleven cities with different base rates is an
+    average over populations that are not comparable, and the indices were
+    proposed on the grounds that they would help *the tropical cities
+    specifically*. A pooled number cannot answer that.
+    """
+    out: dict[str, Any] = {}
+    for fold in ("validation", "test"):
+        part = parts[fold].reset_index(drop=True)
+        rows: dict[str, Any] = {}
+        for city_id, group in part.groupby("city_id", sort=True):
+            labels = group[LABEL]
+            if len(group) < min_rows or int(positives(labels).sum()) < min_positives:
+                continue
+            mask = group.index.to_numpy()
+            entry = {"rows": int(len(group)), "base_rate": base_rate(labels)}
+            for arm in ("without", "with"):
+                result = score(labels, scored[arm][fold][mask])
+                entry[arm] = {"pr_auc": result.pr_auc, "brier": result.brier}
+            entry["delta_pr_auc"] = entry["with"]["pr_auc"] - entry["without"]["pr_auc"]
+            rows[str(city_id)] = entry
+        out[fold] = rows
+    return out
+
+
+def _ablation_verdict(report: Mapping[str, Any]) -> dict[str, Any]:
+    """One sentence, decided on validation, with test reported beside it."""
+    validation = report["delta"]["validation"]["pr_auc"]
+    test = report["delta"]["test"]["pr_auc"]
+    helped = {
+        fold: sum(
+            1
+            for city in report["by_city"][fold].values()
+            if city["delta_pr_auc"] > 0
+        )
+        for fold in ("validation", "test")
+    }
+    counted = {fold: len(report["by_city"][fold]) for fold in helped}
+    ships = validation > 0
+    return {
+        "decided_on": "validation",
+        "validation_delta_pr_auc": validation,
+        "test_delta_pr_auc": test,
+        "cities_helped": helped,
+        "cities_scored": counted,
+        "folds_agree": (validation > 0) == (test > 0),
+        "ships": ships,
+        "statement": (
+            f"Adding the four teleconnection indices moves validation PR-AUC by "
+            f"{validation:+.4f} and test by {test:+.4f}; they help "
+            f"{helped['validation']} of {counted['validation']} cities on "
+            f"validation and {helped['test']} of {counted['test']} on test. "
+            + (
+                "They ship."
+                if ships
+                else "They do not ship: the decision is made on validation, "
+                "which does not support them."
+            )
+        ),
+    }
+
+
+def merge_block(name: str, block: Mapping[str, Any], path: Path | None = None) -> Path:
+    """Write one top-level key of `metrics.json`, leaving the rest untouched.
+
+    **Why a targeted write and not the ordinary bulk one.** The bulk path
+    rewrites the `evaluation` block from the current warehouse, while the
+    `model` block beside it is written by `train.py` and is not refreshed.
+    Doing one and not the other leaves the file internally inconsistent -- an
+    evaluation computed over one set of cities sitting next to a model fitted
+    on another -- which is worse than a file that is uniformly a run behind,
+    because nothing about it looks stale.
+
+    The teleconnection ablation has no such coupling: it fits both of its own
+    arms from scratch inside one call and reports only the difference between
+    them. So it can be recorded on its own, and it is.
+    """
+    path = path or metrics_path()
+    payload = json.loads(path.read_text()) if path.exists() else {}
+    payload[name] = dict(block)
+    payload[name]["recorded_at"] = dt.datetime.now(dt.timezone.utc).isoformat(
+        timespec="seconds"
+    )
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    return path
+
+
+def ablation_table(block: Mapping[str, Any]) -> pd.DataFrame:
+    """Per-city PR-AUC with and without, both folds, sorted by the test move."""
+    rows = []
+    for fold in ("validation", "test"):
+        for city_id, city in block["by_city"][fold].items():
+            rows.append(
+                {
+                    "fold": fold,
+                    "city": city_id,
+                    "base_rate": round(city["base_rate"], 4),
+                    "without": round(city["without"]["pr_auc"], 4),
+                    "with": round(city["with"]["pr_auc"], 4),
+                    "delta": round(city["delta_pr_auc"], 4),
+                }
+            )
+    return pd.DataFrame(rows).sort_values(["fold", "delta"])
+
+
 def _thin(points: pd.DataFrame, limit: int = 800) -> pd.DataFrame:
     """Fewer vertices to draw, without moving the line.
 
@@ -1270,6 +1542,14 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "run per city, so it is opt-in rather than part of every run."
         ),
     )
+    parser.add_argument(
+        "--teleconnections",
+        action="store_true",
+        help=(
+            "Ablate the four NOAA climate indices against the current feature "
+            "set, per city, on validation and test."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -1394,6 +1674,31 @@ def main(argv: Sequence[str] | None = None) -> int:
         shown["vs_persistence"] = shown["vs_persistence"].map("{:.2f}x".format)
         print(shown.to_string(index=False))
         print(f"\n  {sweep['statement']}")
+
+    ablation = None
+    if args.teleconnections:
+        print("\nteleconnection ablation: the same fit, four more columns")
+        ablation = teleconnection_ablation()
+        shown = ablation_table(ablation)
+        print(shown.to_string(index=False))
+        for fold in ("validation", "test"):
+            arm = ablation["arms"]
+            print(
+                f"\n  {fold:<10} PR-AUC "
+                f"{arm['without'][fold]['pr_auc']:.4f} -> "
+                f"{arm['with'][fold]['pr_auc']:.4f} "
+                f"({ablation['delta'][fold]['pr_auc']:+.4f})"
+            )
+        print(f"\n  {ablation['verdict']['statement']}")
+        if args.write:
+            print(f"\nwrote the teleconnections block to {merge_block('teleconnections', ablation)}")
+
+    # An ablation-only run records its own block and stops. Falling through
+    # would refresh `evaluation` against the current warehouse while leaving
+    # the `model` block train.py owns untouched, and the two would then
+    # describe different city sets. See merge_block.
+    if args.teleconnections and not args.figures:
+        return 0
 
     if args.write or args.figures:
         directory = Path(args.figures) if args.figures else FIGURE_DIR

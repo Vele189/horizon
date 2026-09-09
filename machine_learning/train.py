@@ -259,14 +259,22 @@ class Fit:
         }
 
 
-def training_matrix(frame: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
+def training_matrix(
+    frame: pd.DataFrame, columns: Sequence[str] | None = None
+) -> tuple[pd.DataFrame, np.ndarray]:
     """The design matrix and the target, in a fixed column order.
 
     Selected by :func:`~machine_learning.features.feature_columns` and never by
     dropping the keys. ``is_anomaly`` and the label sit in the same frame, and
     a model handed either of them would score beautifully and mean nothing.
+
+    ``columns`` overrides the selection, and exists for ING-04's ablation,
+    which needs the same fit over a different column list. It is a parameter
+    rather than a flag because an ablation removing a block is the same
+    operation as an ablation adding one, and both should go through here so
+    neither can quietly reach the keys.
     """
-    columns = list(feature_columns())
+    columns = list(columns) if columns is not None else list(feature_columns())
     missing = [name for name in columns if name not in frame.columns]
     if missing:
         raise TrainingError(f"the frame is missing {missing}.")
@@ -347,6 +355,7 @@ def fit_once(
     *,
     scale_pos_weight: float,
     half_life_years: float = float("inf"),
+    columns: Sequence[str] | None = None,
 ) -> Fit:
     """Fit one estimator, stopping early on validation average precision.
 
@@ -357,8 +366,8 @@ def fit_once(
     default, weights them equally and is exactly the fit every other ticket in
     this project has been using.
     """
-    x_train, y_train = training_matrix(train)
-    x_validation, y_validation = training_matrix(validation)
+    x_train, y_train = training_matrix(train, columns)
+    x_validation, y_validation = training_matrix(validation, columns)
 
     estimator = XGBClassifier(
         **FIXED_PARAMS,
