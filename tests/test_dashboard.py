@@ -3132,3 +3132,112 @@ def test_the_tooltip_says_which_of_the_four_states_a_city_is_in(rarity_frame) ->
     # not consulted.
     assert "year day" not in tips["portland"]
     assert "year day" not in tips["sydney"]
+
+
+# --------------------------------------------------------------------------
+# The small-screen wall
+# --------------------------------------------------------------------------
+
+
+WALL = theme.small_screen_notice_html("Climate Volatility & Risk Engine")
+
+
+def test_the_wall_borrows_its_colours_rather_than_choosing_them() -> None:
+    """The panel is part of the palette, not a page beside it.
+
+    ``test_no_module_but_theme_spells_a_colour`` cannot see this one: the
+    markup is generated *inside* theme.py, which that check skips. So the same
+    promise is made here directly, against the rendered string.
+    """
+    palette = {
+        colour
+        for mode in MODES
+        for colour in (*theme.DIVERGING[mode], theme.SURFACE[mode], *theme.chrome(mode).values())
+    }
+    assert set(HEX_COLOUR.findall(WALL)) <= palette
+
+
+def test_the_wall_is_for_phones_and_nothing_wider() -> None:
+    """One breakpoint, on width alone.
+
+    Continuum gates on height too, which catches a phone held sideways at the
+    cost of catching a short laptop window. This dashboard is read on laptops
+    in short windows, so height does not gate and the check says so rather
+    than leaving it to whoever next edits the CSS.
+    """
+    assert f"(max-width: {theme.SMALL_SCREEN_MAX_WIDTH_PX - 1}px)" in WALL
+    assert "max-height" not in WALL
+    assert "min-width" not in WALL
+
+
+def test_the_wall_hides_the_app_in_a_way_a_descendant_can_undo() -> None:
+    """``visibility``, not ``display``, and on the one Streamlit-owned element.
+
+    The panel is rendered inside the app it covers. ``display:none`` on an
+    ancestor cannot be reversed further down, so the panel would go with it;
+    ``visibility`` inherits and can be turned back on. Getting this backwards
+    produces a blank white page on a phone, which is the failure this test
+    exists to catch.
+    """
+    assert '[data-testid="stApp"] { visibility: hidden; }' in WALL
+    assert "visibility: visible;" in WALL
+    assert '[data-testid="stApp"] { display: none' not in WALL
+
+
+def test_the_wall_costs_a_laptop_nothing() -> None:
+    """Above the breakpoint the panel is gone, and so is the row it sat in.
+
+    Streamlit renders it into the vertical block that lays out every page, and
+    that block is a flex column with a gap. An element container left in the
+    flow with nothing in it is still a flex item, so hiding only the panel
+    would push every view down by one gap on every screen. Both go.
+    """
+    container = '[data-testid="stElementContainer"]:has(.horizon-wall)'
+    css = WALL.split("@media (max-width")[0]
+
+    assert ".horizon-wall { display: none; }" in css
+    assert f"{container} {{ display: none; }}" in css
+
+
+def test_the_wall_paints_both_themes_without_asking_the_server() -> None:
+    """Both modes ship in the one stylesheet.
+
+    ``st.context.theme.type`` is ``None`` on the first run of a session, so a
+    server-side choice would paint a full-screen panel in the wrong mode and
+    correct it a beat later. The browser already knows.
+    """
+    assert "prefers-color-scheme: dark" in WALL
+    for mode in MODES:
+        assert theme.SURFACE[mode] in WALL
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_the_wall_s_own_text_is_readable_on_it(mode: theme.Mode) -> None:
+    """The headline runs the ramp's poles, and the poles have to clear the page.
+
+    The wash fades into the surface above the headline, so the surface is the
+    background the text is actually read against. 4.5:1 is the floor for the
+    body copy; the headline is large, and takes the 3:1 that large text gets.
+    """
+    surface = theme.SURFACE[mode]
+    steps = theme.DIVERGING[mode]
+
+    assert contrast(theme.chrome(mode)["ink_secondary"], surface) >= 4.5
+    assert contrast(steps[0], surface) >= 3.0
+    assert contrast(steps[-1], surface) >= 3.0
+
+
+def test_the_wall_does_not_take_the_product_name_on_trust() -> None:
+    """The title is interpolated into markup, so it is escaped on the way in."""
+    assert "&amp;" in WALL
+    assert "<script>" not in theme.small_screen_notice_html("<script>alert(1)</script>")
+
+
+def test_the_wall_goes_up_before_the_database_is_asked_for() -> None:
+    """A phone gets the panel, not a connection error it cannot act on.
+
+    Checked on the source rather than by running Streamlit, because ordering
+    inside ``main()`` is the whole claim and a rendered app would not show it.
+    """
+    source = (DASHBOARD_DIR / "app.py").read_text(encoding="utf-8")
+    assert source.index("_small_screen_wall()") < source.index("source = resolve_database_url()")

@@ -39,7 +39,7 @@ from streamlit.navigation.page import StreamlitPage
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from dashboard import views  # noqa: E402
+from dashboard import theme, views  # noqa: E402
 from dashboard.database import (  # noqa: E402
     CACHE_TTL_SECONDS,
     DashboardConfigError,
@@ -57,6 +57,21 @@ PAGE_ICON = ":material/thermostat:"
 # A public dashboard with no route back to its method is a number without a
 # provenance, which is the thing this project exists not to produce.
 REPOSITORY_URL = "https://github.com/Vele189/horizon"
+
+
+def _small_screen_wall() -> None:
+    """Replace the app with a "come back on a laptop" panel on phones.
+
+    Rendered before anything else, and before the connection is resolved, so a
+    phone gets the panel rather than a failure state it cannot act on either.
+
+    The markup carries its own media query (see
+    :func:`dashboard.theme.small_screen_notice_html`); nothing here decides
+    whether it is shown, because the server does not learn the viewport until
+    a round trip after the first paint and would have to draw the dashboard
+    once to find out.
+    """
+    st.markdown(theme.small_screen_notice_html(PAGE_TITLE), unsafe_allow_html=True)
 
 
 def _navigation() -> StreamlitPage:
@@ -185,6 +200,8 @@ def main() -> None:
         layout="wide",
         initial_sidebar_state="expanded",
     )
+
+    _small_screen_wall()
 
     try:
         source = resolve_database_url()

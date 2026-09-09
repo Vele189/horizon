@@ -157,6 +157,7 @@ the palette keeps its promise that a colour on this page means a number.
 from __future__ import annotations
 
 import math
+from html import escape
 from typing import Final, Literal, Mapping, Sequence
 
 __all__ = [
@@ -166,6 +167,7 @@ __all__ = [
     "EMPHASIS",
     "RISK",
     "SEQUENTIAL",
+    "SMALL_SCREEN_MAX_WIDTH_PX",
     "ANOMALY_Z_THRESHOLD",
     "COLD_HUE_DEGREES",
     "DIVERGING",
@@ -195,6 +197,7 @@ __all__ = [
     "rarity_diameter",
     "rarity_key_html",
     "size_key_html",
+    "small_screen_notice_html",
 ]
 
 Mode = Literal["light", "dark"]
@@ -748,3 +751,198 @@ def risk_key_html(mode: Mode, threshold: float) -> str:
         f"The model says yes at {threshold:.4f}, the third break, so the top "
         f"two steps are exactly the flagged cities.</div>"
     )
+
+
+# ---------------------------------------------------------------------------
+# The small-screen wall
+# ---------------------------------------------------------------------------
+#
+# Four views built on a wide layout, a fifteen-city map, a nine-step key and a
+# matrix that is a grid of dates by cities. None of that survives a 390px
+# viewport: the map loses its legend, the matrix wraps into a column of
+# unlabelled cells, and the reader is left scrolling a picture of a dashboard
+# rather than reading one. Shipping that is worse than not shipping it, because
+# a chart that is unreadable still looks like it is saying something.
+#
+# So below :data:`SMALL_SCREEN_MAX_WIDTH_PX` the app is replaced by a full
+# viewport panel that says where to open it. Phones only, and deliberately so:
+# a narrowed desktop window and a tablet in landscape both clear the breakpoint,
+# and locking those out would turn a readability problem into a lockout for
+# readers who could have read it fine.
+#
+# The switch is a CSS media query rather than a Python branch. Streamlit does
+# not know the viewport until the browser tells it, which is one round trip
+# after the first paint, so a server-side check would render the dashboard on a
+# phone and then replace it. The query costs nothing and is right on the first
+# frame.
+#
+# Colours come from ``prefers-color-scheme`` for the same reason:
+# ``st.context.theme.type`` is ``None`` on the first run of a session (see
+# :func:`resolve_mode`), and a full-screen panel painted in the wrong mode and
+# corrected a beat later is a much louder mistake than a mismatched legend.
+# The panel covers the viewport, so it only has to agree with the browser.
+
+# Phones, and nothing wider. See the note above on why this is not the 960px a
+# comfortable reading of the wide layout would ask for.
+SMALL_SCREEN_MAX_WIDTH_PX: Final[int] = 768
+
+# Lucide's ``laptop-minimal``, inlined. A web font for one glyph is a network
+# request the panel would have to survive without, since the reader seeing this
+# is on a phone and quite possibly on mobile data.
+_LAPTOP_SVG: Final[str] = (
+    '<svg class="horizon-wall-icon" viewBox="0 0 24 24" fill="none" '
+    'stroke="currentColor" stroke-width="1.25" stroke-linecap="round" '
+    'stroke-linejoin="round" aria-hidden="true" focusable="false">'
+    '<rect x="3" y="4" width="18" height="12" rx="2" ry="2"></rect>'
+    '<line x1="2" y1="20" x2="22" y2="20"></line>'
+    "</svg>"
+)
+
+
+def _wall_tokens(mode: Mode) -> str:
+    """The panel's custom properties for one mode, as CSS declarations.
+
+    Every value is a token defined above rather than a colour invented for this
+    panel. The wash is the outermost cold step, which is what makes the page
+    read as belonging to the same palette as the map; the headline runs the
+    ramp's own two poles, cold to warm, which is the whole argument of this
+    module said once in a heading.
+    """
+    tokens = chrome(mode)
+    steps = DIVERGING[mode]
+    declarations = {
+        "--horizon-wall-wash": steps[NEUTRAL_INDEX - 1],
+        "--horizon-wall-surface": SURFACE[mode],
+        "--horizon-wall-ink": tokens["ink"],
+        "--horizon-wall-ink-secondary": tokens["ink_secondary"],
+        "--horizon-wall-cold": steps[0],
+        "--horizon-wall-warm": steps[-1],
+    }
+    return "".join(f"{name}:{value};" for name, value in declarations.items())
+
+
+def small_screen_notice_html(title: str) -> str:
+    """The panel, and the media query that decides when it is the whole page.
+
+    ``title`` is the product's name, passed in rather than spelled here: this
+    module owns colours, and what the dashboard is called is not one.
+
+    Hiding the app is done with ``visibility`` rather than ``display``, and on
+    the one element that contains all of Streamlit's chrome. ``visibility``
+    inherits and can be turned back on further down the tree, which is what
+    lets the panel live inside the app it is covering; ``display:none`` on an
+    ancestor cannot be undone by a descendant. One selector therefore takes the
+    sidebar, the header, the toolbar and the page with it, and no list of
+    Streamlit's internal test ids has to be kept current for the wall to hold.
+    """
+    return f"""<style>
+:root {{ {_wall_tokens("light")} }}
+@media (prefers-color-scheme: dark) {{ :root {{ {_wall_tokens("dark")} }} }}
+
+/* The panel itself is off above the breakpoint. This is the rule that has to
+   hold, so it does not depend on knowing Streamlit's markup. */
+.horizon-wall {{ display: none; }}
+
+/* And the row Streamlit made for it goes too: an element container left in
+   the flow is an empty flex item, and the vertical block's gap would push
+   every page down by it. */
+[data-testid="stElementContainer"]:has(.horizon-wall) {{ display: none; }}
+
+@media (max-width: {SMALL_SCREEN_MAX_WIDTH_PX - 1}px) {{
+  html, body {{ overflow: hidden; }}
+
+  /* Everything Streamlit draws, in one selector. */
+  [data-testid="stApp"] {{ visibility: hidden; }}
+
+  /* Back in the flow so the panel inside it renders, and taking up none of
+     it, because the panel is positioned against the viewport instead. */
+  [data-testid="stElementContainer"]:has(.horizon-wall) {{
+    display: block;
+    height: 0; min-height: 0; margin: 0; padding: 0;
+  }}
+
+  .horizon-wall {{
+    visibility: visible;
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    inset: 0;
+    z-index: 2147483647;
+    box-sizing: border-box;
+    padding: 1.75rem 1.25rem 2.5rem;
+    text-align: center;
+    background: linear-gradient(
+      180deg,
+      var(--horizon-wall-wash) 0%,
+      var(--horizon-wall-surface) 55%
+    );
+    color: var(--horizon-wall-ink);
+  }}
+
+  .horizon-wall-brand {{
+    flex: 0 0 auto;
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--horizon-wall-ink);
+  }}
+
+  .horizon-wall-body {{
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin: 0 auto;
+    max-width: 23rem;
+  }}
+
+  .horizon-wall-icon {{
+    width: 68px;
+    height: 68px;
+    color: var(--horizon-wall-ink);
+  }}
+
+  .horizon-wall-headline {{
+    margin: 0;
+    padding: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+    color: var(--horizon-wall-ink);
+  }}
+
+  .horizon-wall-accent {{
+    background-image: linear-gradient(
+      100deg,
+      var(--horizon-wall-cold) 0%,
+      var(--horizon-wall-warm) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }}
+
+  .horizon-wall-copy {{
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.5;
+    letter-spacing: -0.01em;
+    color: var(--horizon-wall-ink-secondary);
+  }}
+}}
+</style>
+<div class="horizon-wall" role="alert">
+  <p class="horizon-wall-brand">{escape(title)}</p>
+  <div class="horizon-wall-body">
+    {_LAPTOP_SVG}
+    <h1 class="horizon-wall-headline">We&rsquo;re
+      <span class="horizon-wall-accent">better</span> on a bigger screen</h1>
+    <p class="horizon-wall-copy">Fifteen cities, a week of forecasts and a
+      thirty-year baseline need the room. Open this dashboard on a laptop or
+      desktop to read it.</p>
+  </div>
+</div>"""
