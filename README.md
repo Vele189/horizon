@@ -39,6 +39,7 @@ python machine_learning/train.py --write
 python machine_learning/evaluate.py --thresholds --leave-one-city-out --write
 python machine_learning/extremes.py --write   # fits the tails, then:
 python dbt_analytics/dbt_env.py -- dbt build --select fact_anomaly_return_periods
+python machine_learning/nowcast.py --ablate pressure recent_wind seasonal --write
 streamlit run dashboard/app.py
 ```
 
@@ -279,6 +280,46 @@ claimed seven. Both tests are in `tests/test_extremes.py`, one asserting the
 current behaviour and one asserting that the old method got it wrong, so the
 pair says exactly what changed if either is reverted.
 
+### A second model, on the one complete mart
+
+`fact_weather_hourly` is the only mart in this warehouse with no gaps: 263 160
+rows, fifteen cities, two years, zero nulls. Two years is far too short for the
+thirty-year anomaly model and exactly right for a nowcast, so
+`machine_learning/nowcast.py` fits one — the **peak wind gust over the next 24,
+48 or 72 hours**, three separate models with their own
+[card](docs/nowcast-card.md). It does not replace the seven-day classifier and
+shares nothing with it but a warehouse and a discipline.
+
+| horizon | RMSE | vs persistence | vs climatology | observed SD |
+|---|---|---|---|---|
+| 24h | 8.38 | +25.3% | +25.5% | 12.15 |
+| 48h | 9.54 | +23.4% | +16.1% | 12.65 |
+| 72h | 10.11 | +19.2% | +11.2% | 12.96 |
+
+**Persistence is the wrong yardstick past 24 hours, so there are two.** The
+ticket asked for persistence and at one day it is a real opponent. At two and
+three days its RMSE — 12.45 and 12.52 — is *worse than predicting each city's
+monthly mean*, so a skill figure quoted against it there would be a statement
+about persistence rather than about the model. Both are reported at every
+horizon, and the climatology is fitted on training rows only.
+
+**Where it loses.** Singapore's gusts have a standard deviation of about
+5 km/h and there is very little to predict: the model is 11.8% worse than that
+city's monthly mean at 48 hours and 25.3% worse at 72. São Paulo joins it at
+72 hours and London draws level. That is in the card, not smoothed into the
+pooled figure, and a test fails if the card stops naming the cities.
+
+**The importance table was misleading and the ablation says so.**
+`wind_speed_10m` carries 0.31 of the gain and `pressure_tendency_24h` 0.017,
+which reads as though the pressure signal the Storm Dynamics view found is not
+being used. Refitting without each block tells a different story: dropping
+pressure costs 2 to 4% of RMSE at every horizon on both validation and test,
+and its value *overtakes* current wind as the horizon grows — at 24 hours
+recent wind is worth more than twice as much, and by 72 hours they are level
+(+2.41% against +2.36%). Gain is split among correlated features close to
+arbitrarily, and every pressure column is correlated with every wind column
+through the weather that produced both.
+
 ## Known limitations
 
 **The validation gate does not pass, and it should not.**
@@ -380,7 +421,7 @@ and fails if one is missing from `requirements.txt`.
 ingestion/          API client, planner, raw archive, bronze loader, reconciliation
 dbt_analytics/      staging, intermediate, and gold marts, plus macros and tests
 machine_learning/   features, labels, baselines, split, training, SHAP, scoring,
-                    extreme value fits
+                    extreme value fits, the hourly gust nowcast
 serving/            promotion of gold marts and predictions to Neon
 dashboard/          Streamlit app, theme, database access, four views
 config/             city registry

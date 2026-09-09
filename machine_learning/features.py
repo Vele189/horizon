@@ -706,6 +706,217 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+# ===========================================================================
+# The hourly matrix (ML-16)
+# ===========================================================================
+#
+# A separate builder rather than a mode of `build_features`, because it is a
+# different product on a different grain answering a different question. The
+# daily matrix predicts a temperature anomaly seven days out from thirty years
+# of climatology; this one predicts the peak wind gust one to three days out
+# from two years of hourly observations. They share a repository and almost
+# nothing else -- not the target, not the horizon, not the baseline, and not
+# the split boundaries.
+
+#: Nowcast horizons, in hours.
+#:
+#: One to three days. Below 24 hours the answer is largely persistence and
+#: there is nothing for a model to add; beyond 72 the hourly record's two years
+#: stop containing enough distinct weather systems for the longer patterns to
+#: be estimated rather than memorised.
+NOWCAST_HORIZONS: Final[tuple[int, ...]] = (24, 48, 72)
+
+#: Rolling windows over the hourly series, in hours.
+#:
+#: Six hours is the current system, twenty-four the diurnal cycle, seventy-two
+#: the synoptic one. Chosen to bracket the timescales rather than to be dense:
+#: overlapping rolling maxima are highly collinear and adding more of them
+#: buys correlation, not information.
+NOWCAST_WINDOWS: Final[tuple[int, ...]] = (6, 24, 72)
+
+#: The hourly columns the builder needs.
+HOURLY_REQUIRED: Final[tuple[str, ...]] = (
+    "city_id",
+    "observation_hour",
+    "pressure_msl",
+    "pressure_tendency_3h",
+    "pressure_tendency_24h",
+    "wind_speed_10m",
+    "wind_gusts_10m",
+    "wind_direction_10m",
+    "temperature_2m",
+    "dew_point_2m",
+    "relative_humidity_2m",
+    "precipitation",
+    "cloud_cover",
+)
+
+#: Carried through the hourly matrix but never a model input.
+HOURLY_PASSTHROUGH: Final[tuple[str, ...]] = (
+    "city_id",
+    "observation_hour",
+    "peak_gust_ahead",
+    "persistence_gust",
+    "horizon_hours",
+    "month",
+)
+
+
+def hourly_feature_columns() -> tuple[str, ...]:
+    """The nowcast's model inputs, in a stable order.
+
+    Derived from the same constants the builder uses, so the list and the
+    matrix cannot disagree -- the daily side's rule, applied here for the same
+    reason.
+    """
+    rolled = tuple(
+        f"{stem}{window}"
+        for window in NOWCAST_WINDOWS
+        for stem in (
+            "gust_max", "gust_mean", "speed_mean",
+            "pressure_min", "pressure_range", "precipitation_sum",
+        )
+    )
+    return (
+        "wind_gusts_10m",
+        "wind_speed_10m",
+        "pressure_msl",
+        "pressure_tendency_3h",
+        "pressure_tendency_24h",
+        "abs_pressure_tendency_3h",
+        "abs_pressure_tendency_24h",
+        "temperature_2m",
+        "dew_point_2m",
+        "dew_point_depression",
+        "relative_humidity_2m",
+        "precipitation",
+        "cloud_cover",
+        "wind_direction_sin",
+        "wind_direction_cos",
+        *rolled,
+        "hour_sin",
+        "hour_cos",
+        "day_of_year_sin",
+        "day_of_year_cos",
+    )
+
+
+def build_hourly_features(
+    hourly: pd.DataFrame, horizon_hours: int
+) -> pd.DataFrame:
+    """One row per city-hour: what is known at *t*, and the peak gust after it.
+
+    The target is ``max(wind_gusts_10m)`` over ``t+1 .. t+horizon_hours``.
+    Hour *t* is a feature and is deliberately outside its own window, the same
+    boundary the daily label draws at day *t*.
+
+    Three choices that would each be a silent defect if made the other way.
+
+    **Wind direction is encoded as a sine and a cosine, never as degrees.**
+    359 and 1 are two degrees apart and 358 units apart on a number line, so a
+    tree fed raw bearings learns a split at north that has no meaning. This is
+    the kind of error that costs a little accuracy, breaks no test, and is
+    invisible in a feature importance table.
+
+    **Every rolling window ends at *t* inclusive and looks backward.** Pandas'
+    default rolling is trailing, which is what is wanted; the target is built
+    by reversing the series, which is where a sign error would put future gusts
+    into the features. `peak_gust_ahead` is asserted disjoint from the window
+    the features are drawn from by a test.
+
+    **`persistence_gust` is carried, not computed downstream.** The baseline is
+    the peak gust over the *previous* ``horizon_hours``, and it has to be the
+    same span as the target or the comparison is between different questions.
+    Deriving it here, from the same constant, is what keeps them equal.
+
+    Returns:
+        The matrix, with warm-up rows dropped: the first 72 hours of each city
+        have no 72-hour window and the last ``horizon_hours`` have no target.
+    """
+    missing = [column for column in HOURLY_REQUIRED if column not in hourly.columns]
+    if missing:
+        raise FeatureError(f"hourly frame is missing {missing}.")
+    if horizon_hours <= 0:
+        raise FeatureError(f"horizon must be positive, got {horizon_hours}.")
+
+    parts = [
+        _hourly_city(city.sort_values("observation_hour"), horizon_hours)
+        for _, city in hourly.groupby("city_id", sort=True)
+    ]
+    frame = pd.concat(parts, ignore_index=True)
+    return frame.dropna(subset=["peak_gust_ahead", "persistence_gust", *hourly_feature_columns()])
+
+
+def _hourly_city(city: pd.DataFrame, horizon_hours: int) -> pd.DataFrame:
+    """One city's hourly matrix. Grouped work stays out of `build_hourly_features`."""
+    hours = city["observation_hour"]
+    gusts, pressure = city["wind_gusts_10m"], city["pressure_msl"]
+
+    out = pd.DataFrame(index=city.index)
+    out["city_id"] = city["city_id"].to_numpy()
+    out["observation_hour"] = hours.to_numpy()
+    for column in (
+        "wind_gusts_10m", "wind_speed_10m", "pressure_msl",
+        "pressure_tendency_3h", "pressure_tendency_24h", "temperature_2m",
+        "dew_point_2m", "relative_humidity_2m", "precipitation", "cloud_cover",
+    ):
+        out[column] = city[column].to_numpy()
+
+    # Magnitude, not direction. The Storm Dynamics view found the relationship
+    # between pressure swing and peak gust is V-shaped: a fast rise and a fast
+    # fall both mean wind, and a signed tendency asks a tree to rediscover that
+    # by splitting twice.
+    out["abs_pressure_tendency_3h"] = city["pressure_tendency_3h"].abs().to_numpy()
+    out["abs_pressure_tendency_24h"] = city["pressure_tendency_24h"].abs().to_numpy()
+
+    # Dew point depression is the moisture signal in the form that means
+    # something across cities; the dew point alone is mostly temperature.
+    out["dew_point_depression"] = (
+        city["temperature_2m"] - city["dew_point_2m"]
+    ).to_numpy()
+
+    radians = np.deg2rad(city["wind_direction_10m"].astype(float))
+    out["wind_direction_sin"] = np.sin(radians).to_numpy()
+    out["wind_direction_cos"] = np.cos(radians).to_numpy()
+
+    for window in NOWCAST_WINDOWS:
+        trailing = {
+            "gust_max": gusts.rolling(window, min_periods=window).max(),
+            "gust_mean": gusts.rolling(window, min_periods=window).mean(),
+            "speed_mean": city["wind_speed_10m"].rolling(window, min_periods=window).mean(),
+            "pressure_min": pressure.rolling(window, min_periods=window).min(),
+            "pressure_range": (
+                pressure.rolling(window, min_periods=window).max()
+                - pressure.rolling(window, min_periods=window).min()
+            ),
+            "precipitation_sum": city["precipitation"].rolling(
+                window, min_periods=window
+            ).sum(),
+        }
+        for stem, values in trailing.items():
+            out[f"{stem}{window}"] = values.to_numpy()
+
+    hour = hours.dt.hour
+    day_of_year = hours.dt.dayofyear
+    out["hour_sin"] = np.sin(2 * np.pi * hour / 24).to_numpy()
+    out["hour_cos"] = np.cos(2 * np.pi * hour / 24).to_numpy()
+    out["day_of_year_sin"] = np.sin(2 * np.pi * day_of_year / 365.25).to_numpy()
+    out["day_of_year_cos"] = np.cos(2 * np.pi * day_of_year / 365.25).to_numpy()
+
+    # The target: reverse, take a trailing max, reverse back, then shift so the
+    # window starts at t+1. Written this way rather than with a forward-looking
+    # rolling because pandas has no forward max and a hand-rolled loop over
+    # 263 160 rows would be the slow, wrong-by-one version of this line.
+    reversed_max = gusts[::-1].rolling(horizon_hours, min_periods=horizon_hours).max()[::-1]
+    out["peak_gust_ahead"] = reversed_max.shift(-1).to_numpy()
+    out["persistence_gust"] = (
+        gusts.rolling(horizon_hours, min_periods=horizon_hours).max().to_numpy()
+    )
+    out["horizon_hours"] = horizon_hours
+    out["month"] = hours.dt.month.to_numpy()
+    return out
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")

@@ -37,6 +37,13 @@ machine_learning/artifacts/*
 # in advance if it is committed in advance.
 !machine_learning/artifacts/metrics.json
 
+# And nowcast-metrics.json, for the same reason one layer over. The nowcast's
+# card claims it cannot go stale because tests/test_nowcast_card.py checks
+# every figure against this file; on a fresh clone without it, that test skips
+# and the claim becomes unenforced. A guarantee that is only true on the
+# machine that ran the model is not a guarantee.
+!machine_learning/artifacts/nowcast-metrics.json
+
 # So is the model itself, while it stays small. Streamlit Community Cloud
 # cannot reach the warehouse the model is trained from, so an artefact outside
 # the repository means the deployed dashboard has no model at all. git cannot

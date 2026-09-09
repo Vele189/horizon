@@ -4889,6 +4889,126 @@ rarity encoding the only city with a fitted answer drew *smallest*, because
 unfitted cities were falling back to their departure sizes and the two scales
 are not comparable. That fallback is now the open ring.
 
+## A second model, and a yardstick that stops working halfway
+
+ML-16. `fact_weather_hourly` is the one mart in this warehouse that is
+finished: 263 160 rows, fifteen cities, two years, every column non-null and no
+missing hours. The daily record is thirty years long and still backfilling; the
+hourly one is short and complete. Two years is useless for a climatology and
+exactly enough for a nowcast, so that is what it gets.
+
+The target is the peak wind gust over the next 24, 48 or 72 hours -- a
+regression, because the quantity a reader wants is a speed rather than a
+probability, and because two years does not hold enough threshold exceedances
+per city to fit a classifier that is not mostly noise. Three separate models,
+one per horizon, with their own card.
+
+### The yardstick the ticket asked for stops working at 48 hours
+
+Persistence -- the peak gust over the *previous* window of the same length --
+is the required baseline, and the first thing worth measuring was whether it is
+any good. At 24 hours it is: RMSE 11.21 against an observed standard deviation
+of 12.15, so it carries real information. At 48 and 72 hours it is not:
+
+| horizon | persistence RMSE | monthly climatology RMSE | observed SD |
+|---|---|---|---|
+| 24h | 11.21 | 11.24 | 12.15 |
+| 48h | 12.45 | 11.37 | 12.65 |
+| 72h | 12.52 | 11.39 | 12.96 |
+
+Past a day, persistence is **worse than predicting each city's monthly mean**,
+and worse than predicting the overall mean too. A skill number quoted against
+it at those horizons would be a statement about how badly persistence decays
+rather than about how well the model does. So both baselines are reported at
+every horizon, the climatology is fitted on training rows only, and the card
+leads with the harder of the two.
+
+Skill against the harder baseline decays the way it should: +25.5% at 24 hours,
++16.1% at 48, +11.2% at 72.
+
+### One year of training, and no way to have both
+
+Two years cannot give a full annual cycle in training *and* seasonally matched
+folds. A model that has seen eight months has never seen the season it is asked
+about, so training takes the cycle -- 2024-09-04 to 2025-08-31, exactly one
+year -- and validation and test take what is left, four months and eight. They
+cover different seasons from each other, and every figure carries that.
+
+The alternative is a random split, which would balance the seasons and would
+also let the model see 3 p.m. to predict 4 p.m. on the same afternoon. The
+limitation is written into the card rather than engineered away.
+
+Purging is by horizon, dropped from the *end* of each fold: an origin in the
+last H hours has a target reaching into the next fold, and the offending row is
+the earlier one. The leak would be small, real, and would flatter precisely the
+rows early stopping reads.
+
+### Overlapping origins inflate precision, not skill
+
+Hourly origins mean two forecasts an hour apart share 71 of 72 hours of their
+answer, so 87 840 test rows are nothing like 87 840 independent observations.
+Re-scoring the same predictions on one origin a day gives RMSE 8.490 against
+8.376 at 24 hours and 10.165 against 10.113 at 72 -- the same answer from 3 660
+windows. The overlap was overstating the *precision* of the metric and not the
+metric. Reported beside the headline rather than instead of it, because the
+headline is what a reader compares against the baselines.
+
+### The importance table was wrong, and the ablation is why we know
+
+The first read of the fitted model said the ticket's premise had not paid off.
+`wind_speed_10m` carries 0.31 of the gain at 24 hours; `pressure_tendency_24h`
+carries 0.017 and sits ninth. The Storm Dynamics view's V-shaped pressure-swing
+signal appeared to be in the matrix and ignored.
+
+Gain is not evidence. It is split among correlated features close to
+arbitrarily, and every pressure column here is correlated with every wind
+column through the weather that produced both. The way to ask whether a block
+carries anything is to remove it and refit:
+
+| dropped | 24h val / test | 48h val / test | 72h val / test |
+|---|---|---|---|
+| pressure | +3.50% / +3.79% | +2.08% / +3.86% | +3.11% / +2.41% |
+| recent wind | +6.14% / +8.46% | +2.32% / +4.29% | +0.82% / +2.36% |
+| seasonal | +0.27% / −0.46% | −0.12% / −0.13% | +0.91% / −1.13% |
+
+The pressure block is worth 2 to 4% of RMSE at every horizon on both folds --
+the premise vindicated against the model's own importance table. And its value
+*overtakes* current wind as the horizon grows: at 24 hours recent wind is worth
+more than twice as much, and by 72 hours they are level, +2.41% against +2.36%.
+The further ahead the question, the less the current gust says and the more the
+pressure field does, which is what the physics would predict and not what the
+gain column suggested.
+
+Refitted rather than permuted or zeroed, deliberately. Zeroing feeds the model
+a value it never saw in training; permuting breaks the correlation structure the
+trees were built on and charges each block for its neighbours' splits as well.
+
+### The ablation that had to be run twice
+
+The first ablation reported test only, and test said the seasonal block should
+go: dropping it *improved* RMSE at all three horizons. That is a tempting
+finding and acting on it would have been a feature-selection step performed
+with test labels -- the thing this project has refused four times already this
+phase, over the weighted quantifier, the sixteen-year half-life, the hazard
+model and the detrended flag.
+
+So the ablation was rerun to score validation as well. Validation prefers
+keeping the block at two horizons of three. It stays, the disagreement is in
+the card, and there is a good reason to distrust the test reading anyway: a
+day-of-year feature fitted on a single annual cycle can only memorise it.
+
+### Where it loses, named
+
+Singapore's gusts have a standard deviation of about 5 km/h. There is very
+little there to predict, and past a day the model stops adding anything: 11.8%
+*worse* than that city's monthly mean at 48 hours, 25.3% worse at 72. São Paulo
+joins it at 72 hours at -6.3% and London draws level at -0.0%.
+
+The fix would be a per-city, per-horizon fallback to climatology, and the rule
+would be chosen by looking at test results. The honest version of "the model
+does not help here" is a card that says which cities and by how much, and a
+test that fails if the card stops naming them.
+
 ## Publishing
 
 Community Cloud requires a public repository, which makes deployment the moment
